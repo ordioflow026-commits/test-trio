@@ -1,0 +1,9 @@
+{
+  "name": "CommApp",
+  "description": "Communication application with video calling and chat",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "contacts"
+  ]
+}

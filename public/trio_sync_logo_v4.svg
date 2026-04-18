@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Global Vertical Gradient -->
+    <linearGradient id="trioGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00FFFF" />
+      <stop offset="100%" stop-color="#007BFF" />
+    </stop>
+    </linearGradient>
+
+    <!-- Base rounded rectangle for the 3 main shapes -->
+    <rect id="baseShape" x="212" y="116" width="88" height="160" rx="28" />
+
+    <!-- The 3 rotated instances of the base shape -->
+    <g id="shape1"><use href="#baseShape" /></g>
+    <g id="shape2"><use href="#baseShape" transform="rotate(120 256 256)" /></g>
+    <g id="shape3"><use href="#baseShape" transform="rotate(240 256 256)" /></g>
+
+    <!-- Masks to create the over/under interlocking weave effect -->
+    <mask id="mask1">
+      <rect width="512" height="512" fill="white" />
+      <use href="#shape2" fill="none" stroke="black" stroke-width="32" stroke-linejoin="round" />
+    </mask>
+    <mask id="mask2">
+      <rect width="512" height="512" fill="white" />
+      <use href="#shape3" fill="none" stroke="black" stroke-width="32" stroke-linejoin="round" />
+    </mask>
+    <mask id="mask3">
+      <rect width="512" height="512" fill="white" />
+      <use href="#shape1" fill="none" stroke="black" stroke-width="32" stroke-linejoin="round" />
+    </mask>
+  </defs>
+
+  <!-- The 3 disconnected background arcs with rounded caps -->
+  <!-- Circumference = 753.98. Dash = 80, Gap = 171.33. Rotation = 71 deg to center at bottom (90 deg) -->
+  <circle cx="256" cy="256" r="120" 
+          stroke="url(#trioGradient)" 
+          stroke-width="8" 
+          fill="none" 
+          stroke-linecap="round"
+          stroke-dasharray="80 171.33"
+          transform="rotate(71 256 256)" />
+
+  <!-- The 3 interlocking main shapes -->
+  <g stroke="url(#trioGradient)" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <use href="#shape1" mask="url(#mask1)" />
+    <use href="#shape2" mask="url(#mask2)" />
+    <use href="#shape3" mask="url(#mask3)" />
+  </g>
+</svg>
