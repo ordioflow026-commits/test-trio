@@ -105,7 +105,12 @@ export default function MainScreen() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveSubTab(tab.id)}
+                  onClick={() => {
+                    setActiveSubTab(tab.id);
+                    if (tab.id === 'contacts') {
+                      window.dispatchEvent(new CustomEvent('fetch-contacts'));
+                    }
+                  }}
                   className={`flex-1 flex flex-col items-center justify-center py-3 px-1 rounded-2xl transition-all duration-300 border ${
                     isActive
                       ? 'bg-blue-700 text-white shadow-[0_8px_16px_rgba(29,78,216,0.4)] scale-105 border-blue-500'

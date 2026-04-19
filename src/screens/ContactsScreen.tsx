@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquare, Phone, Video, Check, X, Mic, ChevronDown, Users } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { Capacitor } from '@capacitor/core';
+import { Contacts } from '@capacitor-community/contacts';
 
 interface Contact {
   id: number;
@@ -28,9 +30,8 @@ const FALLBACK_CONTACTS: Contact[] = DUMMY_NAMES.map((name, i) => {
 
 export default function ContactsScreen() {
   const { t } = useLanguage();
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
+  const [contacts, setContacts] = useState<Contact[]>(FALLBACK_CONTACTS);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
@@ -40,50 +41,60 @@ export default function ContactsScreen() {
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Auto-load for web preview testing
-    requestContactsPermission();
+    // Only fetch when the user explicitly interacts with the contacts icon (triggering this event)
+    const handleFetch = () => requestContactsPermission();
+    window.addEventListener('fetch-contacts', handleFetch);
+    return () => window.removeEventListener('fetch-contacts', handleFetch);
   }, []);
 
-  const requestContactsPermission = async () => {
-    setIsLoading(true);
+  const fetchContactsData = async () => {
     try {
-      // In a real web environment, navigator.contacts requires HTTPS and user gesture.
-      // We simulate the permission flow here.
-      const supported = 'contacts' in navigator && 'ContactsManager' in window;
-      
-      if (supported) {
-        const props = ['name', 'tel'];
-        const opts = { multiple: true };
-        try {
-          const rawContacts = await (navigator as any).contacts.select(props, opts);
-          const formattedContacts = rawContacts.map((c: any, i: number) => ({
-            id: i,
-            name: c.name?.[0] || 'Unknown',
-            phone: c.tel?.[0] || 'No phone',
-            initials: (c.name?.[0] || 'U').substring(0, 2).toUpperCase()
-          }));
-          setContacts(formattedContacts.length > 0 ? formattedContacts : FALLBACK_CONTACTS);
-          setPermissionGranted(true);
-        } catch (err) {
-          console.error("Contacts selection failed:", err);
-          setContacts(FALLBACK_CONTACTS);
-          setPermissionGranted(false);
-        }
+      setErrorMessage(null);
+      const result = await Contacts.getContacts({
+        projection: { name: true, phones: true },
+      });
+      if (result.contacts && result.contacts.length > 0) {
+        const mappedContacts = result.contacts.map((c, i) => ({
+          id: i,
+          name: c.name?.display || 'Unknown',
+          phone: c.phones?.[0]?.number || 'No phone',
+          initials: (c.name?.display || 'U').substring(0, 2).toUpperCase()
+        }));
+        setContacts(mappedContacts);
       } else {
-        // Fallback for browsers that don't support the Contact Picker API
-        setTimeout(() => {
-          setContacts(FALLBACK_CONTACTS);
-          setPermissionGranted(true); // Pretend granted for fallback so UI shows contacts
-          setIsLoading(false);
-        }, 800); // Short delay for realism
-        return;
+        setErrorMessage('Contact access restricted: No contacts found on device.');
+        setContacts(FALLBACK_CONTACTS);
       }
-    } catch (error) {
-      console.error('Error fetching contacts:', error);
+    } catch (err: any) {
+      console.error('Failed to get contacts:', err);
+      setErrorMessage('Contact access restricted: ' + (err.message || 'Failed to fetch. Your browser may be blocking native access.'));
       setContacts(FALLBACK_CONTACTS);
-      setPermissionGranted(true); // Force true to show dummy contacts
-    } finally {
-      setIsLoading(false);
+    }
+  };
+
+  const requestContactsPermission = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      setErrorMessage('Contact access restricted. Showing sample contacts for browser.');
+      setContacts(FALLBACK_CONTACTS);
+      return;
+    }
+
+    try {
+      setErrorMessage(null);
+      let perm = await Contacts.checkPermissions();
+      if (perm.contacts !== 'granted') {
+        perm = await Contacts.requestPermissions();
+      }
+      if (perm.contacts === 'granted') {
+        fetchContactsData();
+      } else {
+        setErrorMessage('Contact access restricted: Permission denied.');
+        setContacts(FALLBACK_CONTACTS);
+      }
+    } catch (err: any) {
+      console.error('Permission request failed:', err);
+      setErrorMessage('Contact access restricted: ' + (err.message || 'Error requesting permissions from browser.'));
+      setContacts(FALLBACK_CONTACTS);
     }
   };
 
@@ -143,39 +154,21 @@ export default function ContactsScreen() {
 
       {/* Contacts List */}
       <div className="flex-1 overflow-y-auto pt-2 pb-20">
-        {isLoading ? (
-          // Shimmer Loading Effect
-          Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex items-center px-4 py-3 animate-pulse">
-              <div className="w-12 h-12 rounded-full bg-slate-800 mr-4"></div>
-              <div className="flex-1 border-b border-slate-800 pb-3 pt-1">
-                <div className="h-4 bg-slate-800 rounded w-1/3 mb-2"></div>
-                <div className="h-3 bg-slate-800 rounded w-1/4"></div>
-              </div>
-            </div>
-          ))
-        ) : permissionGranted === null ? (
-          // Initial State
-          <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-            <Users className="w-16 h-16 text-slate-600 mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">Sync Contacts</h3>
-            <p className="text-slate-400 mb-6">Connect your address book to find friends and start chatting.</p>
-            <button onClick={requestContactsPermission} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-full font-bold transition-colors">
-              Sync Contacts
-            </button>
+        
+        {/* Error Message for Browser Fallback */}
+        {errorMessage && (
+          <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-4 rounded-xl mx-4 mb-4 text-center">
+             <p className="font-bold flex items-center justify-center gap-2">
+               <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-xs">!</span>
+               {errorMessage}
+             </p>
+             <p className="text-xs mt-3 text-red-300/80">
+               Note: To access native contacts safely, ensure you are running this app as an installed PWA or native APK.
+             </p>
           </div>
-        ) : !permissionGranted && contacts === FALLBACK_CONTACTS ? (
-          // Permission Denied State (Optional, but good for UX)
-          <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-            <Users className="w-16 h-16 text-slate-600 mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">Contacts Permission Required</h3>
-            <p className="text-slate-400 mb-6">Please allow access to your contacts to see them here.</p>
-            <button onClick={requestContactsPermission} className="bg-blue-600 text-white px-6 py-3 rounded-full font-bold">
-              Grant Permission
-            </button>
-          </div>
-        ) : (
-          contacts.map((contact) => {
+        )}
+
+        {contacts.map((contact) => {
             const isSelected = selectedIds.has(contact.id);
             return (
             <React.Fragment key={contact.id}>
@@ -215,7 +208,7 @@ export default function ContactsScreen() {
               )}
             </React.Fragment>
           );
-        }))}
+        })}
       </div>
 
       {/* Action Bottom Sheet (Accordion UI) */}
