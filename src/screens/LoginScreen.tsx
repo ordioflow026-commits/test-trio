@@ -42,37 +42,7 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      const parsedPhone = parsePhoneNumber(phone);
-      const countryCode = parsedPhone?.country || 'Unknown';
-      const cleanPhone = phone.replace(/\D/g, '');
-      
-      // 1. Create a real Supabase Auth session using a deterministic dummy email
-      const dummyEmail = `${cleanPhone}@triosync.local`;
-      const dummyPassword = `TrioSync_${cleanPhone}_Secure!`;
-
-      let authUserId;
-      let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: dummyEmail,
-        password: dummyPassword,
-      });
-
-      if (authError) {
-        // If sign in fails, try to sign up
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: dummyEmail,
-          password: dummyPassword,
-        });
-        
-        if (signUpError) {
-          // Fallback if sign up fails (e.g. user exists but different error)
-          throw signUpError;
-        }
-        authUserId = signUpData.user?.id;
-      } else {
-        authUserId = authData.user?.id;
-      }
-
-      // 2. Handle the custom profiles table
+      // Check if user exists
       const { data: existingUser, error: fetchError } = await supabase
         .from('profiles')
         .select('*')
@@ -81,10 +51,13 @@ export default function LoginScreen() {
 
       if (fetchError) throw fetchError;
 
-      let profileId = existingUser?.id;
+      let userId = existingUser?.id;
+      
+      const parsedPhone = parsePhoneNumber(phone);
+      const countryCode = parsedPhone?.country || 'Unknown';
 
       if (!existingUser) {
-        // Register new user profile
+        // Register new user
         const { data: newUser, error: insertError } = await supabase
           .from('profiles')
           .insert([{ name: fullName, phone, country_code: countryCode }])
@@ -92,19 +65,19 @@ export default function LoginScreen() {
           .single();
         
         if (insertError) throw insertError;
-        profileId = newUser.id;
+        userId = newUser.id;
       } else {
         // Update existing user name
         const { error: updateError } = await supabase
           .from('profiles')
           .update({ name: fullName, country_code: countryCode })
-          .eq('id', profileId);
+          .eq('id', userId);
           
         if (updateError) throw updateError;
       }
 
-      // Save session globally in context
-      setUser({ id: profileId, fullName, phone });
+      // Save session globally
+      setUser({ id: userId, fullName, phone });
       
       // Navigate on success
       navigate('/main');
@@ -127,12 +100,9 @@ export default function LoginScreen() {
       </div>
       {/* Header */}
       <div className="p-6 flex justify-between items-center">
-        <div className="flex flex-col items-center justify-center">
-          <img src="/trio_sync_logo_v3.svg" alt="Trio Sync Logo" className="h-10 w-auto object-contain mb-1" />
-          <div className="flex items-baseline tracking-[0.5px]">
-            <span className="text-sm font-extrabold uppercase text-white font-sans">TRIO</span>
-            <span className="text-sm font-light lowercase text-[#00D1FF] font-sans">sync</span>
-          </div>
+        <div className="flex items-center gap-3">
+          <img src="/trio_sync_logo.svg" alt="TrioSync Logo" className="w-10 h-10 rounded-xl shadow-lg shadow-blue-500/20" />
+          <span className="text-xl font-bold text-white tracking-wide">TrioSync</span>
         </div>
         <button
           onClick={toggleLanguage}

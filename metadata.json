@@ -1,9 +1,5 @@
 {
-  "name": "CommApp",
-  "description": "Communication application with video calling and chat",
-  "requestFramePermissions": [
-    "camera",
-    "microphone",
-    "contacts"
-  ]
+  "name": "Remix: CommApp Phase 1",
+  "description": "Core Architecture \u0026 Authentication for communication app",
+  "requestFramePermissions": []
 }
