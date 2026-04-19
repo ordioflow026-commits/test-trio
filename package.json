@@ -5,17 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit",
-    "cap-sync": "npx cap sync",
-    "cap-open": "npx cap open android"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@capacitor-community/contacts": "^7.1.0",
-    "@capacitor/android": "^8.3.0",
-    "@capacitor/core": "^8.3.0",
     "@google/genai": "^1.29.0",
     "@supabase/supabase-js": "^2.103.0",
     "@tailwindcss/vite": "^4.1.14",
@@ -31,7 +26,6 @@
     "vite": "^6.2.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.3.0",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",

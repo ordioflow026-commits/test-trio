@@ -33,12 +33,9 @@ export default function MainScreen() {
       <header className="bg-[#0F172A]/90 backdrop-blur-xl border-b border-slate-800/80 sticky top-0 z-20 shadow-lg shadow-black/20">
         <div className="flex justify-between items-center h-20 px-4">
           {/* Left: Logo */}
-          <div className="w-24 flex flex-col items-center justify-center flex-shrink-0">
-            <img src="/trio_sync_logo_v3.svg" alt="Trio Sync Logo" className="h-8 w-auto object-contain mb-1" />
-            <div className="flex items-baseline tracking-[0.5px]">
-              <span style={{ fontWeight: 800, textTransform: 'uppercase' }} className="text-[11px] text-white font-sans">TRIO</span>
-              <span style={{ fontWeight: 300, textTransform: 'lowercase', color: '#00D1FF' }} className="text-[11px] font-sans">sync</span>
-            </div>
+          <div className="w-24 flex items-center gap-2">
+            <img src="/trio_sync_logo.svg" alt="TrioSync Logo" className="w-8 h-8 rounded-lg shadow-md shadow-blue-500/20" />
+            <span className="text-sm font-bold text-white tracking-wide hidden sm:block">TrioSync</span>
           </div>
 
           {/* Center Frame for Main Icons */}
