@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Phone, Video, Check, X, Mic, ChevronDown, Users } from 'lucide-react';
+import { MessageSquare, Phone, Video, Check, X, Mic, ChevronDown, Users, Loader2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Capacitor } from '@capacitor/core';
 import { Contacts } from '@capacitor-community/contacts';
@@ -14,6 +14,12 @@ interface Contact {
   initials: string;
 }
 
+const SAMPLE_CONTACTS: Contact[] = [
+  { id: 1001, name: 'Sample Alice', phone: '+1 555 0101', initials: 'SA' },
+  { id: 1002, name: 'Sample Bob', phone: '+1 555 0102', initials: 'SB' },
+  { id: 1003, name: 'Sample Charlie', phone: '+1 555 0103', initials: 'SC' },
+];
+
 export default function ContactsScreen() {
   const { t } = useLanguage();
   const { user } = useUser();
@@ -23,30 +29,38 @@ export default function ContactsScreen() {
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [expandedSection, setExpandedSection] = useState<'none' | 'message' | 'call'>('none');
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const navigate = useNavigate();
   
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Only fetch when the user explicitly interacts with the contacts icon (triggering this event)
-    const handleFetch = () => requestContactsPermission();
+    const handleFetch = () => {
+      setIsLoadingContacts(true);
+      requestContactsPermission().finally(() => setIsLoadingContacts(false));
+    };
     window.addEventListener('fetch-contacts', handleFetch);
     
     // Fetch persisted selection
+    let isMounted = true;
     if (user?.id) {
-      supabase.from('user_selections')
+      supabase.from('selected_contacts')
         .select('selected_phones')
         .eq('user_id', user.id)
         .single()
         .then(({ data, error }) => {
-          if (!error && data?.selected_phones && Array.isArray(data.selected_phones)) {
+          if (isMounted && !error && data?.selected_phones && Array.isArray(data.selected_phones)) {
             setSelectedPhones(new Set(data.selected_phones));
             if (data.selected_phones.length > 0) setIsSelectionMode(true);
           }
         });
     }
 
-    return () => window.removeEventListener('fetch-contacts', handleFetch);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('fetch-contacts', handleFetch);
+    };
   }, [user]);
 
   const updateSelection = async (newSelected: Set<string>) => {
@@ -58,7 +72,7 @@ export default function ContactsScreen() {
     // Save selection bounds to supabase ensuring persistence bounds
     if (user?.id) {
       try {
-        await supabase.from('user_selections').upsert({
+        await supabase.from('selected_contacts').upsert({
           user_id: user.id,
           selected_phones: Array.from(newSelected)
         }, { onConflict: 'user_id' });
@@ -93,7 +107,8 @@ export default function ContactsScreen() {
 
   const requestContactsPermission = async () => {
     if (!Capacitor.isNativePlatform()) {
-      setErrorMessage('Please grant contact access. (Web environment testing mode)');
+      setErrorMessage('Web Fallback: Showing 3 Sample Contacts.');
+      setContacts(SAMPLE_CONTACTS);
       return;
     }
 
@@ -104,13 +119,13 @@ export default function ContactsScreen() {
         perm = await Contacts.requestPermissions();
       }
       if (perm.contacts === 'granted') {
-        fetchContactsData();
+        await fetchContactsData();
       } else {
-        setErrorMessage('Please grant contact access. Permission denied.');
+        setErrorMessage('Permission Denied. Please grant contact access in your device settings.');
       }
     } catch (err: any) {
       console.error('Permission request failed:', err);
-      setErrorMessage('Please grant contact access: ' + (err.message || 'Error requesting permissions from browser.'));
+      setErrorMessage('Permission Denied: ' + (err.message || 'Error requesting permissions from browser.'));
     }
   };
 
@@ -170,6 +185,14 @@ export default function ContactsScreen() {
       {/* Contacts List */}
       <div className="flex-1 overflow-y-auto pt-2 pb-20">
         
+        {/* Inline Loading Spinner */}
+        {isLoadingContacts && (
+          <div className="flex flex-col items-center justify-center p-6 text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-2" />
+            <span className="text-sm font-medium">Loading contacts...</span>
+          </div>
+        )}
+
         {/* Error Message for Browser Fallback */}
         {errorMessage && (
           <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-4 rounded-xl mx-4 mb-4 text-center">
