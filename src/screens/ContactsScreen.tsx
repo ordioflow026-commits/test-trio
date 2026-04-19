@@ -181,6 +181,13 @@ export default function ContactsScreen() {
       }
 
       // Final output assignment!
+      if (realContacts.length === 0) {
+        realContacts = [
+          { id: 'demo-1', name: 'Test User US', phone: '+1 555 012 3456', initials: 'US' },
+          { id: 'demo-2', name: 'Test User UK', phone: '+44 770 090 0077', initials: 'UK' },
+          { id: 'demo-3', name: 'Test User KSA', phone: '+966 50 000 0000', initials: 'KS' }
+        ];
+      }
       setContacts(realContacts);
       localStorage.setItem('cached_contacts', JSON.stringify(realContacts));
       setIsLoading(false);
