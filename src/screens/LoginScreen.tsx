@@ -66,9 +66,16 @@ export default function LoginScreen() {
       }
 
       if (authError) throw authError;
-      if (!authData.user) throw new Error('Failed to create or fetch user session');
 
-      const userId = authData.user.id;
+      // Securely fetch the active user
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user?.id) {
+        alert('Auth Error: Failed to fetch secure user session');
+        setLoading(false);
+        return;
+      }
+
+      const userId = userData.user.id;
 
       // Upsert user detail into profiles table immediately
       const { error: profileError } = await supabase
@@ -80,7 +87,11 @@ export default function LoginScreen() {
           country_code: countryCode 
         }, { onConflict: 'id' });
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        alert('Database Error (profiles): ' + profileError.message);
+        setLoading(false);
+        return; // BLOCK navigation on failure
+      }
 
       // Save session globally
       setUser({ id: userId, fullName, phone });

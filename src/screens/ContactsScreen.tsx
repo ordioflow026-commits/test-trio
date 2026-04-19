@@ -37,9 +37,11 @@ export default function ContactsScreen() {
       let currentUserId = user?.id;
       
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session?.user?.id) {
-          currentUserId = sessionData.session.user.id;
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData?.user?.id) {
+          console.error('Session fetch failed', userError?.message);
+        } else {
+          currentUserId = userData.user.id;
         }
       } catch (err) {
         console.error('Session fetch failed', err);
@@ -96,10 +98,12 @@ export default function ContactsScreen() {
   const toggleContactSelection = async (contact: Contact, forceSelect?: boolean) => {
     let currentUserId = user?.id;
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session?.user?.id) {
-        currentUserId = sessionData.session.user.id;
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user?.id) {
+        alert('Auth Error: Unauthenticated user. Please log in again.');
+        return;
       }
+      currentUserId = userData.user.id;
     } catch (err) {}
 
     if (!currentUserId) return;
@@ -117,15 +121,18 @@ export default function ContactsScreen() {
           name: contact.name
         }, { onConflict: 'user_id,phone' });
         
-        if (error) throw error;
+        if (error) {
+          alert('Database Error (selected_contacts): ' + error.message);
+          return; // STOP execution on failure
+        }
         
         // Update local state ONLY if successful
         newSelected.add(contact.phone);
         setSelectedPhones(newSelected);
         setIsSelectionMode(true);
-      } catch (err) {
+      } catch (err: any) {
          console.error('Upsert failed', err);
-         setErrorMessage('Failed to save selection. Please try again.');
+         alert('Database Error (selected_contacts): ' + (err.message || 'Unknown network error.'));
       }
     } else {
       try {
@@ -134,15 +141,18 @@ export default function ContactsScreen() {
           .delete()
           .match({ user_id: currentUserId, phone: contact.phone });
           
-        if (error) throw error;
+        if (error) {
+          alert('Database Error (selected_contacts delete): ' + error.message);
+          return; // STOP execution on failure
+        }
 
         // Update local state ONLY if successful
         newSelected.delete(contact.phone);
         setSelectedPhones(newSelected);
         if (newSelected.size === 0) setIsSelectionMode(false);
-      } catch (err) {
+      } catch (err: any) {
          console.error('Delete failed', err);
-         setErrorMessage('Failed to remove selection. Please try again.');
+         alert('Database Error (selected_contacts delete): ' + (err.message || 'Unknown network error.'));
       }
     }
   };
