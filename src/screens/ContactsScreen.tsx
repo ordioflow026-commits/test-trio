@@ -4,6 +4,8 @@ import { MessageSquare, Phone, Video, Check, X, Mic, ChevronDown, Users } from '
 import { useLanguage } from '../contexts/LanguageContext';
 import { Capacitor } from '@capacitor/core';
 import { Contacts } from '@capacitor-community/contacts';
+import { supabase } from '../lib/supabase';
+import { useUser } from '../contexts/UserContext';
 
 interface Contact {
   id: number;
@@ -12,28 +14,13 @@ interface Contact {
   initials: string;
 }
 
-const DUMMY_NAMES = [
-  'Ahmed Hassan', 'Sarah Al-Fayed', 'Mohammed Ali', 'Fatima Zahra', 
-  'Omar Farooq', 'Aisha Rahman', 'Khalid Saeed', 'Nour El-Din', 
-  'Youssef Ibrahim', 'Layla Mahmoud'
-];
-
-const FALLBACK_CONTACTS: Contact[] = DUMMY_NAMES.map((name, i) => {
-  const initials = name.split(' ').map(n => n[0]).join('').toUpperCase();
-  return {
-    id: i,
-    name: name,
-    phone: `+1 555 010${i.toString().padStart(2, '0')}`,
-    initials: initials
-  };
-});
-
 export default function ContactsScreen() {
   const { t } = useLanguage();
-  const [contacts, setContacts] = useState<Contact[]>(FALLBACK_CONTACTS);
+  const { user } = useUser();
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [expandedSection, setExpandedSection] = useState<'none' | 'message' | 'call'>('none');
   const navigate = useNavigate();
@@ -44,8 +31,42 @@ export default function ContactsScreen() {
     // Only fetch when the user explicitly interacts with the contacts icon (triggering this event)
     const handleFetch = () => requestContactsPermission();
     window.addEventListener('fetch-contacts', handleFetch);
+    
+    // Fetch persisted selection
+    if (user?.id) {
+      supabase.from('user_selections')
+        .select('selected_phones')
+        .eq('user_id', user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data?.selected_phones && Array.isArray(data.selected_phones)) {
+            setSelectedPhones(new Set(data.selected_phones));
+            if (data.selected_phones.length > 0) setIsSelectionMode(true);
+          }
+        });
+    }
+
     return () => window.removeEventListener('fetch-contacts', handleFetch);
-  }, []);
+  }, [user]);
+
+  const updateSelection = async (newSelected: Set<string>) => {
+    setSelectedPhones(newSelected);
+    if (newSelected.size === 0) {
+      setIsSelectionMode(false);
+    }
+    
+    // Save selection bounds to supabase ensuring persistence bounds
+    if (user?.id) {
+      try {
+        await supabase.from('user_selections').upsert({
+          user_id: user.id,
+          selected_phones: Array.from(newSelected)
+        }, { onConflict: 'user_id' });
+      } catch (err) {
+        console.error('Failed to save selection', err);
+      }
+    }
+  };
 
   const fetchContactsData = async () => {
     try {
@@ -62,20 +83,17 @@ export default function ContactsScreen() {
         }));
         setContacts(mappedContacts);
       } else {
-        setErrorMessage('Contact access restricted: No contacts found on device.');
-        setContacts(FALLBACK_CONTACTS);
+        setErrorMessage('Please grant contact access or add contacts. No contacts found on device.');
       }
     } catch (err: any) {
       console.error('Failed to get contacts:', err);
-      setErrorMessage('Contact access restricted: ' + (err.message || 'Failed to fetch. Your browser may be blocking native access.'));
-      setContacts(FALLBACK_CONTACTS);
+      setErrorMessage('Please grant contact access: ' + (err.message || 'Browser may be blocking native access.'));
     }
   };
 
   const requestContactsPermission = async () => {
     if (!Capacitor.isNativePlatform()) {
-      setErrorMessage('Contact access restricted. Showing sample contacts for browser.');
-      setContacts(FALLBACK_CONTACTS);
+      setErrorMessage('Please grant contact access. (Web environment testing mode)');
       return;
     }
 
@@ -88,21 +106,19 @@ export default function ContactsScreen() {
       if (perm.contacts === 'granted') {
         fetchContactsData();
       } else {
-        setErrorMessage('Contact access restricted: Permission denied.');
-        setContacts(FALLBACK_CONTACTS);
+        setErrorMessage('Please grant contact access. Permission denied.');
       }
     } catch (err: any) {
       console.error('Permission request failed:', err);
-      setErrorMessage('Contact access restricted: ' + (err.message || 'Error requesting permissions from browser.'));
-      setContacts(FALLBACK_CONTACTS);
+      setErrorMessage('Please grant contact access: ' + (err.message || 'Error requesting permissions from browser.'));
     }
   };
 
-  const handleTouchStart = (id: number) => {
+  const handleTouchStart = (phone: string) => {
     longPressTimer.current = setTimeout(() => {
       if (!isSelectionMode) {
         setIsSelectionMode(true);
-        setSelectedIds(new Set([id]));
+        updateSelection(new Set([phone]));
       }
     }, 500); // 500ms for long press
   };
@@ -115,14 +131,13 @@ export default function ContactsScreen() {
 
   const handleTap = (contact: Contact) => {
     if (isSelectionMode) {
-      const newSelected = new Set(selectedIds);
-      if (newSelected.has(contact.id)) {
-        newSelected.delete(contact.id);
-        if (newSelected.size === 0) setIsSelectionMode(false);
+      const newSelected = new Set<string>(selectedPhones);
+      if (newSelected.has(contact.phone)) {
+        newSelected.delete(contact.phone);
       } else {
-        newSelected.add(contact.id);
+        newSelected.add(contact.phone);
       }
-      setSelectedIds(newSelected);
+      updateSelection(newSelected);
     } else {
       setActiveContact(contact);
       setExpandedSection('none');
@@ -131,12 +146,12 @@ export default function ContactsScreen() {
 
   const startGroupCall = () => {
     setIsSelectionMode(false);
-    setSelectedIds(new Set());
+    updateSelection(new Set<string>());
     navigate('/call', { state: { title: t('groupVideoCall') } });
   };
 
-  // Find the ID of the last selected contact in the list
-  const lastSelectedContactId = [...contacts].reverse().find(c => selectedIds.has(c.id))?.id;
+  // Find the phone of the last selected contact in the list
+  const lastSelectedContactPhone = [...contacts].reverse().find(c => selectedPhones.has(c.phone))?.phone;
 
   return (
     <div className="flex flex-col h-full bg-slate-900 relative">
@@ -144,10 +159,10 @@ export default function ContactsScreen() {
       {isSelectionMode && (
         <div className="absolute top-0 left-0 right-0 bg-blue-600 text-white px-4 py-3 flex items-center justify-between z-20 shadow-md">
           <div className="flex items-center gap-3">
-            <button onClick={() => { setIsSelectionMode(false); setSelectedIds(new Set()); }}>
+            <button onClick={() => { setIsSelectionMode(false); updateSelection(new Set<string>()); }}>
               <X className="w-6 h-6" />
             </button>
-            <span className="font-semibold text-lg">{selectedIds.size} {t('selected')}</span>
+            <span className="font-semibold text-lg">{selectedPhones.size} {t('selected')}</span>
           </div>
         </div>
       )}
@@ -169,14 +184,14 @@ export default function ContactsScreen() {
         )}
 
         {contacts.map((contact) => {
-            const isSelected = selectedIds.has(contact.id);
+            const isSelected = selectedPhones.has(contact.phone);
             return (
             <React.Fragment key={contact.id}>
               <div
-                onMouseDown={() => handleTouchStart(contact.id)}
+                onMouseDown={() => handleTouchStart(contact.phone)}
                 onMouseUp={handleTouchEnd}
                 onMouseLeave={handleTouchEnd}
-                onTouchStart={() => handleTouchStart(contact.id)}
+                onTouchStart={() => handleTouchStart(contact.phone)}
                 onTouchEnd={handleTouchEnd}
                 onClick={() => handleTap(contact)}
                 className={`flex items-center px-4 py-3 cursor-pointer transition-colors select-none ${
@@ -195,7 +210,7 @@ export default function ContactsScreen() {
               </div>
 
               {/* Inline Group Video Call Button under the last selected contact */}
-              {isSelectionMode && contact.id === lastSelectedContactId && (
+              {isSelectionMode && contact.phone === lastSelectedContactPhone && (
                 <div className="px-4 py-4 flex justify-end animate-in fade-in slide-in-from-top-2 bg-slate-800/30 border-b border-slate-800">
                   <button
                     onClick={startGroupCall}
