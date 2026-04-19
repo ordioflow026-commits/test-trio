@@ -7,6 +7,7 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [react(), tailwindcss()],
+    base: '/',
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
@@ -14,6 +15,19 @@ export default defineConfig(({mode}) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+    },
+    build: {
+      chunkSizeWarningLimit: 2000,
+      outDir: 'dist',
+      assetsDir: 'assets',
+      minify: false, // Turn off minification to debug the black screen
+      rollupOptions: {
+        output: {
+          entryFileNames: `assets/[name].js`,
+          chunkFileNames: `assets/[name].js`,
+          assetFileNames: `assets/[name].[ext]`
+        }
+      }
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
