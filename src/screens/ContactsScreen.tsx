@@ -33,28 +33,41 @@ export default function ContactsScreen() {
     let isMounted = true;
 
     const initContacts = async () => {
-      // 1. Initial Load: Query Supabase
-      if (user?.id) {
+      // 1. Initial Load: Query Supabase using real session ID
+      let currentUserId = user?.id;
+      
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.user?.id) {
+          currentUserId = sessionData.session.user.id;
+        }
+      } catch (err) {
+        console.error('Session fetch failed', err);
+      }
+
+      if (currentUserId) {
         try {
           const { data, error } = await supabase.from('selected_contacts')
             .select('*')
-            .eq('user_id', user.id);
+            .eq('user_id', currentUserId);
           
           if (isMounted && !error && data) {
             const savedSelected = new Set<string>();
             const savedContacts: Contact[] = data.map((c: any, index: number) => {
               savedSelected.add(c.phone);
               return {
-                id: index + 10000, // Safe offset
+                id: index + 10000, 
                 name: c.name || 'Unknown',
                 phone: c.phone,
                 initials: (c.name || 'U').substring(0, 2).toUpperCase()
               };
             });
 
+            // Set immediately so user sees their saved contacts right away
             if (savedContacts.length > 0) {
               setContacts(savedContacts);
               setSelectedPhones(savedSelected);
+              setIsSelectionMode(true);
             }
           }
         } catch (err) {
@@ -81,37 +94,55 @@ export default function ContactsScreen() {
   }, [user]);
 
   const toggleContactSelection = async (contact: Contact, forceSelect?: boolean) => {
-    if (!user?.id) return;
+    let currentUserId = user?.id;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user?.id) {
+        currentUserId = sessionData.session.user.id;
+      }
+    } catch (err) {}
+
+    if (!currentUserId) return;
     
     const newSelected = new Set<string>(selectedPhones);
     const isCurrentlySelected = newSelected.has(contact.phone);
     const willBeSelected = forceSelect !== undefined ? forceSelect : !isCurrentlySelected;
 
     if (willBeSelected) {
-      newSelected.add(contact.phone);
-      setSelectedPhones(newSelected);
-      setIsSelectionMode(true);
-      
       try {
-        await supabase.from('selected_contacts').upsert({
-          user_id: user.id,
+        // Insert/Upsert into Supabase FIRST
+        const { error } = await supabase.from('selected_contacts').upsert({
+          user_id: currentUserId,
           phone: contact.phone,
           name: contact.name
-        }, { onConflict: 'user_id,phone' }).select();
+        }, { onConflict: 'user_id,phone' });
+        
+        if (error) throw error;
+        
+        // Update local state ONLY if successful
+        newSelected.add(contact.phone);
+        setSelectedPhones(newSelected);
+        setIsSelectionMode(true);
       } catch (err) {
          console.error('Upsert failed', err);
+         setErrorMessage('Failed to save selection. Please try again.');
       }
     } else {
-      newSelected.delete(contact.phone);
-      setSelectedPhones(newSelected);
-      if (newSelected.size === 0) setIsSelectionMode(false);
-      
       try {
-        await supabase.from('selected_contacts')
+        // Delete from Supabase FIRST
+        const { error } = await supabase.from('selected_contacts')
           .delete()
-          .match({ user_id: user.id, phone: contact.phone });
+          .match({ user_id: currentUserId, phone: contact.phone });
+          
+        if (error) throw error;
+
+        // Update local state ONLY if successful
+        newSelected.delete(contact.phone);
+        setSelectedPhones(newSelected);
+        if (newSelected.size === 0) setIsSelectionMode(false);
       } catch (err) {
          console.error('Delete failed', err);
+         setErrorMessage('Failed to remove selection. Please try again.');
       }
     }
   };
