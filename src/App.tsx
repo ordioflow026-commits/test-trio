@@ -9,7 +9,7 @@ import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
 
 function SessionChecker({ children }: { children: React.ReactNode }) {
-  const { user } = useUser();
+  const { setUser } = useUser();
   const [isChecking, setIsChecking] = useState(true);
   const navigate = useNavigate();
 
@@ -17,17 +17,8 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
     let isMounted = true;
 
     const verifySession = async () => {
-      if (!user?.id) {
-        if (isMounted) setIsChecking(false);
-        return;
-      }
-
       try {
-        const fetchPromise = supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', user.id)
-          .single();
+        const sessionPromise = supabase.auth.getSession();
         
         // 3-second timeout rule to avoid permanent loading spinners
         const timeoutPromise = new Promise((_, reject) => 
@@ -35,15 +26,25 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
         );
 
         const { data, error } = (await Promise.race([
-          fetchPromise, 
+          sessionPromise, 
           timeoutPromise
         ])) as any;
 
-        if (error || !data) {
-           throw new Error('No valid session');
+        if (error || !data?.session) {
+           throw new Error('No valid session found');
         }
 
+        // Fetch profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.session.user.id)
+          .single();
+
         if (isMounted) {
+          if (profile) {
+            setUser({ id: profile.id, fullName: profile.name, phone: profile.phone });
+          }
           setIsChecking(false);
           if (window.location.pathname === '/') {
             navigate('/main', { replace: true });
@@ -57,8 +58,19 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
     };
 
     verifySession();
-    return () => { isMounted = false; };
-  }, [user, navigate]);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' && isMounted) {
+        setUser(null);
+        navigate('/', { replace: true });
+      }
+    });
+
+    return () => { 
+      isMounted = false; 
+      subscription.unsubscribe();
+    };
+  }, [navigate, setUser]);
 
   if (isChecking) {
     return (

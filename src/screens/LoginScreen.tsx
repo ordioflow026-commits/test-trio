@@ -42,39 +42,45 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // Check if user exists
-      const { data: existingUser, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('phone', phone)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-
-      let userId = existingUser?.id;
-      
       const parsedPhone = parsePhoneNumber(phone);
       const countryCode = parsedPhone?.country || 'Unknown';
+      
+      // WhatsApp-like auth workaround logic
+      const numericPhone = phone.replace(/\D/g, '');
+      const email = `${numericPhone}@app.com`;
+      const password = 'password123456';
 
-      if (!existingUser) {
-        // Register new user
-        const { data: newUser, error: insertError } = await supabase
-          .from('profiles')
-          .insert([{ name: fullName, phone, country_code: countryCode }])
-          .select()
-          .single();
-        
-        if (insertError) throw insertError;
-        userId = newUser.id;
-      } else {
-        // Update existing user name
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ name: fullName, country_code: countryCode })
-          .eq('id', userId);
-          
-        if (updateError) throw updateError;
+      let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError && authError.message.includes('Invalid login credentials')) {
+        // Try sign up if sign in fails due to no user
+        const signUpRes = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        authData = signUpRes.data;
+        authError = signUpRes.error;
       }
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Failed to create or fetch user session');
+
+      const userId = authData.user.id;
+
+      // Upsert user detail into profiles table immediately
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({ 
+          id: userId,
+          name: fullName, 
+          phone: phone,
+          country_code: countryCode 
+        }, { onConflict: 'id' });
+
+      if (profileError) throw profileError;
 
       // Save session globally
       setUser({ id: userId, fullName, phone });
@@ -165,7 +171,7 @@ export default function LoginScreen() {
                   {t('loading')}
                 </>
               ) : (
-                t('login')
+                'Start'
               )}
             </button>
           </form>
