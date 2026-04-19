@@ -28,36 +28,49 @@ export default function ContactsScreen() {
   
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Removed global loadSavedAndFetch here and implemented it tightly within the useEffect
   useEffect(() => {
     let isMounted = true;
 
-    const loadSavedAndFetch = async () => {
-      // 1. Fetch persisted selection
+    const initContacts = async () => {
+      // 1. Initial Load: Query Supabase
       if (user?.id) {
         try {
           const { data, error } = await supabase.from('selected_contacts')
-            .select('selected_phones')
-            .eq('user_id', user.id)
-            .single();
+            .select('*')
+            .eq('user_id', user.id);
           
-          if (isMounted && !error && data?.selected_phones && Array.isArray(data.selected_phones)) {
-            setSelectedPhones(new Set(data.selected_phones));
-            if (data.selected_phones.length > 0) setIsSelectionMode(true);
+          if (isMounted && !error && data) {
+            const savedSelected = new Set<string>();
+            const savedContacts: Contact[] = data.map((c: any, index: number) => {
+              savedSelected.add(c.phone);
+              return {
+                id: index + 10000, // Safe offset
+                name: c.name || 'Unknown',
+                phone: c.phone,
+                initials: (c.name || 'U').substring(0, 2).toUpperCase()
+              };
+            });
+
+            if (savedContacts.length > 0) {
+              setContacts(savedContacts);
+              setSelectedPhones(savedSelected);
+            }
           }
         } catch (err) {
           console.error('Initial sync error', err);
         }
       }
 
-      // 2. Auto-Fetch contacts
+      // 2. Fetch fresh device contacts
       if (isMounted) {
         triggerContactFetch();
       }
     };
 
-    loadSavedAndFetch();
+    initContacts();
 
-    // Support explicit re-fetches if event arrives
+    // Support explicit re-fetches
     const handleFetch = () => triggerContactFetch();
     window.addEventListener('fetch-contacts', handleFetch);
 
@@ -67,21 +80,38 @@ export default function ContactsScreen() {
     };
   }, [user]);
 
-  const updateSelection = async (newSelected: Set<string>) => {
-    setSelectedPhones(newSelected);
-    if (newSelected.size === 0) {
-      setIsSelectionMode(false);
-    }
+  const toggleContactSelection = async (contact: Contact, forceSelect?: boolean) => {
+    if (!user?.id) return;
     
-    // Save selection bounds to supabase ensuring persistence bounds
-    if (user?.id) {
+    const newSelected = new Set<string>(selectedPhones);
+    const isCurrentlySelected = newSelected.has(contact.phone);
+    const willBeSelected = forceSelect !== undefined ? forceSelect : !isCurrentlySelected;
+
+    if (willBeSelected) {
+      newSelected.add(contact.phone);
+      setSelectedPhones(newSelected);
+      setIsSelectionMode(true);
+      
       try {
         await supabase.from('selected_contacts').upsert({
           user_id: user.id,
-          selected_phones: Array.from(newSelected)
-        }, { onConflict: 'user_id' });
+          phone: contact.phone,
+          name: contact.name
+        }, { onConflict: 'user_id,phone' }).select();
       } catch (err) {
-        console.error('Failed to save selection', err);
+         console.error('Upsert failed', err);
+      }
+    } else {
+      newSelected.delete(contact.phone);
+      setSelectedPhones(newSelected);
+      if (newSelected.size === 0) setIsSelectionMode(false);
+      
+      try {
+        await supabase.from('selected_contacts')
+          .delete()
+          .match({ user_id: user.id, phone: contact.phone });
+      } catch (err) {
+         console.error('Delete failed', err);
       }
     }
   };
@@ -109,7 +139,14 @@ export default function ContactsScreen() {
               phone: c.phones?.[0]?.number || 'No phone',
               initials: (c.name?.display || 'U').substring(0, 2).toUpperCase()
             }));
-            setContacts(mappedContacts);
+            
+            // Merge device contacts with existing selection so nothing disappears
+            setContacts(prev => {
+               const map = new Map();
+               prev.forEach(c => map.set(c.phone, c));
+               mappedContacts.forEach(c => map.set(c.phone, c));
+               return Array.from(map.values());
+            });
           } else {
             setErrorMessage('No contacts found.');
           }
@@ -135,7 +172,13 @@ export default function ContactsScreen() {
                 initials: name.substring(0, 2).toUpperCase()
               };
             });
-            setContacts(mappedContacts);
+            
+            setContacts(prev => {
+               const map = new Map();
+               prev.forEach(c => map.set(c.phone, c));
+               mappedContacts.forEach(c => map.set(c.phone, c));
+               return Array.from(map.values());
+            });
           } else {
             setErrorMessage('No contacts found.');
           }
@@ -155,11 +198,10 @@ export default function ContactsScreen() {
     }
   };
 
-  const handleTouchStart = (phone: string) => {
+  const handleTouchStart = (contact: Contact) => {
     longPressTimer.current = setTimeout(() => {
       if (!isSelectionMode) {
-        setIsSelectionMode(true);
-        updateSelection(new Set([phone]));
+        toggleContactSelection(contact, true);
       }
     }, 500); // 500ms for long press
   };
@@ -172,13 +214,7 @@ export default function ContactsScreen() {
 
   const handleTap = (contact: Contact) => {
     if (isSelectionMode) {
-      const newSelected = new Set<string>(selectedPhones);
-      if (newSelected.has(contact.phone)) {
-        newSelected.delete(contact.phone);
-      } else {
-        newSelected.add(contact.phone);
-      }
-      updateSelection(newSelected);
+      toggleContactSelection(contact);
     } else {
       setActiveContact(contact);
       setExpandedSection('none');
@@ -187,7 +223,6 @@ export default function ContactsScreen() {
 
   const startGroupCall = () => {
     setIsSelectionMode(false);
-    updateSelection(new Set<string>());
     navigate('/call', { state: { title: t('groupVideoCall') } });
   };
 
@@ -200,7 +235,7 @@ export default function ContactsScreen() {
       {isSelectionMode && (
         <div className="absolute top-0 left-0 right-0 bg-blue-600 text-white px-4 py-3 flex items-center justify-between z-20 shadow-md">
           <div className="flex items-center gap-3">
-            <button onClick={() => { setIsSelectionMode(false); updateSelection(new Set<string>()); }}>
+            <button onClick={() => { setIsSelectionMode(false); }}>
               <X className="w-6 h-6" />
             </button>
             <span className="font-semibold text-lg">{selectedPhones.size} {t('selected')}</span>
@@ -240,12 +275,12 @@ export default function ContactsScreen() {
         {contacts.map((contact) => {
             const isSelected = selectedPhones.has(contact.phone);
             return (
-            <React.Fragment key={contact.id}>
+            <React.Fragment key={`${contact.id}-${contact.phone}`}>
               <div
-                onMouseDown={() => handleTouchStart(contact.phone)}
+                onMouseDown={() => handleTouchStart(contact)}
                 onMouseUp={handleTouchEnd}
                 onMouseLeave={handleTouchEnd}
-                onTouchStart={() => handleTouchStart(contact.phone)}
+                onTouchStart={() => handleTouchStart(contact)}
                 onTouchEnd={handleTouchEnd}
                 onClick={() => handleTap(contact)}
                 className={`flex items-center px-4 py-3 cursor-pointer transition-colors select-none ${
