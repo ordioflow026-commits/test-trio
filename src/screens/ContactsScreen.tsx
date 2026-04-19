@@ -14,12 +14,6 @@ interface Contact {
   initials: string;
 }
 
-const SAMPLE_CONTACTS: Contact[] = [
-  { id: 1001, name: 'Sample Alice', phone: '+1 555 0101', initials: 'SA' },
-  { id: 1002, name: 'Sample Bob', phone: '+1 555 0102', initials: 'SB' },
-  { id: 1003, name: 'Sample Charlie', phone: '+1 555 0103', initials: 'SC' },
-];
-
 export default function ContactsScreen() {
   const { t } = useLanguage();
   const { user } = useUser();
@@ -35,27 +29,37 @@ export default function ContactsScreen() {
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Only fetch when the user explicitly interacts with the contacts icon (triggering this event)
-    const handleFetch = () => {
-      setIsLoadingContacts(true);
-      requestContactsPermission().finally(() => setIsLoadingContacts(false));
-    };
-    window.addEventListener('fetch-contacts', handleFetch);
-    
-    // Fetch persisted selection
     let isMounted = true;
-    if (user?.id) {
-      supabase.from('selected_contacts')
-        .select('selected_phones')
-        .eq('user_id', user.id)
-        .single()
-        .then(({ data, error }) => {
+
+    const loadSavedAndFetch = async () => {
+      // 1. Fetch persisted selection
+      if (user?.id) {
+        try {
+          const { data, error } = await supabase.from('selected_contacts')
+            .select('selected_phones')
+            .eq('user_id', user.id)
+            .single();
+          
           if (isMounted && !error && data?.selected_phones && Array.isArray(data.selected_phones)) {
             setSelectedPhones(new Set(data.selected_phones));
             if (data.selected_phones.length > 0) setIsSelectionMode(true);
           }
-        });
-    }
+        } catch (err) {
+          console.error('Initial sync error', err);
+        }
+      }
+
+      // 2. Auto-Fetch contacts
+      if (isMounted) {
+        triggerContactFetch();
+      }
+    };
+
+    loadSavedAndFetch();
+
+    // Support explicit re-fetches if event arrives
+    const handleFetch = () => triggerContactFetch();
+    window.addEventListener('fetch-contacts', handleFetch);
 
     return () => {
       isMounted = false;
@@ -82,50 +86,72 @@ export default function ContactsScreen() {
     }
   };
 
-  const fetchContactsData = async () => {
-    try {
-      setErrorMessage(null);
-      const result = await Contacts.getContacts({
-        projection: { name: true, phones: true },
-      });
-      if (result.contacts && result.contacts.length > 0) {
-        const mappedContacts = result.contacts.map((c, i) => ({
-          id: i,
-          name: c.name?.display || 'Unknown',
-          phone: c.phones?.[0]?.number || 'No phone',
-          initials: (c.name?.display || 'U').substring(0, 2).toUpperCase()
-        }));
-        setContacts(mappedContacts);
-      } else {
-        setErrorMessage('Please grant contact access or add contacts. No contacts found on device.');
-      }
-    } catch (err: any) {
-      console.error('Failed to get contacts:', err);
-      setErrorMessage('Please grant contact access: ' + (err.message || 'Browser may be blocking native access.'));
-    }
-  };
-
-  const requestContactsPermission = async () => {
-    if (!Capacitor.isNativePlatform()) {
-      setErrorMessage('Web Fallback: Showing 3 Sample Contacts.');
-      setContacts(SAMPLE_CONTACTS);
-      return;
-    }
+  const triggerContactFetch = async () => {
+    setIsLoadingContacts(true);
+    setErrorMessage(null);
 
     try {
-      setErrorMessage(null);
-      let perm = await Contacts.checkPermissions();
-      if (perm.contacts !== 'granted') {
-        perm = await Contacts.requestPermissions();
-      }
-      if (perm.contacts === 'granted') {
-        await fetchContactsData();
+      if (Capacitor.isNativePlatform()) {
+        // Native Capacitor Request
+        let perm = await Contacts.checkPermissions();
+        if (perm.contacts !== 'granted') {
+          perm = await Contacts.requestPermissions();
+        }
+        if (perm.contacts === 'granted') {
+          const result = await Contacts.getContacts({
+            projection: { name: true, phones: true },
+          });
+          
+          if (result.contacts && result.contacts.length > 0) {
+            const mappedContacts = result.contacts.map((c, i) => ({
+              id: i,
+              name: c.name?.display || 'Unknown',
+              phone: c.phones?.[0]?.number || 'No phone',
+              initials: (c.name?.display || 'U').substring(0, 2).toUpperCase()
+            }));
+            setContacts(mappedContacts);
+          } else {
+            setErrorMessage('No contacts found.');
+          }
+        } else {
+          setErrorMessage('Permission Denied. Please enable contact permissions in your device settings.');
+        }
       } else {
-        setErrorMessage('Permission Denied. Please grant contact access in your device settings.');
+        // Mobile Browser Priority / Web Contacts API Fallback
+        if ('contacts' in navigator && 'ContactsManager' in window) {
+          const props = ['name', 'tel'];
+          const opts = { multiple: true };
+          
+          const webContacts = await (navigator as any).contacts.select(props, opts);
+          
+          if (webContacts && webContacts.length > 0) {
+            const mappedContacts = webContacts.map((c: any, i: number) => {
+              const name = c.name?.[0] || 'Unknown';
+              const phone = c.tel?.[0] || 'No phone';
+              return {
+                id: i,
+                name,
+                phone,
+                initials: name.substring(0, 2).toUpperCase()
+              };
+            });
+            setContacts(mappedContacts);
+          } else {
+            setErrorMessage('No contacts found.');
+          }
+        } else {
+          setErrorMessage('Web Contacts API is not supported in this browser. Please use the native app.');
+        }
       }
     } catch (err: any) {
-      console.error('Permission request failed:', err);
-      setErrorMessage('Permission Denied: ' + (err.message || 'Error requesting permissions from browser.'));
+      console.error('Contact fetch failed:', err);
+      if (err.name === 'SecurityError' || err.message?.includes('user activation')) {
+        setErrorMessage('Browser requires a tap to load contacts.');
+      } else {
+        setErrorMessage('Please enable contact permissions in your browser settings.');
+      }
+    } finally {
+      setIsLoadingContacts(false);
     }
   };
 
@@ -193,16 +219,21 @@ export default function ContactsScreen() {
           </div>
         )}
 
-        {/* Error Message for Browser Fallback */}
-        {errorMessage && (
-          <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-4 rounded-xl mx-4 mb-4 text-center">
-             <p className="font-bold flex items-center justify-center gap-2">
-               <span className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-xs">!</span>
-               {errorMessage}
-             </p>
-             <p className="text-xs mt-3 text-red-300/80">
-               Note: To access native contacts safely, ensure you are running this app as an installed PWA or native APK.
-             </p>
+        {/* Error / Fallback Message Rendering */}
+        {!isLoadingContacts && (!contacts || contacts.length === 0) && (
+          <div className="flex flex-col items-center justify-center p-6 mt-10 text-center">
+            <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-700 shadow-lg">
+               <Users className="w-8 h-8 text-slate-400" />
+            </div>
+            <p className="text-slate-300 mb-6 text-sm">
+              {errorMessage || 'No contacts found.'}
+            </p>
+            <button 
+              onClick={() => triggerContactFetch()}
+              className="w-full max-w-xs bg-blue-600 hover:bg-blue-500 text-white py-3 px-4 rounded-xl font-semibold shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all active:scale-95 text-sm"
+            >
+              Please enable contact permissions in your browser settings
+            </button>
           </div>
         )}
 
