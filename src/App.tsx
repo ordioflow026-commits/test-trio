@@ -16,49 +16,48 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    const verifySession = async () => {
+    const loadUser = async (session: any) => {
+      if (!session?.user) return;
       try {
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError || !sessionData?.session) {
-          if (isMounted) setIsChecking(false);
-          return;
-        }
-
-        // Fetch profile using maybeSingle() to prevent throwing on missing data
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', sessionData.session.user.id)
+          .eq('id', session.user.id)
           .maybeSingle();
 
         if (isMounted) {
           if (profile) {
             setUser({ id: profile.id, fullName: profile.name, phone: profile.phone });
-            setIsChecking(false);
             if (window.location.pathname === '/') {
               navigate('/main', { replace: true });
             }
           } else {
-             // Session exists but profile missing. Force Logout -> Go to Login
-             await supabase.auth.signOut();
+             // User exists in auth but no profile - maybe mid-signup, keep logged out until signup finish
              setUser(null);
-             setIsChecking(false);
-             navigate('/', { replace: true });
           }
-        }
-      } catch (err) {
-        if (isMounted) {
           setIsChecking(false);
         }
+      } catch (err) {
+        if (isMounted) setIsChecking(false);
       }
     };
 
-    verifySession();
+    // 1. Initial Check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        if (isMounted) setIsChecking(false);
+      } else {
+        loadUser(session);
+      }
+    });
 
+    // 2. Listen for auth changes (Session Fix)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' && isMounted) {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        loadUser(session);
+      } else if (event === 'SIGNED_OUT' && isMounted) {
         setUser(null);
+        setIsChecking(false);
         navigate('/', { replace: true });
       }
     });

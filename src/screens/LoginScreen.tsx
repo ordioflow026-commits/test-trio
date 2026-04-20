@@ -42,36 +42,43 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // 1. Reset State
-      await supabase.auth.signOut();
-
-      // 2. Clean Signup
+      // 1. Attempt Signup First
       const numericPhone = phone.replace(/\D/g, '');
       const email = `${numericPhone}@test.com`;
       const password = 'password123456';
 
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      let { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
       });
 
+      // 2. The Workaround: If signup returns 'User already registered', log in instead
+      if (authError && (authError.message.includes('already registered') || authError.message.includes('already exists'))) {
+        const signInRes = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        authData = signInRes.data;
+        authError = signInRes.error;
+      }
+
       if (authError) {
-        alert('Signup Error: ' + authError.message);
+        alert('Auth Error: ' + authError.message);
         setLoading(false);
         return;
       }
 
       const userId = authData?.user?.id;
       if (!userId) {
-        alert('Signup Error: Could not get User ID');
+        alert('Auth Error: Could not get User ID');
         setLoading(false);
         return;
       }
 
-      // 3. Direct Insert
+      // 3. Handle Success: Upsert profile
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert([{ 
+        .upsert([{ 
           id: userId, 
           name: fullName, 
           phone: phone
@@ -83,13 +90,11 @@ export default function LoginScreen() {
         return;
       }
 
-      // 5. Navigation
-      alert('Welcome! Your account is created.');
+      alert('Welcome back, ' + fullName);
       setUser({ id: userId, fullName, phone });
       navigate('/main');
 
     } catch (err: any) {
-      // 4. Error Alert
       alert('Unexpected Error: ' + err.message);
       setError(err.message || 'Error during registration');
     } finally {
