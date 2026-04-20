@@ -35,19 +35,27 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
         }
 
         // Fetch profile
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', data.session.user.id)
           .single();
 
         if (isMounted) {
-          if (profile) {
+          if (profile && !profileError) {
             setUser({ id: profile.id, fullName: profile.name, phone: profile.phone });
-          }
-          setIsChecking(false);
-          if (window.location.pathname === '/') {
-            navigate('/main', { replace: true });
+            setIsChecking(false);
+            if (window.location.pathname === '/') {
+              navigate('/main', { replace: true });
+            }
+          } else {
+             // 1. Force Logout on Fix: Session exists but profile doesn't.
+             console.log('Session exists but profile missing. Forcing logout...');
+             await supabase.auth.signOut();
+             setUser(null);
+             setIsChecking(false);
+             navigate('/', { replace: true });
+             return;
           }
         }
       } catch (err) {

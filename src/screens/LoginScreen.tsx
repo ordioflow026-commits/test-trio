@@ -43,8 +43,8 @@ export default function LoginScreen() {
 
     try {
       // 1. The Trigger
-      alert('Starting registration...');
-      console.log('Step 1 [TRIGGER]: Starting registration...', { fullName, phone });
+      alert('Starting New Registration...');
+      console.log('Step 1 [TRIGGER]: Starting New Registration...', { fullName, phone });
 
       const parsedPhone = parsePhoneNumber(phone);
       const countryCode = parsedPhone?.country || 'Unknown';
@@ -56,19 +56,11 @@ export default function LoginScreen() {
 
       console.log('Step 2 [AUTH]: Proceeding with email ->', email);
 
-      // Attempt signup directly based on prompt rules
+      // Second: Perform supabase.auth.signUp
       let { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
       });
-
-      // Handle fallback silently if user already exists so we can still test the flow
-      if (authError && authError.message.includes('already registered')) {
-        console.log('Step 2B [AUTH FALLBACK]: User already registered, signing in...');
-        const signInRes = await supabase.auth.signInWithPassword({ email, password });
-        authData = signInRes.data;
-        authError = signInRes.error;
-      }
 
       if (authError) {
         console.error('Step 2 [AUTH ERROR]:', authError.message);
@@ -91,6 +83,7 @@ export default function LoginScreen() {
       const userId = userData.user.id;
 
       // 3. Database Action (The Profile)
+      // Third: WAIT for the result, then insert into the profiles table.
       console.log('Step 3 [DATABASE]: Initiating profile insert for User ID ->', userId);
 
       const { error: profileError } = await supabase
@@ -101,34 +94,17 @@ export default function LoginScreen() {
           phone: phone
         }]);
 
-      // Note: If you have already inserted them once, .insert() will fail with duplicate key.
-      // We will catch that specific error and run an update just to ensure testing isn't permanently blocked,
-      // but otherwise throw the error to the alert exactly as requested.
       if (profileError) {
-        if (profileError.code === '23505') { // postgres unique_violation
-            console.log('Step 3B [DB OVERRIDE]: Profile existed, running update instead of insert.');
-            const { error: updateError } = await supabase
-               .from('profiles')
-               .update({ name: fullName, phone: phone })
-               .eq('id', userId);
-            
-            if (updateError) {
-              console.error('Step 3 [UPDATE ERROR]:', updateError);
-              alert('Profile Save Error: ' + updateError.message);
-              setLoading(false);
-              return;
-            }
-        } else {
-            console.error('Step 3 [INSERT ERROR]:', profileError);
-            alert('Profile Save Error: ' + profileError.message);
-            setLoading(false);
-            return;
-        }
+        console.error('Step 3 [INSERT ERROR]:', profileError);
+        alert('Profile Save Error: ' + profileError.message);
+        setLoading(false);
+        return;
       }
 
       // 4. Verification
+      // Fourth: ONLY IF the profile insert is successful, show alert('Registration Saved in DB!')
       console.log('Step 4 [SUCCESS]: All steps completed. Profile inserted/saved. Navigating...');
-      alert('SUCCESS! You are registered.');
+      alert('Registration Saved in DB!');
 
       // Save session globally
       setUser({ id: userId, fullName, phone });
@@ -137,8 +113,8 @@ export default function LoginScreen() {
       navigate('/main');
     } catch (err: any) {
       console.error('Unexpected Supabase Error:', err);
-      alert('Unexpected Error: ' + err.message);
-      setError(err.message || 'An error occurred during login. Please check your connection.');
+      alert('Error during registration: ' + err.message);
+      setError(err.message || 'Error during registration');
     } finally {
       setLoading(false);
     }
