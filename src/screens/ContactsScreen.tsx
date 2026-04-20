@@ -17,6 +17,7 @@ interface Contact {
 export default function ContactsScreen() {
   const { t } = useLanguage();
   const { user } = useUser();
+  const [hasShownSaveAlert, setHasShownSaveAlert] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -56,12 +57,14 @@ export default function ContactsScreen() {
           if (isMounted && !error && data) {
             const savedSelected = new Set<string>();
             const savedContacts: Contact[] = data.map((c: any, index: number) => {
-              savedSelected.add(c.phone);
+              const fetchedPhone = c.contact_number || c.phone;
+              const fetchedName = c.contact_name || c.name || 'Unknown';
+              savedSelected.add(fetchedPhone);
               return {
                 id: index + 10000, 
-                name: c.name || 'Unknown',
-                phone: c.phone,
-                initials: (c.name || 'U').substring(0, 2).toUpperCase()
+                name: fetchedName,
+                phone: fetchedPhone,
+                initials: fetchedName.substring(0, 2).toUpperCase()
               };
             });
 
@@ -117,15 +120,20 @@ export default function ContactsScreen() {
         // Insert/Upsert into Supabase FIRST
         const { error } = await supabase.from('selected_contacts').upsert({
           user_id: currentUserId,
-          phone: contact.phone,
-          name: contact.name
-        }, { onConflict: 'user_id,phone' });
+          contact_number: contact.phone,
+          contact_name: contact.name
+        });
         
         if (error) {
           alert('Database Error (selected_contacts): ' + error.message);
           return; // STOP execution on failure
         }
         
+        if (!hasShownSaveAlert) {
+          alert('Contact Saved!');
+          setHasShownSaveAlert(true);
+        }
+
         // Update local state ONLY if successful
         newSelected.add(contact.phone);
         setSelectedPhones(newSelected);
@@ -139,7 +147,7 @@ export default function ContactsScreen() {
         // Delete from Supabase FIRST
         const { error } = await supabase.from('selected_contacts')
           .delete()
-          .match({ user_id: currentUserId, phone: contact.phone });
+          .match({ user_id: currentUserId, contact_number: contact.phone });
           
         if (error) {
           alert('Database Error (selected_contacts delete): ' + error.message);
