@@ -42,38 +42,34 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // 1. Nuke Local Storage
-      localStorage.clear();
-      sessionStorage.clear();
-
-      // 2. Force SignOut
+      // 1. Reset State
       await supabase.auth.signOut();
 
+      // 2. Clean Signup
       const numericPhone = phone.replace(/\D/g, '');
       const email = `${numericPhone}@test.com`;
       const password = 'password123456';
 
-      // 3. Step 1 (Auth)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
       });
 
       if (authError) {
-        alert('AUTH ERROR: ' + authError.message);
+        alert('Signup Error: ' + authError.message);
         setLoading(false);
         return;
       }
 
       const userId = authData?.user?.id;
       if (!userId) {
-        alert('AUTH ERROR: Failed to retrieve User ID');
+        alert('Signup Error: Could not get User ID');
         setLoading(false);
         return;
       }
 
-      // 4. Step 2 (Database)
-      const { error: dbError } = await supabase
+      // 3. Direct Insert
+      const { error: profileError } = await supabase
         .from('profiles')
         .insert([{ 
           id: userId, 
@@ -81,20 +77,20 @@ export default function LoginScreen() {
           phone: phone
         }]);
 
-      if (dbError) {
-        alert('DB ERROR: ' + dbError.message);
+      if (profileError) {
+        alert('Profile Error: ' + profileError.message);
         setLoading(false);
         return;
       }
 
-      // 5. Step 3 (Success)
-      alert('FULL SUCCESS!');
-
+      // 5. Navigation
+      alert('Welcome! Your account is created.');
       setUser({ id: userId, fullName, phone });
       navigate('/main');
 
     } catch (err: any) {
-      alert('UNEXPECTED ERROR: ' + err.message);
+      // 4. Error Alert
+      alert('Unexpected Error: ' + err.message);
       setError(err.message || 'Error during registration');
     } finally {
       setLoading(false);
