@@ -42,56 +42,94 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
+      // 1. The Trigger
+      alert('Starting registration...');
+      console.log('Step 1 [TRIGGER]: Starting registration...', { fullName, phone });
+
       const parsedPhone = parsePhoneNumber(phone);
       const countryCode = parsedPhone?.country || 'Unknown';
       
-      // WhatsApp-like auth workaround logic
+      // 2. Auth Action
       const numericPhone = phone.replace(/\D/g, '');
-      const email = `${numericPhone}@app.com`;
+      const email = `${numericPhone}@test.com`;
       const password = 'password123456';
 
-      let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      console.log('Step 2 [AUTH]: Proceeding with email ->', email);
+
+      // Attempt signup directly based on prompt rules
+      let { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
       });
 
-      if (authError && authError.message.includes('Invalid login credentials')) {
-        // Try sign up if sign in fails due to no user
-        const signUpRes = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        authData = signUpRes.data;
-        authError = signUpRes.error;
+      // Handle fallback silently if user already exists so we can still test the flow
+      if (authError && authError.message.includes('already registered')) {
+        console.log('Step 2B [AUTH FALLBACK]: User already registered, signing in...');
+        const signInRes = await supabase.auth.signInWithPassword({ email, password });
+        authData = signInRes.data;
+        authError = signInRes.error;
       }
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error('Step 2 [AUTH ERROR]:', authError.message);
+        alert('Signup Error: ' + authError.message);
+        setLoading(false);
+        return;
+      }
 
-      // Securely fetch the active user
+      console.log('Step 2 [AUTH SUCCESS]: Authenticated successfully.', authData.user);
+
+      // Securely fetch active user
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData?.user?.id) {
-        alert('Auth Error: Failed to fetch secure user session');
+        console.error('Step 2.5 [GET USER ERROR]:', userError);
+        alert('Auth Error: Failed to fetch secure user session. ' + (userError?.message || 'Empty ID'));
         setLoading(false);
         return;
       }
 
       const userId = userData.user.id;
 
-      // Upsert user detail into profiles table immediately
+      // 3. Database Action (The Profile)
+      console.log('Step 3 [DATABASE]: Initiating profile insert for User ID ->', userId);
+
       const { error: profileError } = await supabase
         .from('profiles')
-        .upsert({ 
-          id: userId,
+        .insert([{ 
+          id: userId, 
           name: fullName, 
-          phone: phone,
+          phone: phone, 
           country_code: countryCode 
-        }, { onConflict: 'id' });
+        }]);
 
+      // Note: If you have already inserted them once, .insert() will fail with duplicate key.
+      // We will catch that specific error and run an update just to ensure testing isn't permanently blocked,
+      // but otherwise throw the error to the alert exactly as requested.
       if (profileError) {
-        alert('Database Error (profiles): ' + profileError.message);
-        setLoading(false);
-        return; // BLOCK navigation on failure
+        if (profileError.code === '23505') { // postgres unique_violation
+            console.log('Step 3B [DB OVERRIDE]: Profile existed, running update instead of insert.');
+            const { error: updateError } = await supabase
+               .from('profiles')
+               .update({ name: fullName, phone: phone, country_code: countryCode })
+               .eq('id', userId);
+            
+            if (updateError) {
+              console.error('Step 3 [UPDATE ERROR]:', updateError);
+              alert('Profile Save Error: ' + updateError.message);
+              setLoading(false);
+              return;
+            }
+        } else {
+            console.error('Step 3 [INSERT ERROR]:', profileError);
+            alert('Profile Save Error: ' + profileError.message);
+            setLoading(false);
+            return;
+        }
       }
+
+      // 4. Verification
+      console.log('Step 4 [SUCCESS]: All steps completed. Profile inserted/saved. Navigating...');
+      alert('SUCCESS! You are registered.');
 
       // Save session globally
       setUser({ id: userId, fullName, phone });
@@ -99,7 +137,8 @@ export default function LoginScreen() {
       // Navigate on success
       navigate('/main');
     } catch (err: any) {
-      console.error('Supabase Error:', err);
+      console.error('Unexpected Supabase Error:', err);
+      alert('Unexpected Error: ' + err.message);
       setError(err.message || 'An error occurred during login. Please check your connection.');
     } finally {
       setLoading(false);
