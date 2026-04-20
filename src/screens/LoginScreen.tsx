@@ -42,7 +42,12 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // 1. Attempt Signup First
+      // 1. Clean Start
+      localStorage.clear();
+      sessionStorage.clear();
+      await supabase.auth.signOut();
+
+      // 2. Smart Auth
       const numericPhone = phone.replace(/\D/g, '');
       const email = `${numericPhone}@test.com`;
       const password = 'password123456';
@@ -52,7 +57,6 @@ export default function LoginScreen() {
         password,
       });
 
-      // 2. The Workaround: If signup returns 'User already registered', log in instead
       if (authError && (authError.message.includes('already registered') || authError.message.includes('already exists'))) {
         const signInRes = await supabase.auth.signInWithPassword({
           email,
@@ -75,24 +79,24 @@ export default function LoginScreen() {
         return;
       }
 
-      // 3. Handle Success: Upsert profile
-      const { error: profileError } = await supabase
+      // 3. Exact Database Upsert
+      const { error: dbError } = await supabase
         .from('profiles')
-        .upsert([{ 
+        .upsert({ 
           id: userId, 
           name: fullName, 
-          phone: phone
-        }]);
+          phone: phone 
+        });
 
-      if (profileError) {
-        alert('Profile Error: ' + profileError.message);
+      if (dbError) {
+        alert('Profile Error: ' + dbError.message);
         setLoading(false);
         return;
       }
 
-      alert('Welcome back, ' + fullName);
-      setUser({ id: userId, fullName, phone });
-      navigate('/main');
+      // 4. Success
+      setUser({ id: userId, fullName: fullName, phone: phone });
+      navigate('/main', { replace: true });
 
     } catch (err: any) {
       alert('Unexpected Error: ' + err.message);
