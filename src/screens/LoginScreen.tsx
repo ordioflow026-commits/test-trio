@@ -42,65 +42,59 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // 1. Global Reset
-      alert('Resetting session...');
+      // 1. Nuke Local Storage
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // 2. Force SignOut
       await supabase.auth.signOut();
 
-      // 2. Clean Database Attempt
-      alert('Registering/Logging in...');
-      
       const numericPhone = phone.replace(/\D/g, '');
       const email = `${numericPhone}@test.com`;
       const password = 'password123456';
 
-      let { data: authData, error: authError } = await supabase.auth.signUp({
+      // 3. Step 1 (Auth)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
       });
 
-      // 3. The 'Already Exists' Workaround
-      if (authError && (authError.message.includes('already registered') || authError.message.includes('already exists'))) {
-        const signInRes = await supabase.auth.signInWithPassword({ email, password });
-        authData = signInRes.data;
-        authError = signInRes.error;
-      }
-
       if (authError) {
-        alert('Authentication Error: ' + authError.message);
+        alert('AUTH ERROR: ' + authError.message);
         setLoading(false);
         return;
       }
 
       const userId = authData?.user?.id;
       if (!userId) {
-        alert('Authentication Error: Failed to retrieve User ID');
+        alert('AUTH ERROR: Failed to retrieve User ID');
         setLoading(false);
         return;
       }
 
-      // 4. Force Profile Create
-      const { error: profileError } = await supabase
+      // 4. Step 2 (Database)
+      const { error: dbError } = await supabase
         .from('profiles')
-        .upsert([{ 
+        .insert([{ 
           id: userId, 
           name: fullName, 
           phone: phone
         }]);
 
-      if (profileError) {
-        alert('Profile Registration Error: ' + profileError.message);
+      if (dbError) {
+        alert('DB ERROR: ' + dbError.message);
         setLoading(false);
         return;
       }
 
-      // 5. Progress Alerts
-      alert('Success! Welcome ' + fullName);
+      // 5. Step 3 (Success)
+      alert('FULL SUCCESS!');
 
       setUser({ id: userId, fullName, phone });
       navigate('/main');
 
     } catch (err: any) {
-      alert('Error during registration: ' + err.message);
+      alert('UNEXPECTED ERROR: ' + err.message);
       setError(err.message || 'Error during registration');
     } finally {
       setLoading(false);
