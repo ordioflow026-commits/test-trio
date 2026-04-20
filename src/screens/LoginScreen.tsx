@@ -98,8 +98,7 @@ export default function LoginScreen() {
         .insert([{ 
           id: userId, 
           name: fullName, 
-          phone: phone, 
-          country_code: countryCode 
+          phone: phone
         }]);
 
       // Note: If you have already inserted them once, .insert() will fail with duplicate key.
@@ -110,7 +109,7 @@ export default function LoginScreen() {
             console.log('Step 3B [DB OVERRIDE]: Profile existed, running update instead of insert.');
             const { error: updateError } = await supabase
                .from('profiles')
-               .update({ name: fullName, phone: phone, country_code: countryCode })
+               .update({ name: fullName, phone: phone })
                .eq('id', userId);
             
             if (updateError) {
