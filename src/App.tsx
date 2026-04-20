@@ -18,44 +18,33 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
 
     const verifySession = async () => {
       try {
-        const sessionPromise = supabase.auth.getSession();
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         
-        // 3-second timeout rule to avoid permanent loading spinners
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('timeout')), 3000)
-        );
-
-        const { data, error } = (await Promise.race([
-          sessionPromise, 
-          timeoutPromise
-        ])) as any;
-
-        if (error || !data?.session) {
-           throw new Error('No valid session found');
+        if (sessionError || !sessionData?.session) {
+          if (isMounted) setIsChecking(false);
+          return;
         }
 
-        // Fetch profile
-        const { data: profile, error: profileError } = await supabase
+        // Fetch profile using maybeSingle() to prevent throwing on missing data
+        const { data: profile } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', data.session.user.id)
-          .single();
+          .eq('id', sessionData.session.user.id)
+          .maybeSingle();
 
         if (isMounted) {
-          if (profile && !profileError) {
+          if (profile) {
             setUser({ id: profile.id, fullName: profile.name, phone: profile.phone });
             setIsChecking(false);
             if (window.location.pathname === '/') {
               navigate('/main', { replace: true });
             }
           } else {
-             // 1. Force Logout on Fix: Session exists but profile doesn't.
-             console.log('Session exists but profile missing. Forcing logout...');
+             // Session exists but profile missing. Force Logout -> Go to Login
              await supabase.auth.signOut();
              setUser(null);
              setIsChecking(false);
              navigate('/', { replace: true });
-             return;
           }
         }
       } catch (err) {

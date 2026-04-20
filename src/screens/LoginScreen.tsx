@@ -42,77 +42,58 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // 1. The Trigger
-      alert('Starting New Registration...');
-      console.log('Step 1 [TRIGGER]: Starting New Registration...', { fullName, phone });
+      alert('Attempting to save to DB...');
 
-      const parsedPhone = parsePhoneNumber(phone);
-      const countryCode = parsedPhone?.country || 'Unknown';
-      
-      // 2. Auth Action
       const numericPhone = phone.replace(/\D/g, '');
       const email = `${numericPhone}@test.com`;
       const password = 'password123456';
 
-      console.log('Step 2 [AUTH]: Proceeding with email ->', email);
-
-      // Second: Perform supabase.auth.signUp
       let { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
       });
 
+      // Basic fallback since we are using fake emails for testing. 
+      // Prevents getting completely locked out if you test twice.
+      if (authError && authError.message.includes('already registered')) {
+        const signInRes = await supabase.auth.signInWithPassword({ email, password });
+        authData = signInRes.data;
+        authError = signInRes.error;
+      }
+
       if (authError) {
-        console.error('Step 2 [AUTH ERROR]:', authError.message);
-        alert('Signup Error: ' + authError.message);
+        alert('Error during registration: ' + authError.message);
         setLoading(false);
         return;
       }
 
-      console.log('Step 2 [AUTH SUCCESS]: Authenticated successfully.', authData.user);
-
-      // Securely fetch active user
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData?.user?.id) {
-        console.error('Step 2.5 [GET USER ERROR]:', userError);
-        alert('Auth Error: Failed to fetch secure user session. ' + (userError?.message || 'Empty ID'));
+      const userId = authData?.user?.id;
+      if (!userId) {
+        alert('Error during registration: Failed to get new User ID');
         setLoading(false);
         return;
       }
-
-      const userId = userData.user.id;
-
-      // 3. Database Action (The Profile)
-      // Third: WAIT for the result, then insert into the profiles table.
-      console.log('Step 3 [DATABASE]: Initiating profile insert for User ID ->', userId);
 
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert([{ 
+        .upsert([{ 
           id: userId, 
           name: fullName, 
           phone: phone
         }]);
 
       if (profileError) {
-        console.error('Step 3 [INSERT ERROR]:', profileError);
-        alert('Profile Save Error: ' + profileError.message);
+        alert('Error during registration: ' + profileError.message);
         setLoading(false);
         return;
       }
 
-      // 4. Verification
-      // Fourth: ONLY IF the profile insert is successful, show alert('Registration Saved in DB!')
-      console.log('Step 4 [SUCCESS]: All steps completed. Profile inserted/saved. Navigating...');
-      alert('Registration Saved in DB!');
+      alert('Save Successful!');
 
-      // Save session globally
       setUser({ id: userId, fullName, phone });
-      
-      // Navigate on success
       navigate('/main');
+
     } catch (err: any) {
-      console.error('Unexpected Supabase Error:', err);
       alert('Error during registration: ' + err.message);
       setError(err.message || 'Error during registration');
     } finally {
