@@ -42,8 +42,13 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      alert('Attempting to save to DB...');
+      // 1. Global Reset
+      alert('Resetting session...');
+      await supabase.auth.signOut();
 
+      // 2. Clean Database Attempt
+      alert('Registering/Logging in...');
+      
       const numericPhone = phone.replace(/\D/g, '');
       const email = `${numericPhone}@test.com`;
       const password = 'password123456';
@@ -53,27 +58,27 @@ export default function LoginScreen() {
         password,
       });
 
-      // Basic fallback since we are using fake emails for testing. 
-      // Prevents getting completely locked out if you test twice.
-      if (authError && authError.message.includes('already registered')) {
+      // 3. The 'Already Exists' Workaround
+      if (authError && (authError.message.includes('already registered') || authError.message.includes('already exists'))) {
         const signInRes = await supabase.auth.signInWithPassword({ email, password });
         authData = signInRes.data;
         authError = signInRes.error;
       }
 
       if (authError) {
-        alert('Error during registration: ' + authError.message);
+        alert('Authentication Error: ' + authError.message);
         setLoading(false);
         return;
       }
 
       const userId = authData?.user?.id;
       if (!userId) {
-        alert('Error during registration: Failed to get new User ID');
+        alert('Authentication Error: Failed to retrieve User ID');
         setLoading(false);
         return;
       }
 
+      // 4. Force Profile Create
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert([{ 
@@ -83,12 +88,13 @@ export default function LoginScreen() {
         }]);
 
       if (profileError) {
-        alert('Error during registration: ' + profileError.message);
+        alert('Profile Registration Error: ' + profileError.message);
         setLoading(false);
         return;
       }
 
-      alert('Save Successful!');
+      // 5. Progress Alerts
+      alert('Success! Welcome ' + fullName);
 
       setUser({ id: userId, fullName, phone });
       navigate('/main');
