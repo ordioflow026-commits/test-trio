@@ -10,7 +10,9 @@ export default function MainScreen() {
   const [activeSubTab, setActiveSubTab] = useState('contacts');
   const { t, dir, language, toggleLanguage } = useLanguage();
   const [userData, setUserData] = useState({ fullName: 'Guest', phone: '' });
-  const [hasNotifications, setHasNotifications] = useState(true); // Mock state for red dot
+  const [hasNotifications, setHasNotifications] = useState(true);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [isFirstLogin, setIsFirstLogin] = useState(true);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -25,7 +27,25 @@ export default function MainScreen() {
         console.error('Failed to parse user data', e);
       }
     }
+    
+    const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome');
+    if (hasSeenWelcome) {
+      setIsFirstLogin(false);
+      setHasNotifications(false);
+    }
   }, []);
+
+  const handleBellClick = () => {
+    if (isFirstLogin) {
+      setShowWelcomeModal(!showWelcomeModal);
+      setIsFirstLogin(false);
+      setHasNotifications(false);
+      sessionStorage.setItem('hasSeenWelcome', 'true');
+    } else {
+      setActiveMainTab('notifications');
+      setShowWelcomeModal(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0B1120] flex flex-col font-sans" dir={dir}>
@@ -51,22 +71,40 @@ export default function MainScreen() {
               <Home className="w-6 h-6" />
             </button>
             
-            <button
-              onClick={() => {
-                setActiveMainTab('notifications');
-                setHasNotifications(false);
-              }}
-              className={`relative p-3 rounded-full transition-all duration-300 border ${
-                activeMainTab === 'notifications'
-                  ? 'bg-blue-700 border-blue-500 text-white shadow-[0_0_15px_rgba(29,78,216,0.5)]'
-                  : 'border-blue-500/50 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20'
-              }`}
-            >
-              <Bell className="w-6 h-6" />
-              {hasNotifications && (
-                <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-[#0F172A] rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+            <div className="relative">
+              <button
+                onClick={handleBellClick}
+                className={`relative p-3 rounded-full transition-all duration-300 border ${
+                  activeMainTab === 'notifications'
+                    ? 'bg-blue-700 border-blue-500 text-white shadow-[0_0_15px_rgba(29,78,216,0.5)]'
+                    : 'border-blue-500/50 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20'
+                }`}
+              >
+                <Bell className="w-6 h-6" />
+                {hasNotifications && (
+                  <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-[#0F172A] rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                )}
+              </button>
+              
+              {/* Welcome Notification Dropdown */}
+              {showWelcomeModal && (
+                <div className="absolute top-16 left-1/2 transform -translate-x-1/2 mt-2 w-64 bg-slate-800 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.6)] border border-slate-700/50 p-4 z-50 animate-in fade-in slide-in-from-top-4">
+                  <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-slate-800 border-l border-t border-slate-700/50 rotate-45"></div>
+                  <div className="flex items-center gap-3 mb-2 relative z-10">
+                    <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center border border-blue-500/30">
+                      <span className="text-xl">👋</span>
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white tracking-tight">Notification</h3>
+                      <p className="text-[10px] text-slate-400">Just now</p>
+                    </div>
+                  </div>
+                  <p className="text-sm border-t border-slate-700/50 pt-3 text-slate-200 mt-2 font-medium relative z-10">
+                    Welcome back, <span className="text-blue-400">{userData.fullName}</span>!
+                  </p>
+                </div>
               )}
-            </button>
+            </div>
             
             <button
               onClick={() => setActiveMainTab('profile')}

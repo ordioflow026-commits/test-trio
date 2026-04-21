@@ -45,7 +45,7 @@ export default function LoginScreen() {
     }
   }, [error]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -159,7 +159,7 @@ export default function LoginScreen() {
             <p className="text-slate-400 text-sm">Secure Communication Platform</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleStart} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 {t('fullName')}
