@@ -17,6 +17,26 @@ export default function LoginScreen() {
   const { t, toggleLanguage, language, dir } = useLanguage();
   const { setUser } = useUser();
 
+  // Initial Check: in LoginScreen, check for an existing session as soon as the app starts.
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+         const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+         if (profile) {
+           setUser({ id: profile.id, fullName: profile.name, phone: profile.phone });
+           navigate('/main', { replace: true });
+         }
+      }
+    };
+    checkExistingSession();
+  }, [navigate, setUser]);
+
   useEffect(() => {
     if (error) {
       setShowSnackbar(true);
@@ -43,9 +63,7 @@ export default function LoginScreen() {
 
     try {
       // 1. Clean Start
-      localStorage.clear();
-      sessionStorage.clear();
-      await supabase.auth.signOut();
+      await supabase.auth.signOut(); // This clears the session from storage automatically
 
       // 2. Smart Auth
       const numericPhone = phone.replace(/\D/g, '');

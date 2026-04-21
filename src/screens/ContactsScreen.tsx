@@ -22,7 +22,8 @@ export default function ContactsScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
-  const [expandedContactId, setExpandedContactId] = useState<number | null>(null);
+  const [activeContact, setActiveContact] = useState<Contact | null>(null);
+  const [expandedSection, setExpandedSection] = useState<'none' | 'message' | 'call'>('none');
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const navigate = useNavigate();
   
@@ -264,7 +265,8 @@ export default function ContactsScreen() {
     if (isSelectionMode) {
       toggleContactSelection(contact);
     } else {
-      setExpandedContactId(prev => prev === contact.id ? null : contact.id);
+      setActiveContact(contact);
+      setExpandedSection('none');
     }
   };
 
@@ -272,12 +274,9 @@ export default function ContactsScreen() {
     setIsSelectionMode(false);
     navigate('/call', { state: { title: t('groupVideoCall') } });
   };
-  
-  const startGroupMessage = () => {
-    setIsSelectionMode(false);
-    // navigation logic placeholder
-    alert('Group Message logic to be implemented');
-  };
+
+  // Find the phone of the last selected contact in the list
+  const lastSelectedContactPhone = [...contacts].reverse().find(c => selectedPhones.has(c.phone))?.phone;
 
   return (
     <div className="flex flex-col h-full bg-slate-900 relative">
@@ -324,7 +323,6 @@ export default function ContactsScreen() {
 
         {contacts.map((contact) => {
             const isSelected = selectedPhones.has(contact.phone);
-            const isExpanded = expandedContactId === contact.id && !isSelectionMode;
             return (
             <React.Fragment key={`${contact.id}-${contact.phone}`}>
               <div
@@ -335,24 +333,13 @@ export default function ContactsScreen() {
                 onTouchEnd={handleTouchEnd}
                 onClick={() => handleTap(contact)}
                 className={`flex items-center px-4 py-3 cursor-pointer transition-colors select-none ${
-                  isSelected || isExpanded ? 'bg-slate-800/80' : 'hover:bg-slate-800/50'
+                  isSelected ? 'bg-blue-900/30' : 'hover:bg-slate-800/50'
                 }`}
               >
-                {/* Selection Checkbox */}
-                {isSelectionMode && (
-                  <div className="mr-3">
-                    <div className={`w-6 h-6 rounded-md border flex items-center justify-center transition-colors ${
-                      isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-600 bg-slate-800/50'
-                    }`}>
-                      {isSelected && <Check className="w-4 h-4" />}
-                    </div>
-                  </div>
-                )}
-                
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold mr-4 ${
                   isSelected ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)]' : 'bg-slate-800 text-slate-300 border border-slate-700'
                 }`}>
-                  {contact.initials}
+                  {isSelected ? <Check className="w-6 h-6" /> : contact.initials}
                 </div>
                 <div className="flex-1 border-b border-slate-800 pb-3 pt-1">
                   <h3 className="font-semibold text-slate-200">{contact.name}</h3>
@@ -360,35 +347,15 @@ export default function ContactsScreen() {
                 </div>
               </div>
 
-              {/* Inline Action Menu for Single Tap */}
-              {isExpanded && (
-                <div className="bg-slate-800/40 border-b border-slate-800 px-4 py-4 flex justify-around items-center animate-in slide-in-from-top-2 fade-in duration-200">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setExpandedContactId(null); }}
-                    className="flex flex-col items-center gap-1.5 hover:text-blue-400 group"
+              {/* Inline Group Video Call Button under the last selected contact */}
+              {isSelectionMode && contact.phone === lastSelectedContactPhone && (
+                <div className="px-4 py-4 flex justify-end animate-in fade-in slide-in-from-top-2 bg-slate-800/30 border-b border-slate-800">
+                  <button
+                    onClick={startGroupCall}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-full shadow-[0_4px_12px_rgba(37,99,235,0.5)] flex items-center gap-2 hover:scale-105 transition-transform active:scale-95 border border-blue-400/30"
                   >
-                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-blue-400 border border-slate-700 group-hover:bg-blue-500 group-hover:text-white transition-all shadow-sm">
-                      <MessageSquare className="w-5 h-5" />
-                    </div>
-                    <span className="text-[10px] font-medium text-slate-400 group-hover:text-blue-400">Message</span>
-                  </button>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setExpandedContactId(null); navigate('/call', { state: { title: t('audioCall') } }); }}
-                    className="flex flex-col items-center gap-1.5 hover:text-green-400 group"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-green-400 border border-slate-700 group-hover:bg-green-500 group-hover:text-white transition-all shadow-sm">
-                      <Phone className="w-5 h-5" />
-                    </div>
-                    <span className="text-[10px] font-medium text-slate-400 group-hover:text-green-400">Call</span>
-                  </button>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setExpandedContactId(null); navigate('/call', { state: { title: t('videoCall') } }); }}
-                    className="flex flex-col items-center gap-1.5 hover:text-purple-400 group"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-purple-400 border border-slate-700 group-hover:bg-purple-500 group-hover:text-white transition-all shadow-sm">
-                      <Video className="w-5 h-5" />
-                    </div>
-                    <span className="text-[10px] font-medium text-slate-400 group-hover:text-purple-400">Video</span>
+                    <Video className="w-5 h-5" />
+                    <span className="font-bold">{t('groupVideoCall')}</span>
                   </button>
                 </div>
               )}
@@ -397,24 +364,103 @@ export default function ContactsScreen() {
         })}
       </div>
 
-      {/* Floating Action Bar for Selection Mode */}
-      {isSelectionMode && selectedPhones.size > 0 && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-2 flex justify-between gap-2 z-50 animate-in slide-in-from-bottom-5 fade-in">
-          <button
-            onClick={startGroupMessage}
-            className="flex-1 flex justify-center items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-xl transition-colors font-medium text-sm"
-          >
-            <MessageSquare className="w-4 h-4" />
-            Group Message
-          </button>
-          <button
-            onClick={startGroupCall}
-            className="flex-1 flex justify-center items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all font-medium text-sm"
-          >
-            <Video className="w-4 h-4" />
-            Group Call
-          </button>
-        </div>
+      {/* Action Bottom Sheet (Accordion UI) */}
+      {activeContact && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity"
+            onClick={() => setActiveContact(null)}
+          />
+          <div className="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 rounded-t-3xl z-50 p-6 shadow-2xl transform transition-transform max-w-md mx-auto">
+            <div className="w-12 h-1.5 bg-slate-600 rounded-full mx-auto mb-6" />
+            <h2 className="text-2xl font-bold text-center mb-1 text-white">{activeContact.name}</h2>
+            <p className="text-center text-blue-400 mb-8 font-medium" dir="ltr">{activeContact.phone}</p>
+            
+            <div className="flex items-stretch gap-4 w-full h-48">
+              {/* Message Column */}
+              <div 
+                tabIndex={0}
+                className="group relative flex-1 rounded-3xl bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700 hover:border-blue-500/50 hover:shadow-[0_0_30px_rgba(59,130,246,0.2)] transition-all duration-500 overflow-hidden cursor-pointer flex flex-col items-center justify-center focus:outline-none"
+              >
+                {/* Default State */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 transition-all duration-500 group-hover:-translate-y-8 group-hover:opacity-0 group-hover:scale-95 group-focus:-translate-y-8 group-focus:opacity-0 group-focus:scale-95">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30 text-white transform rotate-3 transition-transform duration-500 group-hover:rotate-0 group-focus:rotate-0">
+                    <MessageSquare className="w-8 h-8" />
+                  </div>
+                  <span className="font-bold text-lg text-slate-200 tracking-wide">{t('message')}</span>
+                </div>
+
+                {/* Hover/Active State */}
+                <div className="absolute inset-0 flex items-center justify-center gap-3 opacity-0 translate-y-8 transition-all duration-500 group-hover:opacity-100 group-hover:translate-y-0 group-focus:opacity-100 group-focus:translate-y-0 bg-slate-900/80 backdrop-blur-md">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setActiveContact(null); }}
+                    className="flex flex-col items-center gap-2 hover:scale-110 transition-transform p-2"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center text-blue-400 border border-blue-500/30 hover:bg-blue-500 hover:text-white hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all duration-300">
+                      <MessageSquare className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-200">{t('textMessage')}</span>
+                  </button>
+                  
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setActiveContact(null); }}
+                    className="flex flex-col items-center gap-2 hover:scale-110 transition-transform p-2"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center text-orange-400 border border-orange-500/30 hover:bg-orange-500 hover:text-white hover:shadow-[0_0_20px_rgba(249,115,22,0.5)] transition-all duration-300">
+                      <Mic className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-200">{t('voiceMessage')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Call Column */}
+              <div 
+                tabIndex={0}
+                className="group relative flex-1 rounded-3xl bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700 hover:border-green-500/50 hover:shadow-[0_0_30px_rgba(34,197,94,0.2)] transition-all duration-500 overflow-hidden cursor-pointer flex flex-col items-center justify-center focus:outline-none"
+              >
+                {/* Default State */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 transition-all duration-500 group-hover:-translate-y-8 group-hover:opacity-0 group-hover:scale-95 group-focus:-translate-y-8 group-focus:opacity-0 group-focus:scale-95">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/30 text-white transform -rotate-3 transition-transform duration-500 group-hover:rotate-0 group-focus:rotate-0">
+                    <Phone className="w-8 h-8" />
+                  </div>
+                  <span className="font-bold text-lg text-slate-200 tracking-wide">{t('call')}</span>
+                </div>
+
+                {/* Hover/Active State */}
+                <div className="absolute inset-0 flex items-center justify-center gap-3 opacity-0 translate-y-8 transition-all duration-500 group-hover:opacity-100 group-hover:translate-y-0 group-focus:opacity-100 group-focus:translate-y-0 bg-slate-900/80 backdrop-blur-md">
+                  <button 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setActiveContact(null);
+                      navigate('/call', { state: { title: t('audioCall') } });
+                    }}
+                    className="flex flex-col items-center gap-2 hover:scale-110 transition-transform p-2"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center text-green-400 border border-green-500/30 hover:bg-green-500 hover:text-white hover:shadow-[0_0_20px_rgba(34,197,94,0.5)] transition-all duration-300">
+                      <Phone className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-200">{t('audioCall')}</span>
+                  </button>
+                  
+                  <button 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setActiveContact(null);
+                      navigate('/call', { state: { title: t('videoCall') } });
+                    }}
+                    className="flex flex-col items-center gap-2 hover:scale-110 transition-transform p-2"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center text-purple-400 border border-purple-500/30 hover:bg-purple-500 hover:text-white hover:shadow-[0_0_20px_rgba(168,85,247,0.5)] transition-all duration-300">
+                      <Video className="w-6 h-6" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-200">{t('videoCall')}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

@@ -17,7 +17,14 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
     let isMounted = true;
 
     const loadUser = async (session: any) => {
-      if (!session?.user) return;
+      if (!session?.user) {
+        if (isMounted) {
+          setUser(null);
+          setIsChecking(false);
+        }
+        return;
+      }
+      
       try {
         const { data: profile } = await supabase
           .from('profiles')
@@ -51,14 +58,16 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // 2. Listen for auth changes (Session Fix)
+    // 2. Listen for auth changes to persist session automatically
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         loadUser(session);
-      } else if (event === 'SIGNED_OUT' && isMounted) {
-        setUser(null);
-        setIsChecking(false);
-        navigate('/', { replace: true });
+      } else if (event === 'SIGNED_OUT') {
+        if (isMounted) {
+          setUser(null);
+          setIsChecking(false);
+          navigate('/', { replace: true });
+        }
       }
     });
 

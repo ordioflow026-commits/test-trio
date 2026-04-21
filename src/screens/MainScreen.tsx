@@ -10,8 +10,7 @@ export default function MainScreen() {
   const [activeSubTab, setActiveSubTab] = useState('contacts');
   const { t, dir, language, toggleLanguage } = useLanguage();
   const [userData, setUserData] = useState({ fullName: 'Guest', phone: '' });
-  const [hasNotifications, setHasNotifications] = useState(true);
-  const [showWelcomeMenu, setShowWelcomeMenu] = useState(false);
+  const [hasNotifications, setHasNotifications] = useState(true); // Mock state for red dot
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -52,36 +51,22 @@ export default function MainScreen() {
               <Home className="w-6 h-6" />
             </button>
             
-            <div className="relative">
-              <button
-                onClick={() => {
-                  setShowWelcomeMenu(!showWelcomeMenu);
-                  setHasNotifications(false);
-                }}
-                className={`relative p-3 rounded-full transition-all duration-300 border ${
-                  showWelcomeMenu
-                    ? 'bg-blue-700 border-blue-500 text-white shadow-[0_0_15px_rgba(29,78,216,0.5)]'
-                    : 'border-blue-500/50 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20'
-                }`}
-              >
-                <Bell className="w-6 h-6" />
-                {hasNotifications && (
-                  <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-[#0F172A] rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
-                )}
-              </button>
-              
-              {showWelcomeMenu && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 w-48 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl z-50 p-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-slate-800 border-t border-l border-slate-700 transform rotate-45"></div>
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center mb-2">
-                      <Bell className="w-5 h-5 text-blue-400" />
-                    </div>
-                    <p className="text-sm font-semibold text-slate-200">Welcome to the app!</p>
-                  </div>
-                </div>
+            <button
+              onClick={() => {
+                setActiveMainTab('notifications');
+                setHasNotifications(false);
+              }}
+              className={`relative p-3 rounded-full transition-all duration-300 border ${
+                activeMainTab === 'notifications'
+                  ? 'bg-blue-700 border-blue-500 text-white shadow-[0_0_15px_rgba(29,78,216,0.5)]'
+                  : 'border-blue-500/50 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20'
+              }`}
+            >
+              <Bell className="w-6 h-6" />
+              {hasNotifications && (
+                <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-[#0F172A] rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
               )}
-            </div>
+            </button>
             
             <button
               onClick={() => setActiveMainTab('profile')}
@@ -149,6 +134,16 @@ export default function MainScreen() {
             {activeSubTab === 'privateRoom' && <PrivateRoomScreen />}
             {activeSubTab === 'broadcast' && <BroadcastScreen />}
           </>
+        )}
+
+        {activeMainTab === 'notifications' && (
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-6 bg-gradient-to-b from-transparent to-slate-900/50">
+            <div className="w-24 h-24 bg-slate-800/50 rounded-full flex items-center justify-center mb-6 border border-slate-700/50 shadow-lg">
+              <Bell className="w-10 h-10 text-slate-400" />
+            </div>
+            <p className="text-xl font-bold text-slate-200">{t('notifications')}</p>
+            <p className="text-sm mt-3 text-slate-400">You're all caught up!</p>
+          </div>
         )}
 
         {activeMainTab === 'profile' && (
