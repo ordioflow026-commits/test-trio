@@ -253,7 +253,7 @@ export default function ContactsScreen() {
     <div className="flex flex-col h-full bg-slate-900 relative">
       {/* Selection Header */}
       {isSelectionMode && (
-        <div className="absolute top-0 left-0 right-0 bg-blue-600 text-white px-4 py-3 flex items-center justify-between z-20 shadow-md">
+        <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-4 py-3 flex items-center justify-between z-20 shadow-md">
           <div className="flex items-center gap-3">
             <button onClick={() => { setIsSelectionMode(false); }}>
               <X className="w-6 h-6" />
@@ -304,17 +304,17 @@ export default function ContactsScreen() {
                 onTouchEnd={handleTouchEnd}
                 onClick={() => handleTap(contact)}
                 className={`flex items-center px-4 py-3 cursor-pointer transition-colors select-none ${
-                  isSelected ? 'bg-blue-900/30' : 'hover:bg-slate-800/50'
+                  isSelected ? 'bg-blue-900/40' : 'hover:bg-slate-800/50'
                 }`}
               >
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold mr-4 transition-all duration-300 ${
-                  isSelected ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] scale-110' : 'bg-slate-800 text-slate-300 border border-slate-700'
+                  isSelected ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] scale-105' : 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30'
                 }`}>
-                  {isSelected ? <Check className="w-5 h-5 animate-in zoom-in-50" /> : contact.initials}
+                  {contact.initials}
                 </div>
-                <div className="flex-1 border-b border-slate-800 pb-3 pt-1">
-                  <h3 className={`font-semibold transition-colors ${isSelected ? 'text-blue-400' : 'text-slate-200'}`}>{contact.name}</h3>
-                  <p className="text-sm text-slate-500" dir="ltr">{contact.phone}</p>
+                <div className="flex-1 border-b border-slate-800/60 pb-3 pt-1">
+                  <h3 className={`font-semibold transition-colors text-[17px] ${isSelected ? 'text-blue-400' : 'text-slate-200'}`}>{contact.name}</h3>
+                  <p className="text-[13px] text-slate-400 mt-0.5" dir="ltr">{contact.phone}</p>
                 </div>
               </div>
             </React.Fragment>
