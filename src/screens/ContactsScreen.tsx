@@ -6,6 +6,7 @@ import { Capacitor } from '@capacitor/core';
 import { Contacts } from '@capacitor-community/contacts';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface Contact {
   id: number;
@@ -249,16 +250,18 @@ export default function ContactsScreen() {
     navigate('/call', { state: { title: t('groupVideoCall') } });
   };
 
+  const lastSelectedContactPhone = Array.from(selectedPhones).pop();
+
   return (
     <div className="flex flex-col h-full bg-slate-900 relative">
       {/* Selection Header */}
       {isSelectionMode && (
-        <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-blue-600 to-cyan-500 text-white px-4 py-3 flex items-center justify-between z-20 shadow-md">
+        <div className="absolute top-0 left-0 right-0 bg-[#00b4d8] text-white px-4 py-3 flex items-center justify-between z-20 shadow-md">
           <div className="flex items-center gap-3">
             <button onClick={() => { setIsSelectionMode(false); }}>
               <X className="w-6 h-6" />
             </button>
-            <span className="font-semibold text-lg">{selectedPhones.size} {t('selected')}</span>
+            <span className="font-semibold text-lg">{selectedPhones.size} {t('selected') || 'Selected'}</span>
           </div>
         </div>
       )}
@@ -295,7 +298,7 @@ export default function ContactsScreen() {
         {contacts.map((contact) => {
             const isSelected = selectedPhones.has(contact.phone);
             return (
-            <React.Fragment key={`${contact.id}-${contact.phone}`}>
+            <div key={`${contact.id}-${contact.phone}`} className="relative">
               <div
                 onMouseDown={() => handleTouchStart(contact)}
                 onMouseUp={handleTouchEnd}
@@ -304,42 +307,50 @@ export default function ContactsScreen() {
                 onTouchEnd={handleTouchEnd}
                 onClick={() => handleTap(contact)}
                 className={`flex items-center px-4 py-3 cursor-pointer transition-colors select-none ${
-                  isSelected ? 'bg-blue-900/40' : 'hover:bg-slate-800/50'
+                  isSelected ? 'bg-[#0070a8]' : 'hover:bg-slate-800/50'
                 }`}
               >
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold mr-4 transition-all duration-300 ${
-                  isSelected ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] scale-105' : 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30'
+                  isSelected ? 'bg-[#00b4d8] text-white shadow-md' : 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30'
                 }`}>
-                  {contact.initials}
+                  {isSelected ? <Check className="w-6 h-6" /> : contact.initials}
                 </div>
                 <div className="flex-1 border-b border-slate-800/60 pb-3 pt-1">
-                  <h3 className={`font-semibold transition-colors text-[17px] ${isSelected ? 'text-blue-400' : 'text-slate-200'}`}>{contact.name}</h3>
-                  <p className="text-[13px] text-slate-400 mt-0.5" dir="ltr">{contact.phone}</p>
+                  <h3 className={`font-semibold transition-colors text-[17px] ${isSelected ? 'text-white' : 'text-slate-200'}`}>{contact.name}</h3>
+                  <p className={`text-[13px] mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-400'}`} dir="ltr">{contact.phone}</p>
                 </div>
               </div>
-            </React.Fragment>
+              
+              {/* Dynamic Floating Action Buttons for Last Selected Contact */}
+              <AnimatePresence>
+                {isSelectionMode && contact.phone === lastSelectedContactPhone && (
+                  <motion.div
+                    layoutId="dynamic-fab"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-30"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  >
+                    <button
+                        onClick={(e) => { e.stopPropagation(); startGroupCall(); }}
+                        className="w-[48px] h-[48px] rounded-full bg-[#00b4d8] text-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,180,216,0.5)] hover:brightness-110 active:scale-95 transition-all outline-none"
+                    >
+                         <Phone fill="currentColor" stroke="none" className="w-[20px] h-[20px]" />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); startGroupCall(); }}
+                        className="w-[48px] h-[48px] rounded-full bg-[#00e676] text-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,230,118,0.5)] hover:brightness-110 active:scale-95 transition-all outline-none"
+                    >
+                         <Video fill="currentColor" stroke="none" className="w-[20px] h-[20px]" />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           );
         })}
       </div>
-
-      {/* Floating Bottom Action Bar for Multi-Select */}
-      {isSelectionMode && selectedPhones.size > 0 && (
-        <div className="absolute bottom-6 left-4 right-4 bg-slate-800 border border-slate-700 px-5 py-3 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex items-center justify-between z-30 animate-in slide-in-from-bottom-5 fade-in">
-          <div className="text-white font-medium pl-1 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-blue-600 text-xs flex items-center justify-center">
-              {selectedPhones.size}
-            </span>
-            <span className="text-sm font-semibold">{t('selected') || 'Selected'}</span>
-          </div>
-          <button
-            onClick={startGroupCall}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/30 font-semibold flex items-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm"
-          >
-            <Phone className="w-4 h-4 fill-white text-white" />
-            <span>Call Group</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
