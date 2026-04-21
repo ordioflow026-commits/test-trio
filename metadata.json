@@ -1,6 +1,6 @@
 {
-  "name": "Zoom Clone with Multi-View",
-  "description": "A real-time video conferencing app with group calls, customizable 3-screen layouts, and live broadcast views.",
+  "name": "CommApp",
+  "description": "Communication application with video calling and chat",
   "requestFramePermissions": [
     "camera",
     "microphone",

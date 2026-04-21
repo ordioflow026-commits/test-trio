@@ -207,7 +207,7 @@ export default function BroadcastScreen() {
 
         <h2 className="text-lg font-bold text-white mb-4">{t('activeBroadcasts')}</h2>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {loading ? (
             <div className="col-span-full flex justify-center py-10">
               <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
@@ -383,20 +383,20 @@ export default function BroadcastScreen() {
           </div>
 
           {/* Triple Screen Carousel */}
-          <div className="relative flex-1 overflow-hidden">
+          <div className="relative flex-1 overflow-hidden md:overflow-auto">
             <div 
-              className="absolute inset-0 flex transition-transform duration-500 ease-out"
-              style={{ transform: `translateX(${dir === 'rtl' ? currentSlot * 100 : -currentSlot * 100}%)` }}
+              className="absolute md:relative inset-0 flex md:grid md:grid-cols-3 md:w-full md:!transform-none transition-transform duration-500 ease-out w-[300%]"
+              style={{ transform: `translateX(${dir === 'rtl' ? currentSlot * 33.333 : -currentSlot * 33.333}%)` }}
             >
               {/* Screen 1: Main Stream */}
-              <div className="w-full h-full flex-shrink-0 bg-slate-900 flex flex-col items-center justify-center relative">
+              <div className="w-1/3 md:w-full h-full flex-shrink-0 bg-slate-900 flex flex-col items-center justify-center relative">
                 <Video className="w-24 h-24 text-slate-700 mb-4" />
                 <p className="text-slate-500 font-bold">{t('mainStream')}</p>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none"></div>
               </div>
 
               {/* Screen 2: Collaboration */}
-              <div className="w-full h-full flex-shrink-0 bg-slate-800 flex flex-col items-center justify-center relative">
+              <div className="w-1/3 md:w-full h-full flex-shrink-0 bg-slate-800 flex flex-col items-center justify-center relative">
                 <div className="grid grid-cols-2 gap-4 p-8 w-full max-w-lg">
                   {[1, 2, 3, 4].map(i => (
                     <div key={i} className="aspect-video bg-slate-700 rounded-xl flex items-center justify-center border border-slate-600 shadow-lg">
@@ -408,7 +408,7 @@ export default function BroadcastScreen() {
               </div>
 
               {/* Screen 3: Media/Tools */}
-              <div className="w-full h-full flex-shrink-0 bg-slate-900 flex flex-col items-center justify-center relative">
+              <div className="w-1/3 md:w-full h-full flex-shrink-0 bg-slate-900 flex flex-col items-center justify-center relative">
                 <MonitorPlay className="w-24 h-24 text-slate-700 mb-4" />
                 <p className="text-slate-500 font-bold">{t('mediaTools')}</p>
               </div>
@@ -417,7 +417,7 @@ export default function BroadcastScreen() {
             {/* Navigation Arrows */}
             {isHost && (
               <>
-                <div className="absolute inset-y-0 left-0 flex items-center px-2 z-10 pointer-events-none">
+                <div className="md:hidden absolute inset-y-0 left-0 flex items-center px-2 z-10 pointer-events-none">
                   {((dir === 'ltr' && currentSlot > 0) || (dir === 'rtl' && currentSlot < 2)) && (
                     <button 
                       onClick={dir === 'ltr' ? prevSlot : nextSlot}
@@ -427,7 +427,7 @@ export default function BroadcastScreen() {
                     </button>
                   )}
                 </div>
-                <div className="absolute inset-y-0 right-0 flex items-center px-2 z-10 pointer-events-none">
+                <div className="md:hidden absolute inset-y-0 right-0 flex items-center px-2 z-10 pointer-events-none">
                   {((dir === 'ltr' && currentSlot < 2) || (dir === 'rtl' && currentSlot > 0)) && (
                     <button 
                       onClick={dir === 'ltr' ? nextSlot : prevSlot}
@@ -479,18 +479,20 @@ export default function BroadcastScreen() {
             {/* Gift Box Feature */}
             <div className="relative pointer-events-auto flex flex-col items-end">
               {showGifts && (
-                <div className="absolute bottom-16 right-0 bg-slate-800/95 backdrop-blur-md border border-slate-700 p-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in slide-in-from-bottom-2 mb-2 w-64">
-                  <p className="text-white text-sm font-bold text-center leading-relaxed">
-                    {dir === 'rtl' ? 'ادعم صانع المحتوى لمزيد من الإبداع!' : 'Support the creator for more creativity!'}
-                  </p>
-                  <div className="flex items-center justify-between bg-slate-900/50 rounded-xl p-2 border border-slate-700">
-                    <button onClick={() => setDonationAmount(Math.max(1, donationAmount - 1))} className="w-10 h-10 bg-slate-700 rounded-lg text-white font-bold hover:bg-slate-600 transition-colors text-xl">-</button>
-                    <span className="text-white font-bold text-xl">${donationAmount}</span>
-                    <button onClick={() => setDonationAmount(donationAmount + 1)} className="w-10 h-10 bg-slate-700 rounded-lg text-white font-bold hover:bg-slate-600 transition-colors text-xl">+</button>
+                <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+                  <div className="bg-slate-800/95 backdrop-blur-md border border-slate-700 p-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in zoom-in-95 duration-200 w-64 pointer-events-auto">
+                    <p className="text-white text-sm font-bold text-center leading-relaxed">
+                      {dir === 'rtl' ? 'ادعم صانع المحتوى لمزيد من الإبداع!' : 'Support the creator for more creativity!'}
+                    </p>
+                    <div className="flex items-center justify-between bg-slate-900/50 rounded-xl p-2 border border-slate-700">
+                      <button onClick={() => setDonationAmount(Math.max(1, donationAmount - 1))} className="w-10 h-10 bg-slate-700 rounded-lg text-white font-bold hover:bg-slate-600 transition-colors text-xl">-</button>
+                      <span className="text-white font-bold text-xl">${donationAmount}</span>
+                      <button onClick={() => setDonationAmount(donationAmount + 1)} className="w-10 h-10 bg-slate-700 rounded-lg text-white font-bold hover:bg-slate-600 transition-colors text-xl">+</button>
+                    </div>
+                    <button onClick={handleSendGift} className="w-full bg-gradient-to-r from-pink-500 to-rose-600 text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(225,29,72,0.4)]">
+                      {dir === 'rtl' ? 'إرسال الدعم' : 'Send Support'}
+                    </button>
                   </div>
-                  <button onClick={handleSendGift} className="w-full bg-gradient-to-r from-pink-500 to-rose-600 text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(225,29,72,0.4)]">
-                    {dir === 'rtl' ? 'إرسال الدعم' : 'Send Support'}
-                  </button>
                 </div>
               )}
               <button 
