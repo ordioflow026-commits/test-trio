@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Home, Bell, User, Users, Lock, Radio, Globe, MessageSquare, Plus, LogIn } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useUser } from '../contexts/UserContext';
 import ContactsScreen from './ContactsScreen';
 import PrivateRoomScreen from './PrivateRoomScreen';
 import BroadcastScreen from './BroadcastScreen';
@@ -9,23 +10,10 @@ export default function MainScreen() {
   const [activeMainTab, setActiveMainTab] = useState('home');
   const [activeSubTab, setActiveSubTab] = useState('contacts');
   const { t, dir, language, toggleLanguage } = useLanguage();
-  const [userData, setUserData] = useState({ fullName: 'Guest', phone: '' });
+  const { user } = useUser();
   const [hasNotifications, setHasNotifications] = useState(true); // Mock state for red dot
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        setUserData({
-          fullName: parsed.fullName || 'Guest',
-          phone: parsed.phone || ''
-        });
-      } catch (e) {
-        console.error('Failed to parse user data', e);
-      }
-    }
-  }, []);
+  const userData = user || { fullName: 'Guest', phone: '' };
 
   return (
     <div className="min-h-screen bg-[#0B1120] flex flex-col font-sans" dir={dir}>
@@ -130,9 +118,19 @@ export default function MainScreen() {
       <main className="flex-1 overflow-hidden relative flex flex-col">
         {activeMainTab === 'home' && (
           <>
-            {activeSubTab === 'contacts' && <ContactsScreen />}
-            {activeSubTab === 'privateRoom' && <PrivateRoomScreen />}
-            {activeSubTab === 'broadcast' && <BroadcastScreen />}
+            <div className="px-5 py-4 bg-[#0F172A]/40 border-b border-slate-800/80 shadow-sm z-10 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-slate-400 font-medium tracking-wide uppercase mb-0.5">{t('welcome') || 'Welcome back'}</p>
+                <h2 className="text-lg font-bold text-white tracking-tight">
+                  {userData.fullName} <span className="text-blue-500">👋</span>
+                </h2>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden relative flex flex-col">
+              {activeSubTab === 'contacts' && <ContactsScreen />}
+              {activeSubTab === 'privateRoom' && <PrivateRoomScreen />}
+              {activeSubTab === 'broadcast' && <BroadcastScreen />}
+            </div>
           </>
         )}
 
