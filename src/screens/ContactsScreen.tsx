@@ -240,7 +240,7 @@ export default function ContactsScreen() {
     if (isSelectionMode) {
       toggleContactSelection(contact);
     } else {
-      setExpandedContactId(prev => prev === contact.phone ? null : contact.phone);
+      navigate('/chat', { state: { contact } });
     }
   };
 
@@ -317,36 +317,6 @@ export default function ContactsScreen() {
                   <p className="text-sm text-slate-500" dir="ltr">{contact.phone}</p>
                 </div>
               </div>
-
-              {/* Inline Action Menu for Single Tap */}
-              {expandedContactId === contact.phone && !isSelectionMode && (
-                <div className="px-4 py-3 bg-slate-800/40 border-b border-slate-800/80 flex items-center justify-around animate-in slide-in-from-top-2 fade-in">
-                  <button className="flex flex-col items-center gap-1.5 p-2 text-blue-400 hover:text-blue-300 hover:bg-slate-800 rounded-xl transition-all">
-                    <div className="w-10 h-10 rounded-full bg-slate-800 border border-blue-500/30 flex items-center justify-center shadow-inner">
-                      <MessageSquare className="w-5 h-5" />
-                    </div>
-                    <span className="text-[10px] font-semibold tracking-wide">{t('message') || 'Message'}</span>
-                  </button>
-                  <button 
-                    onClick={() => navigate('/call', { state: { title: t('audioCall') || 'Voice Call' }})}
-                    className="flex flex-col items-center gap-1.5 p-2 text-green-400 hover:text-green-300 hover:bg-slate-800 rounded-xl transition-all"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-slate-800 border border-green-500/30 flex items-center justify-center shadow-inner">
-                      <Phone className="w-5 h-5" />
-                    </div>
-                    <span className="text-[10px] font-semibold tracking-wide">{t('audioCall') || 'Voice Call'}</span>
-                  </button>
-                  <button 
-                    onClick={() => navigate('/call', { state: { title: t('videoCall') || 'Video Call' }})}
-                    className="flex flex-col items-center gap-1.5 p-2 text-purple-400 hover:text-purple-300 hover:bg-slate-800 rounded-xl transition-all"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-slate-800 border border-purple-500/30 flex items-center justify-center shadow-inner">
-                      <Video className="w-5 h-5" />
-                    </div>
-                    <span className="text-[10px] font-semibold tracking-wide">{t('videoCall') || 'Video Call'}</span>
-                  </button>
-                </div>
-              )}
             </React.Fragment>
           );
         })}
