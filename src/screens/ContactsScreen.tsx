@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Phone, Video, Check, X, Mic, ChevronDown, Users, Loader2 } from 'lucide-react';
+import { MessageSquare, Phone, Video, Check, X, Mic, ChevronDown, Users, Loader2, Trash2, UserPlus, Plus } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Capacitor } from '@capacitor/core';
 import { Contacts } from '@capacitor-community/contacts';
@@ -20,39 +20,29 @@ export default function ContactsScreen() {
   const { t } = useLanguage();
   const { user } = useUser();
   const { isSelectionMode, selectedContactIds, selectedContacts, toggleSelection } = useSelection();
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    const saved = localStorage.getItem('triosync_device_contacts');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
   const navigate = useNavigate();
   
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    localStorage.setItem('triosync_device_contacts', JSON.stringify(contacts));
+  }, [contacts]);
+
+  useEffect(() => {
     let isMounted = true;
 
-    // Load any already selected contacts from the context initially so the list isn't completely empty
-    if (isMounted && selectedContacts.length > 0 && contacts.length === 0) {
-      setContacts(selectedContacts.map((c, i) => ({
-        id: i + 10000,
-        name: c.name,
-        phone: c.id, 
-        initials: (c.name || 'U').substring(0, 2).toUpperCase()
-      })));
-    }
-
-    // Since we require user interaction for browser API, do not force triggerContactFetch on load here.
-    // The user will tap "Load Contacts" button instead if nothing is there.
-    // But if Capacitor is native platform, it's fine to fetch automatically!
-    if (Capacitor.isNativePlatform() && isMounted && contacts.length === 0) {
-      triggerContactFetch();
-    } else if (contacts.length === 0 && selectedContacts.length === 0) {
-      // Fallback mock contacts so the screen isn't entirely empty initially:
-      setContacts([
-          { id: 1, name: 'Alice Smith', phone: '+1234567890', initials: 'AL' },
-          { id: 2, name: 'Bob Johnson', phone: '+0987654321', initials: 'BO' }
-      ]);
-    }
+    // We do not load mock contacts anymore. 
+    // And we rely on user action or previously saved contacts in localStorage.
 
     const handleFetch = () => triggerContactFetch();
     window.addEventListener('fetch-contacts', handleFetch);
@@ -61,7 +51,39 @@ export default function ContactsScreen() {
       isMounted = false;
       window.removeEventListener('fetch-contacts', handleFetch);
     };
-  }, [user, selectedContacts]);
+  }, [user]);
+
+  const handleManualAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newContactName.trim() || !newContactPhone.trim()) return;
+
+    const newContact: Contact = {
+      id: Date.now(),
+      name: newContactName.trim(),
+      phone: newContactPhone.trim(),
+      initials: newContactName.trim().substring(0, 2).toUpperCase()
+    };
+
+    setContacts(prev => {
+      const map = new Map();
+      prev.forEach(c => map.set(c.phone, c));
+      map.set(newContact.phone, newContact);
+      return Array.from(map.values());
+    });
+
+    setNewContactName('');
+    setNewContactPhone('');
+    setShowAddForm(false);
+  };
+
+  const handleDeleteContact = (e: React.MouseEvent, contact: Contact) => {
+    e.stopPropagation(); // prevent tapping the row
+    setContacts(prev => prev.filter(c => c.phone !== contact.phone));
+    // If it was selected, un-select it
+    if (selectedContactIds.includes(contact.phone)) {
+      toggleSelection({ id: contact.phone, name: contact.name }, false);
+    }
+  };
 
   const triggerContactFetch = async () => {
     setIsLoadingContacts(true);
@@ -114,15 +136,7 @@ export default function ContactsScreen() {
             setErrorMessage('No valid web contacts selected.');
           }
         } else {
-          setErrorMessage('Browser Contacts API unsupported. Here is mock data.');
-          setContacts(prev => {
-            const map = new Map();
-            prev.forEach(c => map.set(c.phone, c));
-            // Add mock
-            map.set('+1122334455', { id: 3, name: 'Charlie Mock', phone: '+1122334455', initials: 'CH' });
-            map.set('+5544332211', { id: 4, name: 'David Fallback', phone: '+5544332211', initials: 'DA' });
-            return Array.from(map.values());
-          });
+          setErrorMessage('Browser Contacts API unsupported on this device. Please add contacts manually.');
         }
       }
     } catch (err: any) {
@@ -170,6 +184,69 @@ export default function ContactsScreen() {
 
   return (
     <div className="flex flex-col h-full bg-slate-900 relative">
+      
+      {/* Contact Tools Header */}
+      <div className="px-4 py-3 flex justify-between items-center border-b border-slate-800/60 bg-slate-900 z-10 shadow-sm">
+        <button 
+          onClick={() => triggerContactFetch()} 
+          className="flex items-center gap-2 text-[13px] font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          <Users className="w-4 h-4" /> Load Device Contacts
+        </button>
+        <button 
+          onClick={() => setShowAddForm(!showAddForm)} 
+          className="flex items-center gap-2 text-[13px] font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          <UserPlus className="w-4 h-4" /> Add Manual
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.form
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden bg-slate-800/50 border-b border-slate-800/60"
+            onSubmit={handleManualAdd}
+          >
+            <div className="p-4 flex flex-col gap-3">
+              <input 
+                type="text" 
+                placeholder="Name" 
+                value={newContactName}
+                onChange={e => setNewContactName(e.target.value)}
+                className="w-full bg-slate-900/80 border border-slate-700/50 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500 transition-colors"
+                required
+              />
+              <input 
+                type="tel" 
+                placeholder="Phone (e.g. +123...)" 
+                value={newContactPhone}
+                onChange={e => setNewContactPhone(e.target.value)}
+                className="w-full bg-slate-900/80 border border-slate-700/50 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500 transition-colors"
+                required
+              />
+              <div className="flex justify-end gap-2 mt-1">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddForm(false)}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-400 hover:bg-slate-700/50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow-lg shadow-blue-500/20"
+                >
+                  Save Contact
+                </button>
+              </div>
+            </div>
+          </motion.form>
+        )}
+      </AnimatePresence>
+
       {/* Contacts List */}
       <div className="flex-1 overflow-y-auto pt-2 pb-20">
         
@@ -219,9 +296,21 @@ export default function ContactsScreen() {
                 }`}>
                   {isSelected ? <Check className="w-6 h-6" /> : contact.initials}
                 </div>
-                <div className="flex-1 border-b border-slate-800/60 pb-3 pt-1">
-                  <h3 className={`font-semibold transition-colors text-[17px] ${isSelected ? 'text-white' : 'text-slate-200'}`}>{contact.name}</h3>
-                  <p className={`text-[13px] mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-400'}`} dir="ltr">{contact.phone}</p>
+                <div className="flex-1 border-b border-slate-800/60 pb-3 pt-1 flex justify-between items-center pr-2">
+                  <div>
+                    <h3 className={`font-semibold transition-colors text-[17px] ${isSelected ? 'text-white' : 'text-slate-200'}`}>{contact.name}</h3>
+                    <p className={`text-[13px] mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-400'}`} dir="ltr">{contact.phone}</p>
+                  </div>
+                  
+                  {/* Delete Button */}
+                  {!isSelectionMode && (
+                    <button
+                      onClick={(e) => handleDeleteContact(e, contact)}
+                      className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-full transition-colors active:scale-95"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
               </div>
               
