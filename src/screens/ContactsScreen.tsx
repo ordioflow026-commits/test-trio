@@ -19,7 +19,7 @@ interface Contact {
 export default function ContactsScreen() {
   const { t } = useLanguage();
   const { user } = useUser();
-  const { isSelectionMode, selectedContactIds, toggleSelection } = useSelection();
+  const { isSelectionMode, selectedContactIds, selectedContacts, toggleSelection } = useSelection();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
@@ -31,12 +31,29 @@ export default function ContactsScreen() {
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Fetch fresh device contacts
-    if (isMounted) {
-      triggerContactFetch();
+    // Load any already selected contacts from the context initially so the list isn't completely empty
+    if (isMounted && selectedContacts.length > 0 && contacts.length === 0) {
+      setContacts(selectedContacts.map((c, i) => ({
+        id: i + 10000,
+        name: c.name,
+        phone: c.id, 
+        initials: (c.name || 'U').substring(0, 2).toUpperCase()
+      })));
     }
 
-    // Support explicit re-fetches
+    // Since we require user interaction for browser API, do not force triggerContactFetch on load here.
+    // The user will tap "Load Contacts" button instead if nothing is there.
+    // But if Capacitor is native platform, it's fine to fetch automatically!
+    if (Capacitor.isNativePlatform() && isMounted && contacts.length === 0) {
+      triggerContactFetch();
+    } else if (contacts.length === 0 && selectedContacts.length === 0) {
+      // Fallback mock contacts so the screen isn't entirely empty initially:
+      setContacts([
+          { id: 1, name: 'Alice Smith', phone: '+1234567890', initials: 'AL' },
+          { id: 2, name: 'Bob Johnson', phone: '+0987654321', initials: 'BO' }
+      ]);
+    }
+
     const handleFetch = () => triggerContactFetch();
     window.addEventListener('fetch-contacts', handleFetch);
 
@@ -44,42 +61,77 @@ export default function ContactsScreen() {
       isMounted = false;
       window.removeEventListener('fetch-contacts', handleFetch);
     };
-  }, [user]);
+  }, [user, selectedContacts]);
 
   const triggerContactFetch = async () => {
     setIsLoadingContacts(true);
     setErrorMessage(null);
 
     try {
-      // 1. Fetch user profiles from database instead of selective device APIs
-      const { data, error } = await supabase.from('profiles').select('*');
-
-      if (error) {
-        throw error;
-      }
-
-      if (data && data.length > 0) {
-        // Exclude the current signed-in user from their own contact list
-        const filteredData = data.filter((profile: any) => profile.id !== user?.id);
-
-        const mappedContacts = filteredData.map((profile: any, i: number) => {
-          const name = profile.name || 'Unknown User';
-          const phone = profile.phone || 'No phone';
-          return {
-            id: i,
-            name,
-            phone,
-            initials: name.substring(0, 2).toUpperCase()
-          };
-        });
-
-        setContacts(mappedContacts);
+      if (Capacitor.isNativePlatform()) {
+        const perm = await Contacts.requestPermissions();
+        if (perm.contacts === 'granted') {
+          const result = await Contacts.getContacts({ projection: { name: true, phones: true } });
+          if (result.contacts && result.contacts.length > 0) {
+            const mappedContacts = result.contacts.map((c, i) => ({
+              id: i,
+              name: c.name?.display || 'Unknown',
+              phone: c.phones?.[0]?.number || 'No phone',
+              initials: (c.name?.display || 'U').substring(0, 2).toUpperCase()
+            }));
+            
+            setContacts(prev => {
+               const map = new Map();
+               prev.forEach(c => map.set(c.phone, c));
+               mappedContacts.forEach(c => map.set(c.phone, c));
+               return Array.from(map.values());
+            });
+          } else {
+            setErrorMessage('No native contacts found.');
+          }
+        } else {
+          setErrorMessage('Permission denied for native device contacts.');
+        }
       } else {
-        setErrorMessage('No users found in the system.');
+        // Web Contacts API
+        if ('contacts' in navigator && 'ContactsManager' in window) {
+          const webContacts = await (navigator as any).contacts.select(['name', 'tel'], { multiple: true });
+          
+          if (webContacts && webContacts.length > 0) {
+            const mappedContacts = webContacts.map((c: any, i: number) => {
+              const name = c.name?.[0] || 'Unknown';
+              const phone = c.tel?.[0] || 'No phone';
+              return { id: i, name, phone, initials: name.substring(0, 2).toUpperCase() };
+            });
+            
+            setContacts(prev => {
+               const map = new Map();
+               prev.forEach(c => map.set(c.phone, c));
+               mappedContacts.forEach(c => map.set(c.phone, c));
+               return Array.from(map.values());
+            });
+          } else {
+            setErrorMessage('No valid web contacts selected.');
+          }
+        } else {
+          setErrorMessage('Browser Contacts API unsupported. Here is mock data.');
+          setContacts(prev => {
+            const map = new Map();
+            prev.forEach(c => map.set(c.phone, c));
+            // Add mock
+            map.set('+1122334455', { id: 3, name: 'Charlie Mock', phone: '+1122334455', initials: 'CH' });
+            map.set('+5544332211', { id: 4, name: 'David Fallback', phone: '+5544332211', initials: 'DA' });
+            return Array.from(map.values());
+          });
+        }
       }
     } catch (err: any) {
       console.error('Contact fetch failed:', err);
-      setErrorMessage('Failed to load contacts from database.');
+      if (err.name === 'SecurityError' || err.message?.includes('user activation')) {
+        setErrorMessage('Browser requires a tap to load contacts. Click the button below.');
+      } else {
+        setErrorMessage('Failed to load device contacts.');
+      }
     } finally {
       setIsLoadingContacts(false);
     }
@@ -130,19 +182,19 @@ export default function ContactsScreen() {
         )}
 
         {/* Error / Fallback Message Rendering */}
-        {!isLoadingContacts && (!contacts || contacts.length === 0) && (
+        {!isLoadingContacts && (!contacts || contacts.length === 0 || errorMessage) && (
           <div className="flex flex-col items-center justify-center p-6 mt-10 text-center">
             <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-700 shadow-lg">
                <Users className="w-8 h-8 text-slate-400" />
             </div>
             <p className="text-slate-300 mb-6 text-sm">
-              {errorMessage || 'No contacts found.'}
+              {errorMessage || 'No contacts currently loaded.'}
             </p>
             <button 
               onClick={() => triggerContactFetch()}
               className="w-full max-w-xs bg-blue-600 hover:bg-blue-500 text-white py-3 px-4 rounded-xl font-semibold shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all active:scale-95 text-sm"
             >
-              Retry loading contacts
+              Load Device Contacts
             </button>
           </div>
         )}

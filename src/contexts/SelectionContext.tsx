@@ -9,6 +9,7 @@ export interface SelectedContact {
 
 interface SelectionContextType {
   selectedContactIds: string[];
+  selectedContacts: SelectedContact[];
   isSelectionMode: boolean;
   toggleSelection: (contact: SelectedContact, forceSelect?: boolean) => void;
   clearSelection: () => void;
@@ -128,7 +129,7 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
   const isSelectionMode = selectedContactIds.length > 0;
 
   return (
-    <SelectionContext.Provider value={{ selectedContactIds, isSelectionMode, toggleSelection, clearSelection }}>
+    <SelectionContext.Provider value={{ selectedContactIds, selectedContacts, isSelectionMode, toggleSelection, clearSelection }}>
       {children}
     </SelectionContext.Provider>
   );
