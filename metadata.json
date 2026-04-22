@@ -1,6 +1,9 @@
 {
   "name": "TRIOsync",
   "description": "Core Architecture & Authentication for communication app",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
   "majorCapabilities": []
 }

@@ -95,6 +95,54 @@ export default function ChatDetailScreen() {
     };
   }, [contact.phone, user]);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !contactProfileId) return;
+
+    setShowAttachmentMenu(false);
+
+    try {
+      const fileName = `${Date.now()}_${file.name}`;
+      const { data, error } = await supabase.storage
+        .from('chat-attachments')
+        .upload(`${user.id}/${fileName}`, file);
+
+      if (error) {
+        console.error("File upload error", error);
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('chat-attachments')
+        .getPublicUrl(`${user.id}/${fileName}`);
+        
+      const fileUrl = publicUrlData.publicUrl;
+
+      // Send the file URL as a message
+      const tempMsg: Message = {
+        id: Date.now().toString(),
+        sender_id: user.id,
+        receiver_id: contactProfileId,
+        content: `File: ${fileUrl}`,
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages(prev => [...prev, tempMsg]);
+
+      await supabase.from('messages').insert({
+        id: tempMsg.id,
+        sender_id: user.id,
+        receiver_id: contactProfileId,
+        content: `File: ${fileUrl}`,
+      });
+
+    } catch (err) {
+      console.error("Upload process failed", err);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!messageText.trim() || !user || !contactProfileId) return;
 
@@ -152,13 +200,13 @@ export default function ChatDetailScreen() {
 
         <div className="flex items-center gap-5 text-white pr-2">
           <button 
-            onClick={() => navigate('/call', { state: { title: contact.name, count: 1, type: 'video' }})}
+            onClick={() => navigate('/call', { state: { title: contact.name, count: 1, type: 'video', targetId: contactProfileId }})}
             className="hover:text-slate-200 transition-colors"
           >
             <Video strokeWidth={1.5} className="w-[22px] h-[22px]" />
           </button>
           <button 
-            onClick={() => navigate('/call', { state: { title: contact.name, count: 1, type: 'audio' }})}
+            onClick={() => navigate('/call', { state: { title: contact.name, count: 1, type: 'audio', targetId: contactProfileId }})}
             className="hover:text-slate-200 transition-colors"
           >
             <Phone strokeWidth={1.5} className="w-[22px] h-[22px]" />
@@ -188,7 +236,19 @@ export default function ChatDetailScreen() {
                         ? 'bg-[#00b4d8] text-white rounded-br-sm' 
                         : 'bg-slate-800/80 text-slate-100 rounded-bl-sm border border-slate-700/50'
                     }`}>
-                      <p className="text-[15px] whitespace-pre-wrap leading-tight">{msg.content}</p>
+                      {msg.content.startsWith('File: ') ? (
+                        <div className="flex flex-col gap-1 mt-1">
+                          {msg.content.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                            <img src={msg.content.replace('File: ', '')} alt="Attachment" className="max-w-[200px] max-h-[200px] rounded-lg object-cover" />
+                          ) : (
+                            <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="text-white underline text-sm break-all">
+                              Download Attachment
+                            </a>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-[15px] whitespace-pre-wrap leading-tight">{msg.content}</p>
+                      )}
                       <p className={`text-[10px] mt-1 text-right ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -205,24 +265,30 @@ export default function ChatDetailScreen() {
       {showAttachmentMenu && (
         <div className="absolute bottom-20 left-4 right-4 bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-700/50 p-4 z-40 animate-in slide-in-from-bottom-2 fade-in">
           <div className="grid grid-cols-3 gap-6 py-2 px-1">
-            <button className="flex flex-col items-center gap-2 group">
+            <button className="flex flex-col items-center gap-2 group" onClick={() => fileInputRef.current?.click()}>
                <div className="w-14 h-14 rounded-full bg-blue-500 flex items-center justify-center text-white scale-100 group-hover:scale-110 transition-transform shadow-md">
                  <ImageIcon className="w-6 h-6" />
                </div>
                <span className="text-xs text-slate-300 font-medium tracking-tight">Gallery</span>
             </button>
-            <button className="flex flex-col items-center gap-2 group">
+            <button className="flex flex-col items-center gap-2 group" onClick={() => fileInputRef.current?.click()}>
                <div className="w-14 h-14 rounded-full bg-violet-500 flex items-center justify-center text-white scale-100 group-hover:scale-110 transition-transform shadow-md">
                  <FileText className="w-6 h-6" />
                </div>
                <span className="text-xs text-slate-300 font-medium tracking-tight">Document</span>
             </button>
-            <button className="flex flex-col items-center gap-2 group">
+            <button className="flex flex-col items-center gap-2 group" onClick={() => fileInputRef.current?.click()}>
                <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center text-white scale-100 group-hover:scale-110 transition-transform shadow-md">
                  <File className="w-6 h-6" />
                </div>
                <span className="text-xs text-slate-300 font-medium tracking-tight">File</span>
             </button>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              onChange={handleFileUpload}
+            />
           </div>
         </div>
       )}

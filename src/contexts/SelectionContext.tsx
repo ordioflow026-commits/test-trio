@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useUser } from './UserContext';
 
 export interface SelectedContact {
-  id: string; // phone number acting as ID
+  id: string; // phone number acting as ID locally
   name: string; 
 }
 
@@ -20,7 +20,6 @@ const SelectionContext = createContext<SelectionContextType | undefined>(undefin
 export function SelectionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useUser();
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
-  // To keep track of name as well if needed in future
   const [selectedContacts, setSelectedContacts] = useState<SelectedContact[]>([]);
 
   useEffect(() => {
@@ -38,15 +37,21 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
       if (currentUserId) {
         try {
           const { data, error } = await supabase.from('selected_contacts')
-            .select('*')
+            .select(`
+              contact_id,
+              profiles!inner (
+                phone,
+                name
+              )
+            `)
             .eq('user_id', currentUserId);
           
           if (isMounted && !error && data) {
             const loadedIds: string[] = [];
             const loadedContacts: SelectedContact[] = [];
             data.forEach((c: any) => {
-              const fetchedPhone = c.contact_number || c.phone;
-              const fetchedName = c.contact_name || c.name || 'Unknown';
+              const fetchedPhone = c.profiles?.phone || c.contact_id;
+              const fetchedName = c.profiles?.name || 'Unknown';
               loadedIds.push(fetchedPhone);
               loadedContacts.push({ id: fetchedPhone, name: fetchedName });
             });
@@ -73,56 +78,66 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
         } catch (e) {}
     }
     
-    setSelectedContactIds(prev => {
-      const isSelected = prev.includes(contact.id);
-      const willBeSelected = forceSelect !== undefined ? forceSelect : !isSelected;
-      
-      let nextState = [...prev];
-      if (willBeSelected) {
-        if (!isSelected) nextState.push(contact.id);
-        
-        if (currentUserId) {
-          supabase.from('selected_contacts').upsert({
-            user_id: currentUserId,
-            contact_number: contact.id, // using phone as id for data consistency
-            contact_name: contact.name
-          }).then(({error}) => { if (error) console.error("Error saving contact", error); });
-        }
-      } else {
-        nextState = nextState.filter(id => id !== contact.id);
-        
-        if (currentUserId) {
-          supabase.from('selected_contacts')
-            .delete()
-            .match({ user_id: currentUserId, contact_number: contact.id })
-            .then(({error}) => { if (error) console.error("Error deleting contact", error); });
-        }
-      }
-      return nextState;
-    });
+    // Check if selecting or deselecting
+    const isCurrentlySelected = selectedContactIds.includes(contact.id);
+    const willBeSelected = forceSelect !== undefined ? forceSelect : !isCurrentlySelected;
 
-    setSelectedContacts(prev => {
-      const isSelected = prev.some(c => c.id === contact.id);
-      const willBeSelected = forceSelect !== undefined ? forceSelect : !isSelected;
-      let nextState = [...prev];
-      if (willBeSelected && !isSelected) {
-        nextState.push(contact);
-      } else if (!willBeSelected) {
-        nextState = nextState.filter(c => c.id !== contact.id);
+    if (willBeSelected === isCurrentlySelected) return; // No change
+
+    // Optimistically update UI
+    if (willBeSelected) {
+      setSelectedContactIds(prev => [...prev, contact.id]);
+      setSelectedContacts(prev => [...prev, contact]);
+    } else {
+      setSelectedContactIds(prev => prev.filter(id => id !== contact.id));
+      setSelectedContacts(prev => prev.filter(c => c.id !== contact.id));
+    }
+
+    if (!currentUserId) return;
+
+    try {
+      // Resolve UUID out of phone number from profiles table
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('phone', contact.id)
+        .maybeSingle();
+
+      const resolvedContactId = profile?.id;
+
+      if (!resolvedContactId) {
+         console.warn("Contact has no matching profile in Supabase to sync selection.");
+         return;
       }
-      return nextState;
-    });
+
+      if (willBeSelected) {
+        const { error } = await supabase.from('selected_contacts').insert({
+          user_id: currentUserId,
+          contact_id: resolvedContactId
+        });
+        if (error) console.error("Error inserting selected contact", error);
+      } else {
+        const { error } = await supabase.from('selected_contacts')
+          .delete()
+          .match({ user_id: currentUserId, contact_id: resolvedContactId });
+        if (error) console.error("Error deleting selected contact", error);
+      }
+    } catch (err) {
+      console.error("Selection sync failed:", err);
+    }
   };
 
-  const clearSelection = () => {
+  const clearSelection = async () => {
     setSelectedContactIds([]);
     setSelectedContacts([]);
     
     let currentUserId = user?.id;
     if (currentUserId) {
-      // It might be better to just clear them matching user_id instead of individually
-      supabase.from('selected_contacts').delete().match({ user_id: currentUserId })
-      .then(({error}) => { if (error) console.error("Error clearing selection", error) });
+      try {
+        await supabase.from('selected_contacts').delete().match({ user_id: currentUserId });
+      } catch (err) {
+        console.error("Error clearing selection", err);
+      }
     }
   };
 

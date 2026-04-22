@@ -330,6 +330,31 @@ export default function BroadcastScreen() {
     );
   }
 
+  // Media Stream
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+
+  useEffect(() => {
+     let activeStream: MediaStream | null = null;
+     if (isHost && viewState === 'room') {
+       navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+         .then((ms) => {
+           activeStream = ms;
+           setStream(ms);
+           if (videoRef.current) {
+             videoRef.current.srcObject = ms;
+           }
+         })
+         .catch(err => console.error("Camera access denied", err));
+     }
+
+     return () => {
+       if (activeStream) {
+         activeStream.getTracks().forEach(t => t.stop());
+       }
+     };
+  }, [isHost, viewState]);
+
   // Live Stream Room (Triple-Screen Layout)
   const currentBroadcast = isHost ? { host_name: user?.fullName || 'You', topic: topic, viewers: '0' } : liveStreams[currentBroadcastIndex] || mockBroadcasts[0];
 
@@ -400,9 +425,21 @@ export default function BroadcastScreen() {
               style={{ transform: `translateX(${dir === 'rtl' ? currentSlot * 100 : -currentSlot * 100}%)` }}
             >
               {/* Screen 1: Main Stream */}
-              <div className="w-full h-full flex-shrink-0 bg-slate-900 flex flex-col items-center justify-center relative">
-                <Video className="w-24 h-24 text-slate-700 mb-4" />
-                <p className="text-slate-500 font-bold">{t('mainStream')}</p>
+              <div className="w-full h-full flex-shrink-0 bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
+                {stream && isHost ? (
+                  <video 
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <>
+                    <Video className="w-24 h-24 text-slate-700 mb-4" />
+                    <p className="text-slate-500 font-bold">{t('mainStream')}</p>
+                  </>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none"></div>
               </div>
 
