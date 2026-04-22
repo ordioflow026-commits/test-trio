@@ -1,23 +1,127 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useUser } from '../contexts/UserContext';
+import { supabase } from '../lib/supabase';
+
+interface Message {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  content: string;
+  created_at: string;
+}
 
 export default function ChatDetailScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, dir } = useLanguage();
+  const { user } = useUser();
   const [messageText, setMessageText] = useState('');
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [contactProfileId, setContactProfileId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Extract contact from navigation state
   const contact = location.state?.contact || { name: 'Test User US', phone: '+1 555 012 3456', initials: 'US' };
 
-  const handleSendMessage = () => {
-    if (!messageText.trim()) return;
-    // Mock sending message
-    console.log("Sending:", messageText);
-    setMessageText('');
+  // Sync scroll
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Fetch receiver ID and load messages
+  useEffect(() => {
+    if (!user) return;
+    
+    let isMounted = true;
+    let channel: any = null;
+
+    const initChat = async () => {
+      // Find the contact's standard profile ID using their phone
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('phone', contact.phone)
+        .maybeSingle();
+
+      const receiverId = profileData?.id || contact.phone; // fallback to phone if not registered
+      if (isMounted) setContactProfileId(receiverId);
+
+      // Fetch history
+      const { data: history, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${user.id})`)
+        .order('created_at', { ascending: true });
+
+      if (isMounted) {
+        if (!error && history) {
+          setMessages(history);
+        }
+        setIsLoading(false);
+      }
+
+      // Start Realtime listener
+      channel = supabase.channel(`chat_${user.id}_${receiverId}`)
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'messages',
+        }, (payload) => {
+          const newMsg = payload.new as Message;
+          if (
+            (newMsg.sender_id === user.id && newMsg.receiver_id === receiverId) ||
+            (newMsg.sender_id === receiverId && newMsg.receiver_id === user.id)
+          ) {
+            setMessages(prev => {
+              // Deduplicate based on ID since we also optimistically insert
+              if (prev.find(m => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+          }
+        })
+        .subscribe();
+    };
+
+    initChat();
+
+    return () => {
+      isMounted = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [contact.phone, user]);
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !user || !contactProfileId) return;
+
+    const msgContent = messageText.trim();
+    setMessageText(''); // Clear input instantly
+
+    const tempMsg: Message = {
+      id: Date.now().toString(), // fake ID
+      sender_id: user.id,
+      receiver_id: contactProfileId,
+      content: msgContent,
+      created_at: new Date().toISOString(),
+    };
+
+    // Optimistic UI insert
+    setMessages(prev => [...prev, tempMsg]);
+
+    const { error } = await supabase.from('messages').insert({
+      id: tempMsg.id, // specify the ID so the listener can deduplicate
+      sender_id: user.id,
+      receiver_id: contactProfileId,
+      content: msgContent,
+    });
+
+    if (error) {
+      console.error("Failed to send message", error);
+    }
   };
 
   return (
@@ -48,13 +152,13 @@ export default function ChatDetailScreen() {
 
         <div className="flex items-center gap-5 text-white pr-2">
           <button 
-            onClick={() => navigate('/call', { state: { title: t('videoCall') || 'Video Call' }})}
+            onClick={() => navigate('/call', { state: { title: contact.name, count: 1, type: 'video' }})}
             className="hover:text-slate-200 transition-colors"
           >
             <Video strokeWidth={1.5} className="w-[22px] h-[22px]" />
           </button>
           <button 
-            onClick={() => navigate('/call', { state: { title: t('audioCall') || 'Voice Call' }})}
+            onClick={() => navigate('/call', { state: { title: contact.name, count: 1, type: 'audio' }})}
             className="hover:text-slate-200 transition-colors"
           >
             <Phone strokeWidth={1.5} className="w-[22px] h-[22px]" />
@@ -63,8 +167,38 @@ export default function ChatDetailScreen() {
       </header>
 
       {/* Main Chat Area */}
-      <main className="flex-1 overflow-y-auto w-full relative z-10 px-4">
-         {/* Chat messages would go here */}
+      <main className="flex-1 overflow-y-auto w-full relative z-10 px-4 flex flex-col gap-3 py-4">
+         {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+         ) : (
+            <>
+              {messages.length === 0 && (
+                <div className="flex items-center justify-center h-full text-slate-400 text-sm">
+                  Say hi to {contact.name}!
+                </div>
+              )}
+              {messages.map((msg, idx) => {
+                const isMe = msg.sender_id === user?.id;
+                return (
+                  <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm ${
+                      isMe 
+                        ? 'bg-[#00b4d8] text-white rounded-br-sm' 
+                        : 'bg-slate-800/80 text-slate-100 rounded-bl-sm border border-slate-700/50'
+                    }`}>
+                      <p className="text-[15px] whitespace-pre-wrap leading-tight">{msg.content}</p>
+                      <p className={`text-[10px] mt-1 text-right ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} className="h-1" />
+            </>
+         )}
       </main>
 
       {/* Attachment Menu (Overlay) */}
@@ -108,6 +242,12 @@ export default function ChatDetailScreen() {
           <textarea 
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
             placeholder="Message"
             className="flex-1 max-h-32 bg-transparent text-white placeholder-white/80 py-3 outline-none resize-none overflow-y-auto leading-tight"
             rows={1}

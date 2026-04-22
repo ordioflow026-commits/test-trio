@@ -175,9 +175,9 @@ export default function ContactsScreen() {
     }
   };
 
-  const startGroupCall = () => {
+  const startGroupCall = (isVideo: boolean = true) => {
     // We could clear selection or leave it
-    navigate('/call', { state: { title: t('groupVideoCall') } });
+    navigate('/call', { state: { title: t('groupVideoCall'), count: selectedContactIds.length, type: isVideo ? 'video' : 'audio' } });
   };
 
   const lastSelectedContactPhone = selectedContactIds.length > 0 ? selectedContactIds[selectedContactIds.length - 1] : null;
@@ -326,13 +326,13 @@ export default function ContactsScreen() {
                     transition={{ type: "spring", stiffness: 400, damping: 25 }}
                   >
                     <button
-                        onClick={(e) => { e.stopPropagation(); startGroupCall(); }}
+                        onClick={(e) => { e.stopPropagation(); startGroupCall(false); }}
                         className="w-[48px] h-[48px] rounded-full bg-[#00b4d8] text-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,180,216,0.5)] hover:brightness-110 active:scale-95 transition-all outline-none"
                     >
                          <Phone fill="currentColor" stroke="none" className="w-[20px] h-[20px]" />
                     </button>
                     <button
-                        onClick={(e) => { e.stopPropagation(); startGroupCall(); }}
+                        onClick={(e) => { e.stopPropagation(); startGroupCall(true); }}
                         className="w-[48px] h-[48px] rounded-full bg-[#00e676] text-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,230,118,0.5)] hover:brightness-110 active:scale-95 transition-all outline-none"
                     >
                          <Video fill="currentColor" stroke="none" className="w-[20px] h-[20px]" />

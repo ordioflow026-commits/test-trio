@@ -3,10 +3,12 @@ import { Video, Users, User, MonitorPlay, Gift, ChevronLeft, ChevronRight, X, Me
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
+import { useSelection } from '../contexts/SelectionContext';
 import { supabase } from '../lib/supabase';
 
 export default function BroadcastScreen() {
   const { t, dir } = useLanguage();
+  const { selectedContactIds } = useSelection();
   const [viewState, setViewState] = useState<'list' | 'setup' | 'room'>('list');
   const [isHost, setIsHost] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -301,6 +303,15 @@ export default function BroadcastScreen() {
               className="w-full bg-slate-800/80 border border-slate-700 rounded-xl p-4 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
               dir={dir}
             />
+          </div>
+
+          {/* Target Audience Indicator */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-slate-400">Target Audience</label>
+            <div className="w-full bg-slate-800/80 border border-slate-700 rounded-xl p-4 text-white flex items-center gap-3">
+              <Users className="w-5 h-5 text-blue-400" />
+              <span>{selectedContactIds.length > 0 ? `Private to ${selectedContactIds.length} Selected contacts` : 'Public Stream'}</span>
+            </div>
           </div>
 
           {/* Go Live Button */}
