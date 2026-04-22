@@ -367,14 +367,14 @@ export default function BroadcastScreen() {
           className="absolute inset-0 flex flex-col bg-black"
         >
           {/* Top Bar Overlays */}
-          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-20 pointer-events-none">
-            <div className="flex items-center gap-3 pointer-events-auto">
+          <div className="absolute top-0 inset-x-0 p-4 pt-safe sm:pt-8 flex justify-between items-start z-20 pointer-events-none">
+            <div className="flex items-center gap-2 sm:gap-3 pointer-events-auto flex-wrap">
               <div className="bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-[0_0_15px_rgba(220,38,38,0.6)]">
                 <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
                 {t('live')}
               </div>
               <div className="bg-black/50 backdrop-blur-md text-white text-xs px-3 py-1.5 rounded-full border border-white/10">
-                <Users className="w-3 h-3 inline mr-1" /> {currentBroadcast.viewers}
+                <Users className="w-3 h-3 inline me-1" /> {currentBroadcast.viewers}
               </div>
               <div className="bg-black/50 backdrop-blur-md text-white text-xs px-3 py-1.5 rounded-full border border-white/10">
                 {currentBroadcast.host_name || currentBroadcast.host}
@@ -442,10 +442,10 @@ export default function BroadcastScreen() {
           </div>
 
           {/* Bottom Overlays: Comments & Gifts */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-20 pointer-events-none">
+          <div className="absolute bottom-0 inset-x-0 p-4 pb-safe sm:pb-8 flex justify-between items-end z-20 pointer-events-none gap-4">
             
             {/* Comments Section */}
-            <div className="w-64 flex flex-col gap-2 pointer-events-auto">
+            <div className="flex-1 max-w-sm flex flex-col gap-2 pointer-events-auto">
               <div 
                 className="h-48 overflow-y-auto flex flex-col justify-end gap-2 mask-image-to-top pb-2"
                 onWheel={(e) => e.stopPropagation()}
@@ -454,54 +454,73 @@ export default function BroadcastScreen() {
                 onTouchEnd={(e) => e.stopPropagation()}
               >
                 {comments.map(c => (
-                  <div key={c.id} className="bg-black/40 backdrop-blur-sm rounded-xl p-2 border border-white/5 text-sm">
-                    <span className="font-bold text-blue-400 mr-2">{c.user}:</span>
-                    <span className="text-white">{c.text}</span>
+                  <div key={c.id} className="bg-[#0f172a]/80 backdrop-blur-sm rounded-xl p-2 px-3 border border-slate-700/50 text-sm max-w-full">
+                    <span className="font-bold text-blue-400 me-2">{c.user}:</span>
+                    <span className="text-white break-words">{c.text}</span>
                   </div>
                 ))}
               </div>
-              <div className="flex gap-2 bg-black/50 backdrop-blur-md rounded-full p-1 border border-white/10">
+              <div className="flex gap-2 bg-[#0f172a]/80 backdrop-blur-md rounded-full p-1 border border-slate-700/50 w-full transition-all focus-within:border-blue-500/50 focus-within:shadow-lg focus-within:shadow-blue-500/20">
                 <input 
                   type="text" 
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendComment()}
                   placeholder={t('typeComment')}
-                  className="flex-1 bg-transparent text-white px-3 text-sm focus:outline-none placeholder-slate-400"
+                  className="flex-1 w-full bg-transparent text-white px-4 text-sm focus:outline-none placeholder-slate-400"
                   dir={dir}
                 />
-                <button onClick={handleSendComment} className="p-2 bg-blue-600 rounded-full text-white hover:bg-blue-500 transition-colors">
-                  <Send className="w-4 h-4" />
+                <button onClick={handleSendComment} className="p-2.5 bg-blue-600 rounded-full text-white hover:bg-blue-500 transition-colors flex-shrink-0">
+                  <Send className={`w-4 h-4 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
                 </button>
               </div>
             </div>
 
-            {/* Gift Box Feature */}
-            <div className="relative pointer-events-auto flex flex-col items-end">
-              {showGifts && (
-                <div className="absolute bottom-16 right-0 bg-slate-800/95 backdrop-blur-md border border-slate-700 p-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in slide-in-from-bottom-2 mb-2 w-64">
-                  <p className="text-white text-sm font-bold text-center leading-relaxed">
-                    {dir === 'rtl' ? 'ادعم صانع المحتوى لمزيد من الإبداع!' : 'Support the creator for more creativity!'}
-                  </p>
-                  <div className="flex items-center justify-between bg-slate-900/50 rounded-xl p-2 border border-slate-700">
-                    <button onClick={() => setDonationAmount(Math.max(1, donationAmount - 1))} className="w-10 h-10 bg-slate-700 rounded-lg text-white font-bold hover:bg-slate-600 transition-colors text-xl">-</button>
-                    <span className="text-white font-bold text-xl">${donationAmount}</span>
-                    <button onClick={() => setDonationAmount(donationAmount + 1)} className="w-10 h-10 bg-slate-700 rounded-lg text-white font-bold hover:bg-slate-600 transition-colors text-xl">+</button>
-                  </div>
-                  <button onClick={handleSendGift} className="w-full bg-gradient-to-r from-pink-500 to-rose-600 text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(225,29,72,0.4)]">
-                    {dir === 'rtl' ? 'إرسال الدعم' : 'Send Support'}
-                  </button>
-                </div>
-              )}
+            {/* Gift Box Feature (FAB) */}
+            <div className="pointer-events-auto flex-shrink-0 relative z-30">
               <button 
-                onClick={() => setShowGifts(!showGifts)} 
-                className="w-14 h-14 bg-gradient-to-br from-pink-500 to-rose-600 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.5)] hover:scale-110 transition-transform animate-bounce border-2 border-white/20"
+                onClick={() => setShowGifts(true)} 
+                className="w-14 h-14 bg-[#ff1d53] rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(255,29,83,0.5)] hover:scale-105 transition-transform animate-bounce border-[3px] border-black/20"
               >
-                <Gift className="w-7 h-7 text-white" />
+                <Gift className="w-7 h-7 text-white" fill="none" strokeWidth={2.5} />
               </button>
             </div>
-
           </div>
+          
+          {/* Centered Gift Popup Modal */}
+          <AnimatePresence>
+            {showGifts && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 pointer-events-auto"
+                onClick={() => setShowGifts(false)}
+              >
+                <motion.div 
+                  initial={{ scale: 0.9, y: 20 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.9, y: 20 }}
+                  className="bg-[#1e293b] border border-slate-700/80 p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col gap-6 w-full max-w-sm"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className="text-white font-bold text-center leading-relaxed text-lg sm:text-xl">
+                    {dir === 'rtl' ? 'ادعم صانع المحتوى لمزيد من الإبداع!' : 'Support the creator for more creativity!'}
+                  </p>
+                  
+                  <div className="flex items-center justify-between bg-slate-900/50 rounded-2xl p-3 border border-slate-700/50">
+                    <button onClick={() => setDonationAmount(Math.max(1, donationAmount - 1))} className="w-12 h-12 bg-slate-700/80 hover:bg-slate-600 rounded-xl text-white font-bold transition-colors text-2xl flex items-center justify-center">-</button>
+                    <span className="text-white font-bold text-3xl px-4">${donationAmount}</span>
+                    <button onClick={() => setDonationAmount(donationAmount + 1)} className="w-12 h-12 bg-slate-700/80 hover:bg-slate-600 rounded-xl text-white font-bold transition-colors text-2xl flex items-center justify-center">+</button>
+                  </div>
+                  
+                  <button onClick={handleSendGift} className="w-full bg-[#ff1d53] text-white font-bold py-4 rounded-2xl hover:opacity-90 active:scale-95 transition-all text-lg shadow-[0_4px_15px_rgba(255,29,83,0.4)]">
+                    {dir === 'rtl' ? 'إرسال الدعم' : 'Send Support'}
+                  </button>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </AnimatePresence>
       

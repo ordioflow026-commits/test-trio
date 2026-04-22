@@ -51,15 +51,15 @@ export default function MainScreen() {
     <div className="min-h-screen bg-[#0B1120] flex flex-col font-sans" dir={dir}>
       {/* Top Navigation Bar */}
       <header className="bg-[#0F172A]/90 backdrop-blur-xl border-b border-slate-800/80 sticky top-0 z-20 shadow-lg shadow-black/20">
-        <div className="flex justify-between items-center h-20 px-4">
+        <div className="flex items-center justify-between h-20 px-4 w-full">
           {/* Left: Logo */}
-          <div className="w-24 flex items-center gap-2">
+          <div className="w-24 sm:w-32 flex items-center gap-2">
             <img src="/trio_sync_logo.svg" alt="TrioSync Logo" className="w-8 h-8 rounded-lg shadow-md shadow-blue-500/20" />
             <span className="text-sm font-bold text-white tracking-wide hidden sm:block">TrioSync</span>
           </div>
 
           {/* Center Frame for Main Icons */}
-          <div className="flex items-center bg-slate-800/80 rounded-full p-1.5 border border-blue-900/50 shadow-inner gap-1">
+          <div className="flex items-center justify-center bg-slate-800/80 rounded-full p-1.5 border border-blue-900/50 shadow-inner gap-1 sm:gap-2">
             <button
               onClick={() => setActiveMainTab('home')}
               className={`p-3 rounded-full transition-all duration-300 border ${
@@ -119,13 +119,13 @@ export default function MainScreen() {
           </div>
 
           {/* Right: Language Toggle */}
-          <div className="w-24 flex justify-end">
+          <div className="w-24 sm:w-32 flex justify-end">
             <button
               onClick={toggleLanguage}
-              className="flex flex-col items-center justify-center text-slate-400 hover:text-blue-500 transition-colors bg-slate-800/50 p-2 rounded-2xl border border-blue-900/50 hover:border-blue-600"
+              className="flex flex-col items-center justify-center text-slate-400 hover:text-blue-500 transition-colors bg-slate-800/50 py-1.5 px-3 sm:p-2 rounded-2xl border border-blue-900/50 hover:border-blue-600"
             >
-              <Globe className="w-5 h-5 mb-1" />
-              <span className="text-[10px] font-bold tracking-wider">{language === 'en' ? 'AR' : 'EN'}</span>
+              <Globe className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5 sm:mb-1" />
+              <span className="text-[9px] sm:text-[10px] font-bold tracking-wider">{language === 'en' ? 'AR' : 'EN'}</span>
             </button>
           </div>
         </div>
