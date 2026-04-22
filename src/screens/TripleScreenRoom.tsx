@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, LogOut, Loader2, Lock, Unlock, SquareArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, LogOut, Loader2, Lock, Unlock, SquareArrowRight, Video } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import Whiteboard from '../components/Whiteboard';
 import { supabase } from '../lib/supabase';
@@ -22,7 +22,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
   const { t, dir } = useLanguage();
   const [currentSlot, setCurrentSlot] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('sync');
-  const [participants, setParticipants] = useState<{ id: string, name: string }[]>([]);
+  // Add a placeholder guest when in visitor mode just for visual match (in a real app, this would be dynamic via presence)
+  const [participants, setParticipants] = useState<{ id: string, name: string }[]>(isHost ? [] : [{ id: 'mock-1', name: 'Guest 8b3c' }]);
   
   const [slots, setSlots] = useState<SlotData[]>([
     { type: 'empty' },
@@ -114,7 +115,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
               <p className="mt-6 text-[#00b4d8] font-mono tracking-widest uppercase text-[15px] font-semibold">{t('addContent') || 'ADD CONTENT'}</p>
             </>
           ) : (
-            <p className="text-slate-400 font-mono tracking-widest uppercase text-sm">Waiting for content...</p>
+            <>
+              <Video className="w-14 h-14 text-[#00b4d8] mb-5" strokeWidth={1.5} />
+              <p className="text-[#00b4d8] font-mono tracking-[0.2em] uppercase text-[13px] font-semibold">WAITING FOR HOST...</p>
+            </>
           )}
         </div>
       );
@@ -319,22 +323,28 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
           {/* Bottom Participant Bar */}
           <div className="h-[90px] w-full bg-[#1e293b]/60 border-t border-slate-700/50 backdrop-blur-md flex items-center px-6 relative z-30">
               
-              <div className="flex items-center h-full gap-4 relative z-10 w-full">
+              <div className="flex items-center h-full gap-4 relative z-10 w-full pt-1">
                   {/* Local User (YOU) */}
-                  <div className="w-14 h-14 rounded-2xl bg-[#0f172a] border-2 border-[#00b4d8] shadow-[0_0_15px_rgba(0,180,216,0.3)] flex items-center justify-center flex-shrink-0">
-                      <span className="text-[#00b4d8] font-bold text-[11px] tracking-wider">YOU</span>
+                  <div className="flex flex-col items-center">
+                    <div className="w-[60px] h-[60px] rounded-[18px] bg-[#0f172a] border-[1.5px] border-[#00b4d8] shadow-[0_0_15px_rgba(0,180,216,0.5)] flex items-end justify-center pb-2 flex-shrink-0">
+                        <span className="text-[#00b4d8] font-bold text-[10px] tracking-widest leading-none">YOU</span>
+                    </div>
                   </div>
                   
-                  {/* Remote Participants would map here */}
+                  {/* Remote Participants */}
                   {participants.map(p => (
-                     <div key={p.id} className="w-14 h-14 rounded-2xl bg-slate-800 border border-slate-600 flex items-center justify-center flex-shrink-0">
-                        <span className="text-slate-300 font-bold text-xs uppercase">{p.name.substring(0,2)}</span>
+                     <div key={p.id} className="flex flex-col items-center gap-1.5 translate-y-[9px]">
+                       <div className="w-[60px] h-[60px] rounded-[18px] bg-[#00b4d8] flex items-center justify-center flex-shrink-0 relative shadow-md">
+                          <span className="text-white font-bold text-2xl uppercase leading-none">{p.name.charAt(0)}</span>
+                          <div className="absolute -bottom-1 -right-0.5 w-3.5 h-3.5 bg-[#00e676] rounded-full border-2 border-[#1e293b]" />
+                       </div>
+                       <span className="text-white text-[11px] font-medium tracking-wide">{p.name}</span>
                      </div>
                   ))}
               </div>
               
               {/* Centered Status Message */}
-              {participants.length === 0 && (
+              {participants.length === 0 && isHost && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <span className="text-[#00b4d8] font-mono tracking-widest text-[13px] opacity-80">Waiting for someone to join...</span>
                 </div>
