@@ -6,7 +6,6 @@ import { Globe, Loader2, User, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
-import TriSyncLogo from '../components/TriSyncLogo';
 
 export default function LoginScreen() {
   const [fullName, setFullName] = useState('');
@@ -135,20 +134,18 @@ export default function LoginScreen() {
         </div>
       </div>
       {/* Header */}
-      <div className="p-6 pb-2 pt-8 relative flex items-center justify-center w-full">
-        {/* Centered Logo */}
-        <TriSyncLogo iconSize={44} />
-        
-        {/* Language Toggle (Absolutely positioned to avoid shifting the center) */}
-        <div className={`absolute top-6 ${dir === 'rtl' ? 'left-6' : 'right-6'}`}>
-          <button
-            onClick={toggleLanguage}
-            className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-800 rounded-full shadow-lg border border-slate-700 hover:bg-slate-700 hover:border-slate-600 transition-all"
-          >
-            <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-[#00f2fe]" />
-            <span className="font-bold text-xs sm:text-sm text-slate-200">{language === 'en' ? 'AR' : 'EN'}</span>
-          </button>
+      <div className="p-6 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <img src="/trio_sync_logo.svg" alt="TrioSync Logo" className="w-10 h-10 rounded-xl shadow-lg shadow-blue-500/20" />
+          <span className="text-xl font-bold text-white tracking-wide">TrioSync</span>
         </div>
+        <button
+          onClick={toggleLanguage}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-full shadow-lg border border-slate-700 hover:bg-slate-700 hover:border-slate-600 transition-all"
+        >
+          <Globe className="w-5 h-5 text-blue-400" />
+          <span className="font-medium text-sm text-slate-200">{language === 'en' ? 'AR' : 'EN'}</span>
+        </button>
       </div>
 
       {/* Form Container */}

@@ -4,7 +4,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 import ContactsScreen from './ContactsScreen';
 import PrivateRoomScreen from './PrivateRoomScreen';
 import BroadcastScreen from './BroadcastScreen';
-import TriSyncLogo from '../components/TriSyncLogo';
 
 export default function MainScreen() {
   const [activeMainTab, setActiveMainTab] = useState('home');
@@ -51,26 +50,18 @@ export default function MainScreen() {
   return (
     <div className="min-h-screen bg-[#0B1120] flex flex-col font-sans" dir={dir}>
       {/* Top Navigation Bar */}
-      <header className="bg-[#0F172A]/90 backdrop-blur-xl border-b border-slate-800/80 sticky top-0 z-20 shadow-lg shadow-black/20 flex flex-col items-center pt-8 pb-4 relative w-full gap-5">
-        
-        {/* Absolute Language Toggle */}
-        <div className={`absolute top-6 ${dir === 'rtl' ? 'left-4 sm:left-6' : 'right-4 sm:right-6'}`}>
-          <button
-            onClick={toggleLanguage}
-            className="flex flex-col items-center justify-center text-slate-400 hover:text-[#00f2fe] transition-colors bg-slate-800/50 py-1.5 px-3 sm:p-2 rounded-2xl border border-slate-700 hover:border-slate-500 shadow-sm"
-          >
-            <Globe className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5 sm:mb-1" />
-            <span className="text-[9px] sm:text-[10px] font-bold tracking-wider">{language === 'en' ? 'AR' : 'EN'}</span>
-          </button>
-        </div>
+      <header className="bg-[#0F172A]/90 backdrop-blur-xl border-b border-slate-800/80 sticky top-0 z-20 shadow-lg shadow-black/20">
+        <div className="flex items-center justify-between h-20 px-4 w-full">
+          {/* Left: Logo */}
+          <div className="w-24 sm:w-32 flex items-center gap-2">
+            <img src="/trio_sync_logo.svg" alt="TrioSync Logo" className="w-8 h-8 rounded-lg shadow-md shadow-blue-500/20" />
+            <span className="text-sm font-bold text-white tracking-wide hidden sm:block">TrioSync</span>
+          </div>
 
-        {/* Centered Logo block */}
-        <TriSyncLogo iconSize={36} />
-
-        {/* Center Frame for Main Icons */}
-        <div className="flex items-center justify-center bg-slate-800/80 rounded-full p-1.5 border border-blue-900/50 shadow-inner gap-1 sm:gap-2 mx-auto">
-          <button
-            onClick={() => setActiveMainTab('home')}
+          {/* Center Frame for Main Icons */}
+          <div className="flex items-center justify-center bg-slate-800/80 rounded-full p-1.5 border border-blue-900/50 shadow-inner gap-1 sm:gap-2">
+            <button
+              onClick={() => setActiveMainTab('home')}
               className={`p-3 rounded-full transition-all duration-300 border ${
                 activeMainTab === 'home'
                   ? 'bg-blue-700 border-blue-500 text-white shadow-[0_0_15px_rgba(29,78,216,0.5)]'
@@ -126,6 +117,18 @@ export default function MainScreen() {
               <User className="w-6 h-6" />
             </button>
           </div>
+
+          {/* Right: Language Toggle */}
+          <div className="w-24 sm:w-32 flex justify-end">
+            <button
+              onClick={toggleLanguage}
+              className="flex flex-col items-center justify-center text-slate-400 hover:text-blue-500 transition-colors bg-slate-800/50 py-1.5 px-3 sm:p-2 rounded-2xl border border-blue-900/50 hover:border-blue-600"
+            >
+              <Globe className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5 sm:mb-1" />
+              <span className="text-[9px] sm:text-[10px] font-bold tracking-wider">{language === 'en' ? 'AR' : 'EN'}</span>
+            </button>
+          </div>
+        </div>
 
         {/* Sub-Navigation (Only visible when Home is active) */}
         {activeMainTab === 'home' && (
