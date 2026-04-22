@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { UserProvider, useUser } from './contexts/UserContext';
+import { SelectionProvider } from './contexts/SelectionContext';
 import LoginScreen from './screens/LoginScreen';
 import MainScreen from './screens/MainScreen';
 import DummyCallScreen from './screens/DummyCallScreen';
@@ -95,8 +96,9 @@ export default function App() {
       <UserProvider>
         <BrowserRouter>
           <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl overflow-hidden relative">
-            <SessionChecker>
-              <Routes>
+            <SelectionProvider>
+              <SessionChecker>
+                <Routes>
                 <Route path="/" element={<LoginScreen />} />
                 <Route path="/main" element={<MainScreen />} />
                 <Route path="/call" element={<DummyCallScreen />} />
@@ -104,9 +106,10 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </SessionChecker>
-          </div>
-        </BrowserRouter>
-      </UserProvider>
-    </LanguageProvider>
+          </SelectionProvider>
+        </div>
+      </BrowserRouter>
+    </UserProvider>
+  </LanguageProvider>
   );
 }

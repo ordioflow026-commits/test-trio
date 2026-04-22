@@ -6,6 +6,7 @@ import { Capacitor } from '@capacitor/core';
 import { Contacts } from '@capacitor-community/contacts';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
+import { useSelection } from '../contexts/SelectionContext';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface Contact {
@@ -18,74 +19,22 @@ interface Contact {
 export default function ContactsScreen() {
   const { t } = useLanguage();
   const { user } = useUser();
+  const { isSelectionMode, selectedContactIds, toggleSelection } = useSelection();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const navigate = useNavigate();
   
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Removed global loadSavedAndFetch here and implemented it tightly within the useEffect
   useEffect(() => {
     let isMounted = true;
 
-    const initContacts = async () => {
-      // 1. Initial Load: Query Supabase using real session ID
-      let currentUserId = user?.id;
-      
-      try {
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        if (userError || !userData?.user?.id) {
-          console.error('Session fetch failed', userError?.message);
-        } else {
-          currentUserId = userData.user.id;
-        }
-      } catch (err) {
-        console.error('Session fetch failed', err);
-      }
-
-      if (currentUserId) {
-        try {
-          const { data, error } = await supabase.from('selected_contacts')
-            .select('*')
-            .eq('user_id', currentUserId);
-          
-          if (isMounted && !error && data) {
-            const savedSelected = new Set<string>();
-            const savedContacts: Contact[] = data.map((c: any, index: number) => {
-              const fetchedPhone = c.contact_number || c.phone;
-              const fetchedName = c.contact_name || c.name || 'Unknown';
-              savedSelected.add(fetchedPhone);
-              return {
-                id: index + 10000, 
-                name: fetchedName,
-                phone: fetchedPhone,
-                initials: fetchedName.substring(0, 2).toUpperCase()
-              };
-            });
-
-            // Set immediately so user sees their saved contacts right away
-            if (savedContacts.length > 0) {
-              setContacts(savedContacts);
-              setSelectedPhones(savedSelected);
-              setIsSelectionMode(true);
-            }
-          }
-        } catch (err) {
-          console.error('Initial sync error', err);
-        }
-      }
-
-      // 2. Fetch fresh device contacts
-      if (isMounted) {
-        triggerContactFetch();
-      }
-    };
-
-    initContacts();
+    // 1. Fetch fresh device contacts
+    if (isMounted) {
+      triggerContactFetch();
+    }
 
     // Support explicit re-fetches
     const handleFetch = () => triggerContactFetch();
@@ -97,125 +46,40 @@ export default function ContactsScreen() {
     };
   }, [user]);
 
-  const toggleContactSelection = async (contact: Contact, forceSelect?: boolean) => {
-    let currentUserId = user?.id;
-    if (!currentUserId && supabase.auth) {
-        try {
-          const { data } = await supabase.auth.getUser();
-          currentUserId = data?.user?.id;
-        } catch (e) {}
-    }
-    if (!currentUserId) return;
-    
-    const newSelected = new Set<string>(selectedPhones);
-    const isCurrentlySelected = newSelected.has(contact.phone);
-    const willBeSelected = forceSelect !== undefined ? forceSelect : !isCurrentlySelected;
-
-    // Optimistic UI update
-    if (willBeSelected) {
-      newSelected.add(contact.phone);
-      setSelectedPhones(newSelected);
-      setIsSelectionMode(true);
-      setExpandedContactId(null);
-      
-      supabase.from('selected_contacts').upsert({
-        user_id: currentUserId,
-        contact_number: contact.phone,
-        contact_name: contact.name
-      }).then(({error}) => {
-        if (error) console.error("Error saving contact", error);
-      });
-    } else {
-      newSelected.delete(contact.phone);
-      setSelectedPhones(newSelected);
-      if (newSelected.size === 0) setIsSelectionMode(false);
-      
-      supabase.from('selected_contacts')
-        .delete()
-        .match({ user_id: currentUserId, contact_number: contact.phone })
-        .then(({error}) => {
-          if (error) console.error("Error deleting contact", error);
-        });
-    }
-  };
-
   const triggerContactFetch = async () => {
     setIsLoadingContacts(true);
     setErrorMessage(null);
 
     try {
-      if (Capacitor.isNativePlatform()) {
-        // Native Capacitor Request
-        let perm = await Contacts.checkPermissions();
-        if (perm.contacts !== 'granted') {
-          perm = await Contacts.requestPermissions();
-        }
-        if (perm.contacts === 'granted') {
-          const result = await Contacts.getContacts({
-            projection: { name: true, phones: true },
-          });
-          
-          if (result.contacts && result.contacts.length > 0) {
-            const mappedContacts = result.contacts.map((c, i) => ({
-              id: i,
-              name: c.name?.display || 'Unknown',
-              phone: c.phones?.[0]?.number || 'No phone',
-              initials: (c.name?.display || 'U').substring(0, 2).toUpperCase()
-            }));
-            
-            // Merge device contacts with existing selection so nothing disappears
-            setContacts(prev => {
-               const map = new Map();
-               prev.forEach(c => map.set(c.phone, c));
-               mappedContacts.forEach(c => map.set(c.phone, c));
-               return Array.from(map.values());
-            });
-          } else {
-            setErrorMessage('No contacts found.');
-          }
-        } else {
-          setErrorMessage('Permission Denied. Please enable contact permissions in your device settings.');
-        }
+      // 1. Fetch user profiles from database instead of selective device APIs
+      const { data, error } = await supabase.from('profiles').select('*');
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        // Exclude the current signed-in user from their own contact list
+        const filteredData = data.filter((profile: any) => profile.id !== user?.id);
+
+        const mappedContacts = filteredData.map((profile: any, i: number) => {
+          const name = profile.name || 'Unknown User';
+          const phone = profile.phone || 'No phone';
+          return {
+            id: i,
+            name,
+            phone,
+            initials: name.substring(0, 2).toUpperCase()
+          };
+        });
+
+        setContacts(mappedContacts);
       } else {
-        // Mobile Browser Priority / Web Contacts API Fallback
-        if ('contacts' in navigator && 'ContactsManager' in window) {
-          const props = ['name', 'tel'];
-          const opts = { multiple: true };
-          
-          const webContacts = await (navigator as any).contacts.select(props, opts);
-          
-          if (webContacts && webContacts.length > 0) {
-            const mappedContacts = webContacts.map((c: any, i: number) => {
-              const name = c.name?.[0] || 'Unknown';
-              const phone = c.tel?.[0] || 'No phone';
-              return {
-                id: i,
-                name,
-                phone,
-                initials: name.substring(0, 2).toUpperCase()
-              };
-            });
-            
-            setContacts(prev => {
-               const map = new Map();
-               prev.forEach(c => map.set(c.phone, c));
-               mappedContacts.forEach(c => map.set(c.phone, c));
-               return Array.from(map.values());
-            });
-          } else {
-            setErrorMessage('No contacts found.');
-          }
-        } else {
-          setErrorMessage('Web Contacts API is not supported in this browser. Please use the native app.');
-        }
+        setErrorMessage('No users found in the system.');
       }
     } catch (err: any) {
       console.error('Contact fetch failed:', err);
-      if (err.name === 'SecurityError' || err.message?.includes('user activation')) {
-        setErrorMessage('Browser requires a tap to load contacts.');
-      } else {
-        setErrorMessage('Please enable contact permissions in your browser settings.');
-      }
+      setErrorMessage('Failed to load contacts from database.');
     } finally {
       setIsLoadingContacts(false);
     }
@@ -224,8 +88,8 @@ export default function ContactsScreen() {
   const handleTouchStart = (contact: Contact) => {
     longPressTimer.current = setTimeout(() => {
       if (!isSelectionMode) {
-        setIsSelectionMode(true);
-        toggleContactSelection(contact, true);
+        // Automatically selects by calling to Context
+        toggleSelection({ id: contact.phone, name: contact.name }, true);
         setExpandedContactId(null);
       }
     }, 500); // 500ms for long press
@@ -239,33 +103,21 @@ export default function ContactsScreen() {
 
   const handleTap = (contact: Contact) => {
     if (isSelectionMode) {
-      toggleContactSelection(contact);
+      toggleSelection({ id: contact.phone, name: contact.name });
     } else {
       navigate('/chat', { state: { contact } });
     }
   };
 
   const startGroupCall = () => {
-    setIsSelectionMode(false);
+    // We could clear selection or leave it
     navigate('/call', { state: { title: t('groupVideoCall') } });
   };
 
-  const lastSelectedContactPhone = Array.from(selectedPhones).pop();
+  const lastSelectedContactPhone = selectedContactIds.length > 0 ? selectedContactIds[selectedContactIds.length - 1] : null;
 
   return (
     <div className="flex flex-col h-full bg-slate-900 relative">
-      {/* Selection Header */}
-      {isSelectionMode && (
-        <div className="absolute top-0 left-0 right-0 bg-[#00b4d8] text-white px-4 py-3 flex items-center justify-between z-20 shadow-md">
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setIsSelectionMode(false); }}>
-              <X className="w-6 h-6" />
-            </button>
-            <span className="font-semibold text-lg">{selectedPhones.size} {t('selected') || 'Selected'}</span>
-          </div>
-        </div>
-      )}
-
       {/* Contacts List */}
       <div className="flex-1 overflow-y-auto pt-2 pb-20">
         
@@ -290,13 +142,13 @@ export default function ContactsScreen() {
               onClick={() => triggerContactFetch()}
               className="w-full max-w-xs bg-blue-600 hover:bg-blue-500 text-white py-3 px-4 rounded-xl font-semibold shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all active:scale-95 text-sm"
             >
-              Please enable contact permissions in your browser settings
+              Retry loading contacts
             </button>
           </div>
         )}
 
         {contacts.map((contact) => {
-            const isSelected = selectedPhones.has(contact.phone);
+            const isSelected = selectedContactIds.includes(contact.phone);
             return (
             <div key={`${contact.id}-${contact.phone}`} className="relative">
               <div

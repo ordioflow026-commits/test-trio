@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Bell, User, Users, Lock, Radio, Globe, MessageSquare, Plus, LogIn } from 'lucide-react';
+import { Home, Bell, User, Users, Lock, Radio, Globe, MessageSquare, Plus, LogIn, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ContactsScreen from './ContactsScreen';
 import PrivateRoomScreen from './PrivateRoomScreen';
 import BroadcastScreen from './BroadcastScreen';
+import { useSelection } from '../contexts/SelectionContext';
 
 export default function MainScreen() {
   const [activeMainTab, setActiveMainTab] = useState('home');
   const [activeSubTab, setActiveSubTab] = useState('contacts');
   const { t, dir, language, toggleLanguage } = useLanguage();
+  const { isSelectionMode, selectedContactIds, clearSelection } = useSelection();
   const [userData, setUserData] = useState({ fullName: 'Guest', phone: '' });
   const [hasNotifications, setHasNotifications] = useState(true);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
@@ -163,6 +165,18 @@ export default function MainScreen() {
           </div>
         )}
       </header>
+
+      {/* Global Selection Header (Persists across tabs when active) */}
+      {isSelectionMode && (
+        <div className="bg-[#00b4d8] text-white px-4 py-3 flex items-center justify-between z-20 shadow-md">
+          <div className="flex items-center gap-3">
+            <button onClick={clearSelection}>
+              <X className="w-6 h-6" />
+            </button>
+            <span className="font-semibold text-lg">{selectedContactIds.length} {t('selected') || 'Selected'}</span>
+          </div>
+        </div>
+      )}
 
       {/* Content Area */}
       <main className="flex-1 overflow-hidden relative flex flex-col">
