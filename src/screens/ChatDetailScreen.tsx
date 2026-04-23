@@ -131,12 +131,16 @@ export default function ChatDetailScreen() {
 
       setMessages(prev => [...prev, tempMsg]);
 
-      await supabase.from('messages').insert({
-        id: tempMsg.id,
+      const { error: insertError } = await supabase.from('messages').insert({
         sender_id: user.id,
         receiver_id: contactProfileId,
         content: `File: ${fileUrl}`,
       });
+
+      if (insertError) {
+        console.error("Failed to send message", insertError);
+        alert("DB Error: " + insertError.message);
+      }
 
     } catch (err) {
       console.error("Upload process failed", err);
@@ -161,7 +165,6 @@ export default function ChatDetailScreen() {
     setMessages(prev => [...prev, tempMsg]);
 
     const { error } = await supabase.from('messages').insert({
-      id: tempMsg.id, // specify the ID so the listener can deduplicate
       sender_id: user.id,
       receiver_id: contactProfileId,
       content: msgContent,
@@ -169,6 +172,7 @@ export default function ChatDetailScreen() {
 
     if (error) {
       console.error("Failed to send message", error);
+      alert("DB Error: " + error.message);
     }
   };
 
