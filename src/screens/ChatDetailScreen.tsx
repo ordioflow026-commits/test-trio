@@ -68,27 +68,24 @@ export default function ChatDetailScreen() {
 
       // Start Realtime listener
       channel = supabase.channel(`chat_${user.id}_${receiverId}`)
-        .on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table: 'messages',
-        }, (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newMsg = payload.new as Message;
-            if (
-              (newMsg.sender_id === user.id && newMsg.receiver_id === receiverId) ||
-              (newMsg.sender_id === receiverId && newMsg.receiver_id === user.id)
-            ) {
-              setMessages(prev => {
-                // Deduplicate based on ID since we also optimistically insert
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+          const newMsg = payload.new as Message;
+          if (
+            (newMsg.sender_id === user.id && newMsg.receiver_id === receiverId) ||
+            (newMsg.sender_id === receiverId && newMsg.receiver_id === user.id)
+          ) {
+            setMessages(prev => {
+              // If it's an UPDATE (like status changing to 'read'), replace the old message
+              if (payload.eventType === 'UPDATE') {
+                return prev.map(m => m.id === newMsg.id ? newMsg : m);
+              }
+              // If it's an INSERT, check for duplicates before adding
+              if (payload.eventType === 'INSERT') {
                 if (prev.find(m => m.id === newMsg.id)) return prev;
                 return [...prev, newMsg];
-              });
-            }
-          }
-          if (payload.eventType === 'UPDATE') {
-             const updatedMsg = payload.new as Message;
-             setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
+              }
+              return prev;
+            });
           }
         })
         .subscribe();
@@ -104,30 +101,22 @@ export default function ChatDetailScreen() {
 
   // Mark incoming messages as read
   useEffect(() => {
-    if (!user || !contactProfileId || messages.length === 0) return;
-    
-    const unreadMessages = messages.filter(
-      m => m.receiver_id === user.id && m.status !== 'read'
-    );
-
-    if (unreadMessages.length > 0) {
-      const markAsRead = async () => {
-        const unreadIds = unreadMessages.map(m => m.id).filter(id => id.length > 20); // Only try to update real UUIDs, skip temp optimistic IDs
-        if (unreadIds.length === 0) return;
-        
-        const { error } = await supabase
+    const markMessagesAsRead = async () => {
+      if (!user || !contactProfileId || messages.length === 0) return;
+      
+      // Find incoming messages that are not yet marked as read
+      const unreadMessages = messages.filter(m => m.receiver_id === user.id && m.status !== 'read');
+      
+      if (unreadMessages.length > 0) {
+        await supabase
           .from('messages')
           .update({ status: 'read' })
-          .in('id', unreadIds);
-        
-        if (error) {
-          console.error("Failed to mark messages as read", error);
-        } else {
-           setMessages(prev => prev.map(m => unreadIds.includes(m.id) ? { ...m, status: 'read' } : m));
-        }
-      };
-      markAsRead();
-    }
+          .eq('receiver_id', user.id)
+          .eq('sender_id', contactProfileId)
+          .neq('status', 'read');
+      }
+    };
+    markMessagesAsRead();
   }, [messages, user, contactProfileId]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
