@@ -22,7 +22,6 @@ export default function ChatDetailScreen() {
   const [messageText, setMessageText] = useState('');
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [contactProfileId, setContactProfileId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -218,26 +217,6 @@ export default function ChatDetailScreen() {
     }
   };
 
-  const handleDeleteMessage = async () => {
-    if (!selectedMessage) return;
-    const msgId = selectedMessage.id;
-    // Optimistic UI Removal
-    setMessages(prev => prev.filter(m => m.id !== msgId));
-    setSelectedMessage(null);
-    
-    // We only try to delete if it's a real UUID (not a temp one)
-    if (msgId.length > 20) {
-      await supabase.from('messages').delete().eq('id', msgId);
-    }
-  };
-
-  const handleCopyMessage = () => {
-    if (selectedMessage) {
-      navigator.clipboard.writeText(selectedMessage.content);
-      setSelectedMessage(null);
-    }
-  };
-
   return (
     <div className="flex flex-col h-screen bg-[#0f172a] font-sans relative overflow-hidden" dir={dir}>
       {/* Dynamic Background gradient matching the image */}
@@ -298,8 +277,7 @@ export default function ChatDetailScreen() {
                 return (
                   <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div 
-                      onClick={() => setSelectedMessage(msg)}
-                      className={`max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm cursor-pointer active:scale-[0.98] transition-transform ${
+                      className={`max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm ${
                       isMe 
                         ? 'bg-[#00b4d8] text-white rounded-br-sm' 
                         : 'bg-slate-800/80 text-slate-100 rounded-bl-sm border border-slate-700/50'
@@ -364,44 +342,6 @@ export default function ChatDetailScreen() {
               className="hidden" 
               onChange={handleFileUpload}
             />
-          </div>
-        </div>
-      )}
-
-      {/* Message Actions Modal */}
-      {selectedMessage && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center px-4">
-          <div 
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setSelectedMessage(null)}
-          />
-          <div className="bg-slate-800 rounded-2xl shadow-2xl z-10 w-full max-w-sm overflow-hidden animate-in zoom-in-95 fade-in duration-200 border border-slate-700">
-            <div className="flex flex-col">
-              <button 
-                onClick={handleCopyMessage}
-                className="flex items-center gap-3 px-6 py-4 text-white hover:bg-slate-700/50 transition-colors"
-              >
-                <Copy className="w-5 h-5 text-blue-400" />
-                <span className="font-medium">Copy Text</span>
-              </button>
-              
-              {selectedMessage.sender_id === user?.id && (
-                <button 
-                  onClick={handleDeleteMessage}
-                  className="flex items-center gap-3 px-6 py-4 text-red-400 hover:bg-red-500/10 transition-colors border-t border-slate-700/50"
-                >
-                  <Trash2 className="w-5 h-5" />
-                  <span className="font-medium">Delete Message</span>
-                </button>
-              )}
-
-              <button 
-                onClick={() => setSelectedMessage(null)}
-                className="flex items-center justify-center px-6 py-4 text-slate-400 hover:bg-slate-700/50 transition-colors border-t border-slate-700/50"
-              >
-                <span className="font-medium">Cancel</span>
-              </button>
-            </div>
           </div>
         </div>
       )}
