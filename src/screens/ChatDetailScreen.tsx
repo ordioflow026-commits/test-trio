@@ -321,11 +321,9 @@ export default function ChatDetailScreen() {
                         <p className={`text-[10px] ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
                           {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
-                        {isMe && (
+                        {msg.status === 'read' && (
                           <div className="flex items-center">
-                            {(!msg.status || msg.status === 'sent') && <Check strokeWidth={2.5} className="w-[14px] h-[14px] text-blue-200" />}
-                            {msg.status === 'delivered' && <CheckCheck strokeWidth={2.5} className="w-[14px] h-[14px] text-slate-300" />}
-                            {msg.status === 'read' && <CheckCheck strokeWidth={2.5} className="w-[14px] h-[14px] text-cyan-300" />}
+                            <Check strokeWidth={3} className="w-[14px] h-[14px] text-[#00E5FF]" />
                           </div>
                         )}
                       </div>
