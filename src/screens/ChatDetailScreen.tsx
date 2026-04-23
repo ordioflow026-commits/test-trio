@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
@@ -11,6 +11,7 @@ interface Message {
   receiver_id: string;
   content: string;
   created_at: string;
+  status?: string;
 }
 
 export default function ChatDetailScreen() {
@@ -68,20 +69,26 @@ export default function ChatDetailScreen() {
       // Start Realtime listener
       channel = supabase.channel(`chat_${user.id}_${receiverId}`)
         .on('postgres_changes', { 
-            event: 'INSERT', 
+            event: '*', 
             schema: 'public', 
             table: 'messages',
         }, (payload) => {
-          const newMsg = payload.new as Message;
-          if (
-            (newMsg.sender_id === user.id && newMsg.receiver_id === receiverId) ||
-            (newMsg.sender_id === receiverId && newMsg.receiver_id === user.id)
-          ) {
-            setMessages(prev => {
-              // Deduplicate based on ID since we also optimistically insert
-              if (prev.find(m => m.id === newMsg.id)) return prev;
-              return [...prev, newMsg];
-            });
+          if (payload.eventType === 'INSERT') {
+            const newMsg = payload.new as Message;
+            if (
+              (newMsg.sender_id === user.id && newMsg.receiver_id === receiverId) ||
+              (newMsg.sender_id === receiverId && newMsg.receiver_id === user.id)
+            ) {
+              setMessages(prev => {
+                // Deduplicate based on ID since we also optimistically insert
+                if (prev.find(m => m.id === newMsg.id)) return prev;
+                return [...prev, newMsg];
+              });
+            }
+          }
+          if (payload.eventType === 'UPDATE') {
+             const updatedMsg = payload.new as Message;
+             setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
           }
         })
         .subscribe();
@@ -94,6 +101,34 @@ export default function ChatDetailScreen() {
       if (channel) supabase.removeChannel(channel);
     };
   }, [contact.phone, user]);
+
+  // Mark incoming messages as read
+  useEffect(() => {
+    if (!user || !contactProfileId || messages.length === 0) return;
+    
+    const unreadMessages = messages.filter(
+      m => m.receiver_id === user.id && m.status !== 'read'
+    );
+
+    if (unreadMessages.length > 0) {
+      const markAsRead = async () => {
+        const unreadIds = unreadMessages.map(m => m.id).filter(id => id.length > 20); // Only try to update real UUIDs, skip temp optimistic IDs
+        if (unreadIds.length === 0) return;
+        
+        const { error } = await supabase
+          .from('messages')
+          .update({ status: 'read' })
+          .in('id', unreadIds);
+        
+        if (error) {
+          console.error("Failed to mark messages as read", error);
+        } else {
+           setMessages(prev => prev.map(m => unreadIds.includes(m.id) ? { ...m, status: 'read' } : m));
+        }
+      };
+      markAsRead();
+    }
+  }, [messages, user, contactProfileId]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -258,9 +293,18 @@ export default function ChatDetailScreen() {
                       ) : (
                         <p className="text-[15px] whitespace-pre-wrap leading-tight">{msg.content}</p>
                       )}
-                      <p className={`text-[10px] mt-1 text-right ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                      <div className="flex items-center justify-end gap-1 mt-1 pb-0.5">
+                        <p className={`text-[10px] ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {isMe && (
+                          <div className="flex items-center">
+                            {(!msg.status || msg.status === 'sent') && <Check strokeWidth={2.5} className="w-[14px] h-[14px] text-blue-200" />}
+                            {msg.status === 'delivered' && <CheckCheck strokeWidth={2.5} className="w-[14px] h-[14px] text-slate-300" />}
+                            {msg.status === 'read' && <CheckCheck strokeWidth={2.5} className="w-[14px] h-[14px] text-cyan-300" />}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
