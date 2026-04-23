@@ -172,16 +172,21 @@ export default function ChatDetailScreen() {
       const fileUrl = publicUrlData.publicUrl;
 
       // Send the file URL as a message
-      const { error: insertError } = await supabase.from('messages').insert({
+      const { data: insertedFileMsg, error: insertError } = await supabase.from('messages').insert({
         sender_id: user.id,
         receiver_id: contactProfileId,
         content: `File: ${fileUrl}`,
         status: 'sent'
-      });
+      }).select().single();
 
       if (insertError) {
         console.error("Failed to send message", insertError);
         alert("Error: " + insertError.message);
+      } else if (insertedFileMsg) {
+        setMessages(prev => {
+          if (prev.find(m => m.id === insertedFileMsg.id)) return prev;
+          return [...prev, insertedFileMsg];
+        });
       }
 
     } catch (err) {
@@ -195,16 +200,21 @@ export default function ChatDetailScreen() {
     const msgContent = messageText.trim();
     setMessageText('');
 
-    const { error } = await supabase.from('messages').insert({
+    const { data: insertedMsg, error } = await supabase.from('messages').insert({
       sender_id: user.id,
       receiver_id: contactProfileId,
       content: msgContent,
       status: 'sent'
-    });
+    }).select().single();
 
     if (error) {
       console.error("Failed to send message", error);
       alert("Error: " + error.message);
+    } else if (insertedMsg) {
+      setMessages(prev => {
+        if (prev.find(m => m.id === insertedMsg.id)) return prev;
+        return [...prev, insertedMsg];
+      });
     }
   };
 
