@@ -115,6 +115,7 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     const markMessagesAsRead = async () => {
       if (!user || !contactProfileId || messages.length === 0) return;
+      if (document.visibilityState !== 'visible') return; // Prevent background marking
       
       // Find incoming messages that are not yet marked as read
       const unreadMessages = messages.filter(m => m.receiver_id === user.id && m.status !== 'read');
@@ -128,7 +129,16 @@ export default function ChatDetailScreen() {
           .neq('status', 'read');
       }
     };
+
     markMessagesAsRead();
+    
+    // Add event listener to mark as read when user switches back to the app/tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') markMessagesAsRead();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [messages, user, contactProfileId]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +176,7 @@ export default function ChatDetailScreen() {
         sender_id: user.id,
         receiver_id: contactProfileId,
         content: `File: ${fileUrl}`,
+        status: 'sent'
       });
 
       if (insertError) {
@@ -188,6 +199,7 @@ export default function ChatDetailScreen() {
       sender_id: user.id,
       receiver_id: contactProfileId,
       content: msgContent,
+      status: 'sent'
     });
 
     if (error) {
