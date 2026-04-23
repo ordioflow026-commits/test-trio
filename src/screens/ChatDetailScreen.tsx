@@ -139,7 +139,7 @@ export default function ChatDetailScreen() {
 
       if (insertError) {
         console.error("Failed to send message", insertError);
-        alert("DB Error: " + insertError.message);
+        alert("Error: " + insertError.message);
       }
 
     } catch (err) {
@@ -149,30 +149,24 @@ export default function ChatDetailScreen() {
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !user || !contactProfileId) return;
-
     const msgContent = messageText.trim();
-    setMessageText(''); // Clear input instantly
-
+    setMessageText('');
     const tempMsg: Message = {
-      id: Date.now().toString(), // fake ID
+      id: Date.now().toString(),
       sender_id: user.id,
       receiver_id: contactProfileId,
       content: msgContent,
       created_at: new Date().toISOString(),
     };
-
-    // Optimistic UI insert
     setMessages(prev => [...prev, tempMsg]);
-
     const { error } = await supabase.from('messages').insert({
       sender_id: user.id,
       receiver_id: contactProfileId,
       content: msgContent,
     });
-
     if (error) {
       console.error("Failed to send message", error);
-      alert("DB Error: " + error.message);
+      alert("Error: " + error.message);
     }
   };
 
