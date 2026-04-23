@@ -223,6 +223,21 @@ export default function ChatDetailScreen() {
     }
   };
 
+  const handleCopy = async () => {
+    if (!selectedMessage) return;
+    
+    try {
+      await navigator.clipboard.writeText(selectedMessage.content);
+      // Close the modal
+      setSelectedMessage(null);
+      // Show a quick success alert/toast
+      alert("تم نسخ الرسالة بنجاح! ✔️");
+    } catch (err) {
+      console.error("Failed to copy!", err);
+      alert("حدث خطأ أثناء النسخ.");
+    }
+  };
+
   const handleDeleteForMe = async () => {
     if (!selectedMessage || !user) return;
     
@@ -358,6 +373,14 @@ export default function ChatDetailScreen() {
           />
           <div className="bg-slate-800 rounded-2xl shadow-2xl z-10 w-full max-w-sm overflow-hidden animate-in zoom-in-95 fade-in duration-200 border border-slate-700">
             <div className="flex flex-col">
+              <button 
+                onClick={handleCopy}
+                className="flex items-center gap-3 px-6 py-4 text-white hover:bg-slate-700/50 transition-colors"
+              >
+                <Copy className="w-5 h-5 text-blue-400" />
+                <span className="font-medium">نسخ الرسالة</span>
+              </button>
+              
               <button 
                 onClick={handleDeleteForMe}
                 className="flex items-center gap-3 px-6 py-4 text-slate-300 hover:bg-slate-700/50 transition-colors"
