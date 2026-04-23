@@ -69,30 +69,37 @@ export default function ChatDetailScreen() {
 
       // Start Realtime listener
       channel = supabase.channel(`chat_${user.id}_${receiverId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+        .on('postgres_changes', { 
+            event: '*', // Listen to ALL events (INSERT, UPDATE, DELETE)
+            schema: 'public', 
+            table: 'messages',
+        }, (payload) => {
           if (payload.eventType === 'DELETE') {
             setMessages(prev => prev.filter(m => m.id !== payload.old.id));
             return;
           }
           
           const newMsg = payload.new as Message;
-          if (
-            (newMsg.sender_id === user.id && newMsg.receiver_id === receiverId) ||
-            (newMsg.sender_id === receiverId && newMsg.receiver_id === user.id)
-          ) {
-            setMessages(prev => {
-              // If it's an UPDATE (like status changing to 'read'), replace the old message
-              if (payload.eventType === 'UPDATE') {
-                return prev.map(m => m.id === newMsg.id ? newMsg : m);
-              }
-              // If it's an INSERT, check for duplicates before adding
-              if (payload.eventType === 'INSERT') {
+          
+          setMessages(prev => {
+            // Handle UPDATE: Replace the existing message, do NOT duplicate
+            if (payload.eventType === 'UPDATE') {
+              return prev.map(m => m.id === newMsg.id ? newMsg : m);
+            }
+            
+            // Handle INSERT: Add only if it doesn't already exist
+            if (payload.eventType === 'INSERT') {
+              if (
+                (newMsg.sender_id === user.id && newMsg.receiver_id === receiverId) ||
+                (newMsg.sender_id === receiverId && newMsg.receiver_id === user.id)
+              ) {
                 if (prev.find(m => m.id === newMsg.id)) return prev;
                 return [...prev, newMsg];
               }
-              return prev;
-            });
-          }
+            }
+            
+            return prev;
+          });
         })
         .subscribe();
     };
