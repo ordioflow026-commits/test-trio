@@ -26,6 +26,7 @@ export default function ChatDetailScreen() {
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [contactProfileId, setContactProfileId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Extract contact from navigation state
@@ -146,56 +147,58 @@ export default function ChatDetailScreen() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [messages, user, contactProfileId]);
 
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    
-    if (!contactProfileId) {
-      alert("لا يمكن إرسال الرسالة: هذا المستخدم غير مسجل في التطبيق أو رقم الهاتف غير مطابق.");
-      return;
-    }
+    const files = e.target.files;
+    if (!files || files.length === 0 || !user || !contactProfileId) return;
 
     setShowAttachmentMenu(false);
+    setIsUploading(true);
 
     try {
-      const fileName = `${Date.now()}_${file.name}`;
-      const { data, error } = await supabase.storage
-        .from('chat-attachments')
-        .upload(`${user.id}/${fileName}`, file);
-
-      if (error) {
-        console.error("File upload error", error);
-        return;
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('chat-attachments')
-        .getPublicUrl(`${user.id}/${fileName}`);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileName = `${Date.now()}_${file.name}`;
         
-      const fileUrl = publicUrlData.publicUrl;
+        const { error: uploadError } = await supabase.storage
+          .from('chat-attachments')
+          .upload(`${user.id}/${fileName}`, file);
 
-      // Send the file URL as a message
-      const { data: insertedFileMsg, error: insertError } = await supabase.from('messages').insert({
-        sender_id: user.id,
-        receiver_id: contactProfileId,
-        content: `File: ${fileUrl}`,
-        status: 'sent'
-      }).select().single();
+        if (uploadError) {
+          console.error("File upload error", uploadError);
+          continue; // Skip to next file if one fails
+        }
 
-      if (insertError) {
-        console.error("Failed to send message", insertError);
-        alert("Error: " + insertError.message);
-      } else if (insertedFileMsg) {
-        setMessages(prev => {
-          if (prev.find(m => m.id === insertedFileMsg.id)) return prev;
-          return [...prev, insertedFileMsg];
-        });
+        const { data: publicUrlData } = supabase.storage
+          .from('chat-attachments')
+          .getPublicUrl(`${user.id}/${fileName}`);
+          
+        const fileUrl = publicUrlData.publicUrl;
+
+        const { data: insertedFileMsg, error: insertError } = await supabase.from('messages').insert({
+          sender_id: user.id,
+          receiver_id: contactProfileId,
+          content: `File: ${fileUrl}`,
+          status: 'sent'
+        }).select().single();
+
+        if (insertError) {
+          console.error("Failed to send message", insertError);
+        } else if (insertedFileMsg) {
+          setMessages(prev => {
+            if (prev.find(m => m.id === insertedFileMsg.id)) return prev;
+            return [...prev, insertedFileMsg];
+          });
+        }
       }
-
     } catch (err) {
       console.error("Upload process failed", err);
+    } finally {
+      setIsUploading(false);
+      e.target.value = ''; // Reset input to allow selecting the same files again
     }
   };
 
@@ -359,6 +362,14 @@ export default function ChatDetailScreen() {
                   </div>
                 );
               })}
+              {isUploading && (
+                <div className="flex justify-end mb-2">
+                  <div className="max-w-[75%] px-4 py-3 rounded-2xl bg-[#00b4d8] text-white rounded-br-sm shadow-sm flex items-center gap-3">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-sm">جاري إرسال الملفات...</span>
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} className="h-1" />
             </>
          )}
@@ -414,17 +425,17 @@ export default function ChatDetailScreen() {
       {showAttachmentMenu && (
         <div className="absolute bottom-20 left-4 right-4 bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-700/50 p-4 z-40 animate-in slide-in-from-bottom-2 fade-in">
           <div className="grid grid-cols-3 gap-6 py-2 px-1">
-            <button className="flex flex-col items-center gap-2 group" onClick={() => fileInputRef.current?.click()}>
+            <button className="flex flex-col items-center gap-2 group" onClick={() => galleryInputRef.current?.click()}>
                <div className="w-14 h-14 rounded-full bg-blue-500 flex items-center justify-center text-white scale-100 group-hover:scale-110 transition-transform shadow-md">
                  <ImageIcon className="w-6 h-6" />
                </div>
                <span className="text-xs text-slate-300 font-medium tracking-tight">Gallery</span>
             </button>
-            <button className="flex flex-col items-center gap-2 group" onClick={() => fileInputRef.current?.click()}>
+            <button className="flex flex-col items-center gap-2 group" onClick={() => cameraInputRef.current?.click()}>
                <div className="w-14 h-14 rounded-full bg-violet-500 flex items-center justify-center text-white scale-100 group-hover:scale-110 transition-transform shadow-md">
-                 <FileText className="w-6 h-6" />
+                 <Camera className="w-6 h-6" />
                </div>
-               <span className="text-xs text-slate-300 font-medium tracking-tight">Document</span>
+               <span className="text-xs text-slate-300 font-medium tracking-tight">Camera</span>
             </button>
             <button className="flex flex-col items-center gap-2 group" onClick={() => fileInputRef.current?.click()}>
                <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center text-white scale-100 group-hover:scale-110 transition-transform shadow-md">
@@ -432,12 +443,9 @@ export default function ChatDetailScreen() {
                </div>
                <span className="text-xs text-slate-300 font-medium tracking-tight">File</span>
             </button>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
-              onChange={handleFileUpload}
-            />
+            <input type="file" accept="image/*,video/*" multiple ref={galleryInputRef} className="hidden" onChange={handleFileUpload} />
+            <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} className="hidden" onChange={handleFileUpload} />
+            <input type="file" accept="*/*" multiple ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
           </div>
         </div>
       )}
