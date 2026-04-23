@@ -162,16 +162,6 @@ export default function ChatDetailScreen() {
       const fileUrl = publicUrlData.publicUrl;
 
       // Send the file URL as a message
-      const tempMsg: Message = {
-        id: Date.now().toString(),
-        sender_id: user.id,
-        receiver_id: contactProfileId,
-        content: `File: ${fileUrl}`,
-        created_at: new Date().toISOString(),
-      };
-
-      setMessages(prev => [...prev, tempMsg]);
-
       const { error: insertError } = await supabase.from('messages').insert({
         sender_id: user.id,
         receiver_id: contactProfileId,
@@ -189,28 +179,17 @@ export default function ChatDetailScreen() {
   };
 
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !user) return;
-    
-    if (!contactProfileId) {
-      alert("لا يمكن إرسال الرسالة: هذا المستخدم غير مسجل في التطبيق أو رقم الهاتف غير مطابق.");
-      return;
-    }
+    if (!messageText.trim() || !user || !contactProfileId) return;
     
     const msgContent = messageText.trim();
     setMessageText('');
-    const tempMsg: Message = {
-      id: Date.now().toString(),
-      sender_id: user.id,
-      receiver_id: contactProfileId,
-      content: msgContent,
-      created_at: new Date().toISOString(),
-    };
-    setMessages(prev => [...prev, tempMsg]);
+
     const { error } = await supabase.from('messages').insert({
       sender_id: user.id,
       receiver_id: contactProfileId,
       content: msgContent,
     });
+
     if (error) {
       console.error("Failed to send message", error);
       alert("Error: " + error.message);
