@@ -41,14 +41,14 @@ export default function ChatDetailScreen() {
     let channel: any = null;
 
     const initChat = async () => {
-      // Find the contact's standard profile ID using their phone
+      const cleanPhone = contact.phone.replace(/\D/g, '').slice(-9);
       const { data: profileData } = await supabase
         .from('profiles')
         .select('id')
-        .eq('phone', contact.phone)
+        .ilike('phone', `%${cleanPhone}%`)
         .maybeSingle();
 
-      const receiverId = profileData?.id || contact.phone; // fallback to phone if not registered
+      const receiverId = profileData?.id || null;
       if (isMounted) setContactProfileId(receiverId);
 
       // Fetch history
@@ -99,7 +99,12 @@ export default function ChatDetailScreen() {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user || !contactProfileId) return;
+    if (!file || !user) return;
+    
+    if (!contactProfileId) {
+      alert("لا يمكن إرسال الرسالة: هذا المستخدم غير مسجل في التطبيق أو رقم الهاتف غير مطابق.");
+      return;
+    }
 
     setShowAttachmentMenu(false);
 
@@ -148,7 +153,13 @@ export default function ChatDetailScreen() {
   };
 
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !user || !contactProfileId) return;
+    if (!messageText.trim() || !user) return;
+    
+    if (!contactProfileId) {
+      alert("لا يمكن إرسال الرسالة: هذا المستخدم غير مسجل في التطبيق أو رقم الهاتف غير مطابق.");
+      return;
+    }
+    
     const msgContent = messageText.trim();
     setMessageText('');
     const tempMsg: Message = {
