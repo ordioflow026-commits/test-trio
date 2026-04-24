@@ -332,9 +332,13 @@ export default function ChatDetailScreen() {
 
       mediaRecorder.start();
       setIsRecording(true);
-    } catch (err) {
-      console.error("Failed to start recording", err);
-      alert("لم نتمكن من الوصول إلى الميكروفون.");
+    } catch (err: any) {
+      console.error("Microphone access error:", err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        alert("عذراً! لا يمكننا الوصول إلى الميكروفون. 🎙️\n\nيرجى الضغط على (رمز القفل 🔒) بجانب رابط الموقع في الأعلى، ثم الدخول إلى (إعدادات الموقع) وتغيير صلاحية (الميكروفون) إلى (السماح).");
+      } else {
+        alert("حدث خطأ أثناء محاولة تشغيل الميكروفون. تأكد من أن جهازك يدعم تسجيل الصوت.");
+      }
     }
   };
 
