@@ -5,6 +5,16 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
 
+const generateUUID = () => {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 interface Message {
   id: string;
   sender_id: string;
@@ -158,45 +168,36 @@ export default function ChatDetailScreen() {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
 
+    // Copy files but DO NOT clear the input yet (Protects Android memory)
     const files = Array.from(fileList);
-    e.target.value = ''; 
     setShowAttachmentMenu(false);
-
     setUploadingCount(prev => prev + files.length);
 
-    // ==========================================
-    // PHASE 1: INSTANT UI GENERATION (Synchronous)
-    // ==========================================
-    const tempMessages: Message[] = [];
-    
-    files.forEach((file, index) => {
+    // Generate Real UUIDs and Local Previews upfront
+    const localMessages: Message[] = files.map((file) => {
       const localUrl = URL.createObjectURL(file);
-      const tempId = `temp_${Date.now()}_${index}`;
+      // Force the Regex to render it as an image instantly
+      const previewUrl = `${localUrl}#.jpg`; 
       
-      const isImage = file.type.startsWith('image/');
-      const previewUrl = isImage ? `${localUrl}#.jpg` : localUrl;
-
-      tempMessages.push({
-        id: tempId,
+      return {
+        id: generateUUID(), // Pre-generate real ID to block Realtime duplicates
         sender_id: user.id,
         receiver_id: contactProfileId,
         content: `File: ${previewUrl}`,
         created_at: new Date().toISOString(),
         status: 'sending'
-      });
+      };
     });
 
-    // Push ALL previews to the screen instantly before any uploads start
-    setMessages(prev => [...prev, ...tempMessages]);
+    // Instantly show all bubbles
+    setMessages(prev => [...prev, ...localMessages]);
 
-    // ==========================================
-    // PHASE 2: SEQUENTIAL BACKGROUND UPLOADS
-    // ==========================================
+    // Upload Sequentially for stability
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const tempMsg = tempMessages[i];
-      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fileName = `${Date.now()}_${safeName}`;
+      const msg = localMessages[i];
+      const safeName = (file.name || `file_${i}`).replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${safeName}`;
 
       try {
         const { error: uploadError } = await supabase.storage
@@ -209,34 +210,29 @@ export default function ChatDetailScreen() {
           .from('chat-attachments')
           .getPublicUrl(`${user.id}/${fileName}`);
           
-        const { data: insertedMsg, error: insertError } = await supabase.from('messages').insert({
+        // Insert WITH OUR PRE-GENERATED UUID! Realtime will safely ignore this event.
+        const { error: insertError } = await supabase.from('messages').insert({
+          id: msg.id,
           sender_id: user.id,
           receiver_id: contactProfileId,
           content: `File: ${publicUrlData.publicUrl}`,
           status: 'sent'
-        }).select().single();
+        });
 
         if (insertError) throw insertError;
 
-        if (insertedMsg) {
-          setMessages(prev => {
-            const exists = prev.some(m => m.id === insertedMsg.id);
-            if (exists) {
-              return prev
-                .map(m => m.id === insertedMsg.id ? { ...insertedMsg, content: tempMsg.content } : m)
-                .filter(m => m.id !== tempMsg.id);
-            } else {
-              return prev.map(m => m.id === tempMsg.id ? { ...insertedMsg, content: tempMsg.content } : m);
-            }
-          });
-        }
+        // Update local status silently without flickering the image
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'sent' } : m));
       } catch (err) {
-        console.error("Upload failed for file", file.name, err);
-        setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'error' } : m));
+        console.error("Upload failed", err);
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'error' } : m));
       } finally {
         setUploadingCount(prev => Math.max(0, prev - 1));
       }
     }
+
+    // Safely clear memory ONLY after all files are completely done
+    e.target.value = '';
   };
 
   const handleSendMessage = async () => {
