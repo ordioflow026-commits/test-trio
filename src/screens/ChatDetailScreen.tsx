@@ -162,35 +162,40 @@ export default function ChatDetailScreen() {
     e.target.value = ''; 
     setShowAttachmentMenu(false);
 
-    // 1. Instant Local Preview (Optimistic UI)
+    // 1. Instant Local Preview (Fixing the extension bug)
     const tempMessages: Message[] = [];
     const tempUrls: string[] = [];
 
     files.forEach((file, index) => {
       const localUrl = URL.createObjectURL(file);
       tempUrls.push(localUrl);
+      
+      // FIX: Append a fake extension so the UI Regex detects it as an image and renders it instantly!
+      const isImage = file.type.startsWith('image/');
+      const previewUrl = isImage ? `${localUrl}#.jpg` : localUrl;
+
       tempMessages.push({
         id: `temp_${Date.now()}_${index}`,
         sender_id: user.id,
         receiver_id: contactProfileId,
-        content: `File: ${localUrl}`,
+        content: `File: ${previewUrl}`,
         created_at: new Date().toISOString(),
         status: 'sending'
       });
     });
 
-    // Show images instantly
+    // Show images instantly in the UI
     setMessages(prev => [...prev, ...tempMessages]);
     setUploadingCount(prev => prev + files.length);
 
-    // 2. Direct Upload (NO COMPRESSION)
-    for (let i = 0; i < files.length; i++) {
-      const originalFile = files[i];
+    // 2. Parallel Uploads (Much Faster than sequential for loop)
+    const uploadPromises = files.map(async (originalFile, i) => {
       const tempId = tempMessages[i].id;
-      const fileName = `${Date.now()}_${originalFile.name}`;
+      // Clean file name to prevent URL errors
+      const safeName = originalFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `${Date.now()}_${safeName}`;
 
       try {
-        // Upload original file directly
         const { error: uploadError } = await supabase.storage
           .from('chat-attachments')
           .upload(`${user.id}/${fileName}`, originalFile);
@@ -219,11 +224,14 @@ export default function ChatDetailScreen() {
       } finally {
         setUploadingCount(prev => Math.max(0, prev - 1));
       }
-    }
+    });
+
+    // Execute all uploads simultaneously
+    await Promise.all(uploadPromises);
 
     setTimeout(() => {
       tempUrls.forEach(url => URL.revokeObjectURL(url));
-    }, 10000);
+    }, 15000);
   };
 
   const handleSendMessage = async () => {
