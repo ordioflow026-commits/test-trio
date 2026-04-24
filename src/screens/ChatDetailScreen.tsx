@@ -334,10 +334,16 @@ export default function ChatDetailScreen() {
       setIsRecording(true);
     } catch (err: any) {
       console.error("Microphone access error:", err);
+      const isArabic = dir === 'rtl';
+      
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        alert("عذراً! لا يمكننا الوصول إلى الميكروفون. 🎙️\n\nيرجى الضغط على (رمز القفل 🔒) بجانب رابط الموقع في الأعلى، ثم الدخول إلى (إعدادات الموقع) وتغيير صلاحية (الميكروفون) إلى (السماح).");
+        if (isArabic) {
+          alert("عذراً! لا يمكننا الوصول إلى الميكروفون. 🎙️\n\nلحل المشكلة بسهولة، اتبع هذه الخطوات:\n\n1- اضغط على (الثلاث نقاط ⋮) في أعلى المتصفح، ثم اختر (الإعدادات).\n2- انزل للأسفل واضغط على (إعدادات المواقع الإلكترونية).\n3- ابحث عن (الميكروفون) واضغط عليه.\n4- قم بتغيير الصلاحية إلى (السماح).\n\nأو ببساطة: اضغط على الرمز الموجود بجانب رابط الموقع بالأعلى وعدّل الصلاحية مباشرة.");
+        } else {
+          alert("Sorry! We cannot access the microphone. 🎙️\n\nTo easily fix this, follow these steps:\n\n1- Click the (three dots ⋮) at the top of your browser, then choose (Settings).\n2- Scroll down and click on (Site Settings).\n3- Find (Microphone) and click on it.\n4- Change the permission to (Allow).\n\nOr simply: click the icon next to the website URL at the top and change the permission directly.");
+        }
       } else {
-        alert("حدث خطأ أثناء محاولة تشغيل الميكروفون. تأكد من أن جهازك يدعم تسجيل الصوت.");
+        alert(isArabic ? "حدث خطأ أثناء محاولة تشغيل الميكروفون. تأكد من أن جهازك يدعم تسجيل الصوت." : "An error occurred while trying to access the microphone. Make sure your device supports audio recording.");
       }
     }
   };
