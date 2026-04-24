@@ -162,51 +162,30 @@ export default function ChatDetailScreen() {
     e.target.value = ''; 
     setShowAttachmentMenu(false);
 
-    // 1. Instant Local Preview (Fixing the extension bug)
-    const tempMessages: Message[] = [];
-    const tempUrls: string[] = [];
-
-    files.forEach((file, index) => {
-      const localUrl = URL.createObjectURL(file);
-      tempUrls.push(localUrl);
-      
-      // FIX: Append a fake extension so the UI Regex detects it as an image and renders it instantly!
-      const isImage = file.type.startsWith('image/');
-      const previewUrl = isImage ? `${localUrl}#.jpg` : localUrl;
-
-      tempMessages.push({
-        id: `temp_${Date.now()}_${index}`,
-        sender_id: user.id,
-        receiver_id: contactProfileId,
-        content: `File: ${previewUrl}`,
-        created_at: new Date().toISOString(),
-        status: 'sending'
-      });
-    });
-
-    // Show images instantly in the UI
-    setMessages(prev => [...prev, ...tempMessages]);
+    // Update loading spinner count
     setUploadingCount(prev => prev + files.length);
 
-    // 2. Parallel Uploads (Much Faster than sequential for loop)
-    const uploadPromises = files.map(async (originalFile, i) => {
-      const tempId = tempMessages[i].id;
-      // Clean file name to prevent URL errors
-      const safeName = originalFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    // Process SEQUENTIALLY (one by one) to prevent network choking
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileName = `${Date.now()}_${safeName}`;
 
       try {
+        // 1. Upload to Supabase directly
         const { error: uploadError } = await supabase.storage
           .from('chat-attachments')
-          .upload(`${user.id}/${fileName}`, originalFile);
+          .upload(`${user.id}/${fileName}`, file);
 
         if (uploadError) throw uploadError;
 
+        // 2. Get Public URL
         const { data: publicUrlData } = supabase.storage
           .from('chat-attachments')
           .getPublicUrl(`${user.id}/${fileName}`);
           
-        const { data: insertedFileMsg, error: insertError } = await supabase.from('messages').insert({
+        // 3. Insert into Database
+        const { data: insertedMsg, error: insertError } = await supabase.from('messages').insert({
           sender_id: user.id,
           receiver_id: contactProfileId,
           content: `File: ${publicUrlData.publicUrl}`,
@@ -215,23 +194,20 @@ export default function ChatDetailScreen() {
 
         if (insertError) throw insertError;
 
-        if (insertedFileMsg) {
-          setMessages(prev => prev.map(m => m.id === tempId ? insertedFileMsg : m));
+        // 4. Add to UI
+        if (insertedMsg) {
+          setMessages(prev => {
+            if (prev.find(m => m.id === insertedMsg.id)) return prev;
+            return [...prev, insertedMsg];
+          });
         }
       } catch (err) {
-        console.error("Upload failed", err);
-        setMessages(prev => prev.filter(m => m.id !== tempId));
+        console.error("Upload failed for file", file.name, err);
       } finally {
+        // Decrease the loading spinner count when this specific file finishes
         setUploadingCount(prev => Math.max(0, prev - 1));
       }
-    });
-
-    // Execute all uploads simultaneously
-    await Promise.all(uploadPromises);
-
-    setTimeout(() => {
-      tempUrls.forEach(url => URL.revokeObjectURL(url));
-    }, 15000);
+    }
   };
 
   const handleSendMessage = async () => {
