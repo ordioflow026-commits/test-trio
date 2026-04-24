@@ -41,6 +41,7 @@ export default function ChatDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [uploadingCount, setUploadingCount] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [inputKey, setInputKey] = useState(Date.now());
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -172,44 +173,38 @@ export default function ChatDetailScreen() {
     if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
 
     const files = Array.from(fileList);
-    // CLEAR INPUT IMMEDIATELY so camera/gallery can be used again while uploading
-    e.target.value = ''; 
     setShowAttachmentMenu(false);
     setUploadingCount(prev => prev + files.length);
 
-    const tempMessages: Message[] = [];
-    
-    files.forEach((file, index) => {
+    // INSTANTLY refresh inputs via React Key so the user can take another photo,
+    // WITHOUT destroying the Android File objects currently in memory!
+    setInputKey(Date.now());
+
+    const localMessages: Message[] = files.map((file, index) => {
       const localUrl = URL.createObjectURL(file);
-      const tempId = `temp_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 9)}`;
+      const tempId = generateUUID();
       
-      // FORCE .jpg extension if missing to prevent disappearance bug
-      let originalName = file.name || `image_${index}.jpg`;
-      if (file.type.startsWith('image/') && !originalName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-        originalName += '.jpg';
-      }
-      
-      const isImage = originalName.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+      let originalName = file.name || `file_${index}`;
+      const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(originalName);
       const previewUrl = isImage ? `${localUrl}#.jpg` : localUrl;
 
-      tempMessages.push({
+      return {
         id: tempId,
         sender_id: user.id,
         receiver_id: contactProfileId,
         content: `File: ${previewUrl}`,
         created_at: new Date().toISOString(),
         status: 'sending'
-      });
+      };
     });
 
-    setMessages(prev => [...prev, ...tempMessages]);
+    setMessages(prev => [...prev, ...localMessages]);
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const tempMsg = tempMessages[i];
+      const msg = localMessages[i];
+      let originalName = file.name || `file_${i}`;
       
-      // Ensure file name has extension for Supabase storage
-      let originalName = file.name || `image_${i}.jpg`;
       if (file.type.startsWith('image/') && !originalName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
         originalName += '.jpg';
       }
@@ -227,9 +222,8 @@ export default function ChatDetailScreen() {
           .from('chat-attachments')
           .getPublicUrl(`${user.id}/${fileName}`);
           
-        // Insert WITH OUR PRE-GENERATED UUID! Realtime will safely ignore this event.
         const { error: insertError } = await supabase.from('messages').insert({
-          id: tempMsg.id,
+          id: msg.id,
           sender_id: user.id,
           receiver_id: contactProfileId,
           content: `File: ${publicUrlData.publicUrl}`,
@@ -238,11 +232,11 @@ export default function ChatDetailScreen() {
 
         if (insertError) throw insertError;
 
-        // Update local status silently without flickering the image
-        setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'sent' } : m));
+        // CRITICAL: Replace local blob with real server URL so it survives
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'sent', content: `File: ${publicUrlData.publicUrl}` } : m));
       } catch (err) {
         console.error("Upload failed", err);
-        setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'error' } : m));
+        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'error' } : m));
       } finally {
         setUploadingCount(prev => Math.max(0, prev - 1));
       }
@@ -253,23 +247,34 @@ export default function ChatDetailScreen() {
     if (!messageText.trim() || !user || !contactProfileId) return;
     
     const msgContent = messageText.trim();
-    setMessageText('');
+    setMessageText(''); // Clear input instantly
 
-    const { data: insertedMsg, error } = await supabase.from('messages').insert({
+    // INSTANT UI UPDATE (Zero lag, no waiting for network)
+    const tempMsg: Message = {
+      id: generateUUID(),
+      sender_id: user.id,
+      receiver_id: contactProfileId,
+      content: msgContent,
+      created_at: new Date().toISOString(),
+      status: 'sending'
+    };
+
+    setMessages(prev => [...prev, tempMsg]);
+
+    // Send gracefully in the background
+    const { error } = await supabase.from('messages').insert({
+      id: tempMsg.id,
       sender_id: user.id,
       receiver_id: contactProfileId,
       content: msgContent,
       status: 'sent'
-    }).select().single();
+    });
 
     if (error) {
       console.error("Failed to send message", error);
-      alert("Error: " + error.message);
-    } else if (insertedMsg) {
-      setMessages(prev => {
-        if (prev.find(m => m.id === insertedMsg.id)) return prev;
-        return [...prev, insertedMsg];
-      });
+      setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'error' } : m));
+    } else {
+      setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'sent' } : m));
     }
   };
 
@@ -630,10 +635,10 @@ export default function ChatDetailScreen() {
           />
       )}
 
-      {/* Hidden File Inputs (Must be outside conditional blocks to work with external buttons) */}
-      <input type="file" accept="image/*,video/*" multiple ref={galleryInputRef} className="hidden" onChange={handleFileUpload} />
-      <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} className="hidden" onChange={handleFileUpload} />
-      <input type="file" accept="*/*" multiple ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+      {/* Hidden File Inputs (Using Keys to remount safely without destroying Android memory) */}
+      <input key={`gallery_${inputKey}`} type="file" accept="image/*,video/*" multiple ref={galleryInputRef} className="hidden" onChange={handleFileUpload} />
+      <input key={`camera_${inputKey}`} type="file" accept="image/*" capture="environment" ref={cameraInputRef} className="hidden" onChange={handleFileUpload} />
+      <input key={`file_${inputKey}`} type="file" accept="*/*" multiple ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
 
       {/* Footer / Input Bar */}
       <footer className="px-2 pb-3 flex items-end gap-2 z-40 w-full mb-safe">
