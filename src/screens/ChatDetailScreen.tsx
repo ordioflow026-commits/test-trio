@@ -576,7 +576,10 @@ export default function ChatDetailScreen() {
             >
               <Paperclip strokeWidth={1.5} className="w-[22px] h-[22px]" />
             </button>
-            <button className="p-2 hover:bg-white/20 rounded-full transition-colors mr-1">
+            <button 
+              onClick={() => cameraInputRef.current?.click()}
+              className="p-2 hover:bg-white/20 rounded-full transition-colors mr-1"
+            >
               <Camera strokeWidth={1.5} className="w-[22px] h-[22px]" />
             </button>
           </div>
