@@ -26,7 +26,7 @@ export default function ChatDetailScreen() {
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [contactProfileId, setContactProfileId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -155,11 +155,15 @@ export default function ChatDetailScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !user || !contactProfileId) return;
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
+
+    // Immediately copy files and clear the input to allow concurrent uploads
+    const files = Array.from(fileList);
+    e.target.value = ''; 
 
     setShowAttachmentMenu(false);
-    setIsUploading(true);
+    setUploadingCount(prev => prev + 1); // Increment for this batch
 
     try {
       for (let i = 0; i < files.length; i++) {
@@ -172,7 +176,7 @@ export default function ChatDetailScreen() {
 
         if (uploadError) {
           console.error("File upload error", uploadError);
-          continue; // Skip to next file if one fails
+          continue;
         }
 
         const { data: publicUrlData } = supabase.storage
@@ -188,9 +192,7 @@ export default function ChatDetailScreen() {
           status: 'sent'
         }).select().single();
 
-        if (insertError) {
-          console.error("Failed to send message", insertError);
-        } else if (insertedFileMsg) {
+        if (!insertError && insertedFileMsg) {
           setMessages(prev => {
             if (prev.find(m => m.id === insertedFileMsg.id)) return prev;
             return [...prev, insertedFileMsg];
@@ -200,8 +202,7 @@ export default function ChatDetailScreen() {
     } catch (err) {
       console.error("Upload process failed", err);
     } finally {
-      setIsUploading(false);
-      e.target.value = ''; // Reset input to allow selecting the same files again
+      setUploadingCount(prev => Math.max(0, prev - 1)); // Decrement when this batch finishes
     }
   };
 
@@ -286,7 +287,7 @@ export default function ChatDetailScreen() {
       };
 
       mediaRecorder.onstop = async () => {
-        setIsUploading(true);
+        setUploadingCount(prev => prev + 1);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
         const fileName = `audio_${Date.now()}.webm`;
@@ -326,7 +327,7 @@ export default function ChatDetailScreen() {
         } catch (err) {
           console.error("Audio upload process failed", err);
         } finally {
-          setIsUploading(false);
+          setUploadingCount(prev => Math.max(0, prev - 1));
         }
       };
 
@@ -453,11 +454,11 @@ export default function ChatDetailScreen() {
                   </div>
                 );
               })}
-              {isUploading && (
+              {uploadingCount > 0 && (
                 <div className="flex justify-end mb-2">
                   <div className="max-w-[75%] px-4 py-3 rounded-2xl bg-[#00b4d8] text-white rounded-br-sm shadow-sm flex items-center gap-3">
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-sm">جاري إرسال الملفات...</span>
+                    <span className="text-sm">جاري إرسال {uploadingCount > 1 ? `${uploadingCount} ملفات` : 'الملف'}...</span>
                   </div>
                 </div>
               )}
