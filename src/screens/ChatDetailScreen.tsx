@@ -15,59 +15,6 @@ interface Message {
   deleted_for?: string | null;
 }
 
-const compressImage = async (file: File): Promise<File> => {
-  if (!file.type.startsWith('image/')) return file;
-  
-  return new Promise((resolve) => {
-    const img = new Image();
-    // Use Object URL instead of slow base64 FileReader (100x faster & zero extra RAM)
-    const objectUrl = URL.createObjectURL(file);
-    
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl); // Clear memory instantly
-      
-      const canvas = document.createElement('canvas');
-      // WhatsApp standard resolution for fast messaging
-      const MAX_WIDTH = 800; 
-      const MAX_HEIGHT = 800;
-      let width = img.width;
-      let height = img.height;
-
-      if (width > height) {
-        if (width > MAX_WIDTH) {
-          height *= MAX_WIDTH / width;
-          width = MAX_WIDTH;
-        }
-      } else {
-        if (height > MAX_HEIGHT) {
-          width *= MAX_HEIGHT / height;
-          height = MAX_HEIGHT;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0, width, height);
-      
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
-        } else {
-          resolve(file); // Fallback
-        }
-      }, 'image/jpeg', 0.6); // 60% quality is visually lossless for chat but 80% smaller
-    };
-    
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(file); // Fallback if image loading fails
-    };
-    
-    img.src = objectUrl;
-  });
-};
-
 export default function ChatDetailScreen() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -215,7 +162,7 @@ export default function ChatDetailScreen() {
     e.target.value = ''; 
     setShowAttachmentMenu(false);
 
-    // 1. CREATE TEMP MESSAGES BATCH (Instant UI without blocking)
+    // 1. Instant Local Preview (Optimistic UI)
     const tempMessages: Message[] = [];
     const tempUrls: string[] = [];
 
@@ -232,28 +179,24 @@ export default function ChatDetailScreen() {
       });
     });
 
-    // Update UI with all images instantly in ONE render
+    // Show images instantly
     setMessages(prev => [...prev, ...tempMessages]);
     setUploadingCount(prev => prev + files.length);
 
-    // 2. PROCESS SEQUENTIALLY (To prevent Mobile CPU freezing during compression)
+    // 2. Direct Upload (NO COMPRESSION)
     for (let i = 0; i < files.length; i++) {
       const originalFile = files[i];
       const tempId = tempMessages[i].id;
+      const fileName = `${Date.now()}_${originalFile.name}`;
 
       try {
-        // Compress one by one
-        const fileToUpload = await compressImage(originalFile);
-        const fileName = `${Date.now()}_${fileToUpload.name}`;
-        
-        // Upload
+        // Upload original file directly
         const { error: uploadError } = await supabase.storage
           .from('chat-attachments')
-          .upload(`${user.id}/${fileName}`, fileToUpload);
+          .upload(`${user.id}/${fileName}`, originalFile);
 
         if (uploadError) throw uploadError;
 
-        // Get URL & Insert to DB
         const { data: publicUrlData } = supabase.storage
           .from('chat-attachments')
           .getPublicUrl(`${user.id}/${fileName}`);
@@ -267,19 +210,17 @@ export default function ChatDetailScreen() {
 
         if (insertError) throw insertError;
 
-        // Replace temp with real
         if (insertedFileMsg) {
           setMessages(prev => prev.map(m => m.id === tempId ? insertedFileMsg : m));
         }
       } catch (err) {
-        console.error("Upload failed for file", originalFile.name, err);
+        console.error("Upload failed", err);
         setMessages(prev => prev.filter(m => m.id !== tempId));
       } finally {
         setUploadingCount(prev => Math.max(0, prev - 1));
       }
     }
 
-    // Clean up memory safely after all operations
     setTimeout(() => {
       tempUrls.forEach(url => URL.revokeObjectURL(url));
     }, 10000);
