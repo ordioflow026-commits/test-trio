@@ -164,46 +164,51 @@ export default function ChatDetailScreen() {
 
     setUploadingCount(prev => prev + files.length);
 
-    // Process sequentially to protect the network, but with INSTANT UI
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fileName = `${Date.now()}_${safeName}`;
-
-      // 1. CREATE SAFE LOCAL PREVIEW (Optimistic UI)
+    // ==========================================
+    // PHASE 1: INSTANT UI GENERATION (Synchronous)
+    // ==========================================
+    const tempMessages: Message[] = [];
+    
+    files.forEach((file, index) => {
       const localUrl = URL.createObjectURL(file);
-      const tempId = `temp_${Date.now()}_${i}`;
+      const tempId = `temp_${Date.now()}_${index}`;
       
-      // Add fake extension so the UI renders it as an image instantly
       const isImage = file.type.startsWith('image/');
       const previewUrl = isImage ? `${localUrl}#.jpg` : localUrl;
 
-      const tempMsg: Message = {
+      tempMessages.push({
         id: tempId,
         sender_id: user.id,
         receiver_id: contactProfileId,
         content: `File: ${previewUrl}`,
         created_at: new Date().toISOString(),
         status: 'sending'
-      };
+      });
+    });
 
-      // Show the image in chat immediately!
-      setMessages(prev => [...prev, tempMsg]);
+    // Push ALL previews to the screen instantly before any uploads start
+    setMessages(prev => [...prev, ...tempMessages]);
+
+    // ==========================================
+    // PHASE 2: SEQUENTIAL BACKGROUND UPLOADS
+    // ==========================================
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const tempMsg = tempMessages[i];
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `${Date.now()}_${safeName}`;
 
       try {
-        // 2. Upload to Supabase Original File
         const { error: uploadError } = await supabase.storage
           .from('chat-attachments')
           .upload(`${user.id}/${fileName}`, file);
 
         if (uploadError) throw uploadError;
 
-        // 3. Get Public Server URL
         const { data: publicUrlData } = supabase.storage
           .from('chat-attachments')
           .getPublicUrl(`${user.id}/${fileName}`);
           
-        // 4. Insert Real Message into Database
         const { data: insertedMsg, error: insertError } = await supabase.from('messages').insert({
           sender_id: user.id,
           receiver_id: contactProfileId,
@@ -213,18 +218,23 @@ export default function ChatDetailScreen() {
 
         if (insertError) throw insertError;
 
-        // 5. Smoothly replace the local image with the real server image
         if (insertedMsg) {
-          setMessages(prev => prev.map(m => m.id === tempId ? insertedMsg : m));
+          setMessages(prev => {
+            const exists = prev.some(m => m.id === insertedMsg.id);
+            if (exists) {
+              return prev
+                .map(m => m.id === insertedMsg.id ? { ...insertedMsg, content: tempMsg.content } : m)
+                .filter(m => m.id !== tempMsg.id);
+            } else {
+              return prev.map(m => m.id === tempMsg.id ? { ...insertedMsg, content: tempMsg.content } : m);
+            }
+          });
         }
       } catch (err) {
         console.error("Upload failed for file", file.name, err);
-        // Remove the broken message if upload completely fails
-        setMessages(prev => prev.filter(m => m.id !== tempId));
+        setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'error' } : m));
       } finally {
         setUploadingCount(prev => Math.max(0, prev - 1));
-        // Revoke memory safely ONLY when 100% done
-        URL.revokeObjectURL(localUrl);
       }
     }
   };
