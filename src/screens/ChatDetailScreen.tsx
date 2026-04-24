@@ -162,29 +162,48 @@ export default function ChatDetailScreen() {
     e.target.value = ''; 
     setShowAttachmentMenu(false);
 
-    // Update loading spinner count
     setUploadingCount(prev => prev + files.length);
 
-    // Process SEQUENTIALLY (one by one) to prevent network choking
+    // Process sequentially to protect the network, but with INSTANT UI
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileName = `${Date.now()}_${safeName}`;
 
+      // 1. CREATE SAFE LOCAL PREVIEW (Optimistic UI)
+      const localUrl = URL.createObjectURL(file);
+      const tempId = `temp_${Date.now()}_${i}`;
+      
+      // Add fake extension so the UI renders it as an image instantly
+      const isImage = file.type.startsWith('image/');
+      const previewUrl = isImage ? `${localUrl}#.jpg` : localUrl;
+
+      const tempMsg: Message = {
+        id: tempId,
+        sender_id: user.id,
+        receiver_id: contactProfileId,
+        content: `File: ${previewUrl}`,
+        created_at: new Date().toISOString(),
+        status: 'sending'
+      };
+
+      // Show the image in chat immediately!
+      setMessages(prev => [...prev, tempMsg]);
+
       try {
-        // 1. Upload to Supabase directly
+        // 2. Upload to Supabase Original File
         const { error: uploadError } = await supabase.storage
           .from('chat-attachments')
           .upload(`${user.id}/${fileName}`, file);
 
         if (uploadError) throw uploadError;
 
-        // 2. Get Public URL
+        // 3. Get Public Server URL
         const { data: publicUrlData } = supabase.storage
           .from('chat-attachments')
           .getPublicUrl(`${user.id}/${fileName}`);
           
-        // 3. Insert into Database
+        // 4. Insert Real Message into Database
         const { data: insertedMsg, error: insertError } = await supabase.from('messages').insert({
           sender_id: user.id,
           receiver_id: contactProfileId,
@@ -194,18 +213,18 @@ export default function ChatDetailScreen() {
 
         if (insertError) throw insertError;
 
-        // 4. Add to UI
+        // 5. Smoothly replace the local image with the real server image
         if (insertedMsg) {
-          setMessages(prev => {
-            if (prev.find(m => m.id === insertedMsg.id)) return prev;
-            return [...prev, insertedMsg];
-          });
+          setMessages(prev => prev.map(m => m.id === tempId ? insertedMsg : m));
         }
       } catch (err) {
         console.error("Upload failed for file", file.name, err);
+        // Remove the broken message if upload completely fails
+        setMessages(prev => prev.filter(m => m.id !== tempId));
       } finally {
-        // Decrease the loading spinner count when this specific file finishes
         setUploadingCount(prev => Math.max(0, prev - 1));
+        // Revoke memory safely ONLY when 100% done
+        URL.revokeObjectURL(localUrl);
       }
     }
   };
