@@ -207,68 +207,74 @@ export default function ChatDetailScreen() {
     e.target.value = ''; 
     setShowAttachmentMenu(false);
 
-    // Process files concurrently instead of sequentially using forEach
-    files.forEach(async (originalFile, index) => {
-      setUploadingCount(prev => prev + 1);
-      
-      // 1. INSTANT PREVIEW (Optimistic UI)
-      const localUrl = URL.createObjectURL(originalFile);
-      const tempId = `temp_${Date.now()}_${index}`;
-      
-      const tempMessage: Message = {
-        id: tempId,
+    // 1. CREATE TEMP MESSAGES BATCH (Instant UI without blocking)
+    const tempMessages: Message[] = [];
+    const tempUrls: string[] = [];
+
+    files.forEach((file, index) => {
+      const localUrl = URL.createObjectURL(file);
+      tempUrls.push(localUrl);
+      tempMessages.push({
+        id: `temp_${Date.now()}_${index}`,
         sender_id: user.id,
         receiver_id: contactProfileId,
         content: `File: ${localUrl}`,
         created_at: new Date().toISOString(),
         status: 'sending'
-      };
+      });
+    });
 
-      // Show the image in the chat immediately
-      setMessages(prev => [...prev, tempMessage]);
+    // Update UI with all images instantly in ONE render
+    setMessages(prev => [...prev, ...tempMessages]);
+    setUploadingCount(prev => prev + files.length);
+
+    // 2. PROCESS SEQUENTIALLY (To prevent Mobile CPU freezing during compression)
+    for (let i = 0; i < files.length; i++) {
+      const originalFile = files[i];
+      const tempId = tempMessages[i].id;
 
       try {
-        // 2. Compress in the background
+        // Compress one by one
         const fileToUpload = await compressImage(originalFile);
         const fileName = `${Date.now()}_${fileToUpload.name}`;
         
-        // 3. Upload
+        // Upload
         const { error: uploadError } = await supabase.storage
           .from('chat-attachments')
           .upload(`${user.id}/${fileName}`, fileToUpload);
 
         if (uploadError) throw uploadError;
 
-        // 4. Get URL & Insert to DB
+        // Get URL & Insert to DB
         const { data: publicUrlData } = supabase.storage
           .from('chat-attachments')
           .getPublicUrl(`${user.id}/${fileName}`);
           
-        const fileUrl = publicUrlData.publicUrl;
-
         const { data: insertedFileMsg, error: insertError } = await supabase.from('messages').insert({
           sender_id: user.id,
           receiver_id: contactProfileId,
-          content: `File: ${fileUrl}`,
+          content: `File: ${publicUrlData.publicUrl}`,
           status: 'sent'
         }).select().single();
 
         if (insertError) throw insertError;
 
-        // 5. Replace temp local message with real server message smoothly
+        // Replace temp with real
         if (insertedFileMsg) {
           setMessages(prev => prev.map(m => m.id === tempId ? insertedFileMsg : m));
         }
       } catch (err) {
-        console.error("Upload process failed", err);
-        // Remove the broken temp image if upload fails
+        console.error("Upload failed for file", originalFile.name, err);
         setMessages(prev => prev.filter(m => m.id !== tempId));
       } finally {
         setUploadingCount(prev => Math.max(0, prev - 1));
-        // Free up browser memory
-        setTimeout(() => URL.revokeObjectURL(localUrl), 5000);
       }
-    });
+    }
+
+    // Clean up memory safely after all operations
+    setTimeout(() => {
+      tempUrls.forEach(url => URL.revokeObjectURL(url));
+    }, 10000);
   };
 
   const handleSendMessage = async () => {
