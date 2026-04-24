@@ -203,31 +203,43 @@ export default function ChatDetailScreen() {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
 
-    // Immediately copy files and clear the input to allow concurrent uploads
     const files = Array.from(fileList);
     e.target.value = ''; 
-
     setShowAttachmentMenu(false);
-    setUploadingCount(prev => prev + 1); // Increment for this batch
 
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const originalFile = files[i];
-        
-        // Compress image before upload
+    // Process files concurrently instead of sequentially using forEach
+    files.forEach(async (originalFile, index) => {
+      setUploadingCount(prev => prev + 1);
+      
+      // 1. INSTANT PREVIEW (Optimistic UI)
+      const localUrl = URL.createObjectURL(originalFile);
+      const tempId = `temp_${Date.now()}_${index}`;
+      
+      const tempMessage: Message = {
+        id: tempId,
+        sender_id: user.id,
+        receiver_id: contactProfileId,
+        content: `File: ${localUrl}`,
+        created_at: new Date().toISOString(),
+        status: 'sending'
+      };
+
+      // Show the image in the chat immediately
+      setMessages(prev => [...prev, tempMessage]);
+
+      try {
+        // 2. Compress in the background
         const fileToUpload = await compressImage(originalFile);
-        
         const fileName = `${Date.now()}_${fileToUpload.name}`;
         
+        // 3. Upload
         const { error: uploadError } = await supabase.storage
           .from('chat-attachments')
           .upload(`${user.id}/${fileName}`, fileToUpload);
 
-        if (uploadError) {
-          console.error("File upload error", uploadError);
-          continue;
-        }
+        if (uploadError) throw uploadError;
 
+        // 4. Get URL & Insert to DB
         const { data: publicUrlData } = supabase.storage
           .from('chat-attachments')
           .getPublicUrl(`${user.id}/${fileName}`);
@@ -241,18 +253,22 @@ export default function ChatDetailScreen() {
           status: 'sent'
         }).select().single();
 
-        if (!insertError && insertedFileMsg) {
-          setMessages(prev => {
-            if (prev.find(m => m.id === insertedFileMsg.id)) return prev;
-            return [...prev, insertedFileMsg];
-          });
+        if (insertError) throw insertError;
+
+        // 5. Replace temp local message with real server message smoothly
+        if (insertedFileMsg) {
+          setMessages(prev => prev.map(m => m.id === tempId ? insertedFileMsg : m));
         }
+      } catch (err) {
+        console.error("Upload process failed", err);
+        // Remove the broken temp image if upload fails
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+      } finally {
+        setUploadingCount(prev => Math.max(0, prev - 1));
+        // Free up browser memory
+        setTimeout(() => URL.revokeObjectURL(localUrl), 5000);
       }
-    } catch (err) {
-      console.error("Upload process failed", err);
-    } finally {
-      setUploadingCount(prev => Math.max(0, prev - 1)); // Decrement when this batch finishes
-    }
+    });
   };
 
   const handleSendMessage = async () => {
