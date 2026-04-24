@@ -34,6 +34,9 @@ export default function ChatDetailScreen() {
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const longPressTimer = useRef<any>(null);
+  const isLongPress = useRef(false);
   const [contactProfileId, setContactProfileId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [uploadingCount, setUploadingCount] = useState(0);
@@ -168,35 +171,49 @@ export default function ChatDetailScreen() {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
 
-    // Copy files but DO NOT clear the input yet (Protects Android memory)
     const files = Array.from(fileList);
+    // CLEAR INPUT IMMEDIATELY so camera/gallery can be used again while uploading
+    e.target.value = ''; 
     setShowAttachmentMenu(false);
     setUploadingCount(prev => prev + files.length);
 
-    // Generate Real UUIDs and Local Previews upfront
-    const localMessages: Message[] = files.map((file) => {
+    const tempMessages: Message[] = [];
+    
+    files.forEach((file, index) => {
       const localUrl = URL.createObjectURL(file);
-      // Force the Regex to render it as an image instantly
-      const previewUrl = `${localUrl}#.jpg`; 
+      const tempId = `temp_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 9)}`;
       
-      return {
-        id: generateUUID(), // Pre-generate real ID to block Realtime duplicates
+      // FORCE .jpg extension if missing to prevent disappearance bug
+      let originalName = file.name || `image_${index}.jpg`;
+      if (file.type.startsWith('image/') && !originalName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        originalName += '.jpg';
+      }
+      
+      const isImage = originalName.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+      const previewUrl = isImage ? `${localUrl}#.jpg` : localUrl;
+
+      tempMessages.push({
+        id: tempId,
         sender_id: user.id,
         receiver_id: contactProfileId,
         content: `File: ${previewUrl}`,
         created_at: new Date().toISOString(),
         status: 'sending'
-      };
+      });
     });
 
-    // Instantly show all bubbles
-    setMessages(prev => [...prev, ...localMessages]);
+    setMessages(prev => [...prev, ...tempMessages]);
 
-    // Upload Sequentially for stability
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const msg = localMessages[i];
-      const safeName = (file.name || `file_${i}`).replace(/[^a-zA-Z0-9.-]/g, '_');
+      const tempMsg = tempMessages[i];
+      
+      // Ensure file name has extension for Supabase storage
+      let originalName = file.name || `image_${i}.jpg`;
+      if (file.type.startsWith('image/') && !originalName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        originalName += '.jpg';
+      }
+      const safeName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${safeName}`;
 
       try {
@@ -212,7 +229,7 @@ export default function ChatDetailScreen() {
           
         // Insert WITH OUR PRE-GENERATED UUID! Realtime will safely ignore this event.
         const { error: insertError } = await supabase.from('messages').insert({
-          id: msg.id,
+          id: tempMsg.id,
           sender_id: user.id,
           receiver_id: contactProfileId,
           content: `File: ${publicUrlData.publicUrl}`,
@@ -222,17 +239,14 @@ export default function ChatDetailScreen() {
         if (insertError) throw insertError;
 
         // Update local status silently without flickering the image
-        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'sent' } : m));
+        setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'sent' } : m));
       } catch (err) {
         console.error("Upload failed", err);
-        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'error' } : m));
+        setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'error' } : m));
       } finally {
         setUploadingCount(prev => Math.max(0, prev - 1));
       }
     }
-
-    // Safely clear memory ONLY after all files are completely done
-    e.target.value = '';
   };
 
   const handleSendMessage = async () => {
@@ -276,30 +290,31 @@ export default function ChatDetailScreen() {
 
   const handleDeleteForMe = async () => {
     if (!selectedMessage || !user) return;
+    const msgToDelete = selectedMessage;
     
-    // Optimistic UI update
-    setMessages(prev => prev.filter(m => m.id !== selectedMessage.id));
+    setSelectedMessage(null); // INSTANT UI CLOSE
+    setMessages(prev => prev.filter(m => m.id !== msgToDelete.id)); // OPTIMISTIC REMOVE
     
-    if (selectedMessage.deleted_for) {
-       // If the other person already deleted it for themselves, just remove the row permanently
-       await supabase.from('messages').delete().eq('id', selectedMessage.id);
+    if (msgToDelete.deleted_for) {
+       await supabase.from('messages').delete().eq('id', msgToDelete.id);
     } else {
-       // Otherwise, mark it as deleted for the current user only
-       await supabase.from('messages').update({ deleted_for: user.id }).eq('id', selectedMessage.id);
+       await supabase.from('messages').update({ deleted_for: user.id }).eq('id', msgToDelete.id);
     }
-    setSelectedMessage(null);
   };
 
   const handleDeleteForEveryone = async () => {
     if (!selectedMessage) return;
-    const confirmDelete = window.confirm("هل أنت متأكد أنك تريد حذف هذه الرسالة لدى الجميع؟");
-    if (!confirmDelete) return;
+    const msgToDelete = selectedMessage;
+    
+    setSelectedMessage(null); // INSTANT UI CLOSE
+    
+    setTimeout(async () => {
+      const confirmDelete = window.confirm("هل أنت متأكد أنك تريد حذف هذه الرسالة لدى الجميع؟");
+      if (!confirmDelete) return;
 
-    // Optimistic removal
-    setMessages(prev => prev.filter(m => m.id !== selectedMessage.id));
-    // Permanent deletion from database
-    await supabase.from('messages').delete().eq('id', selectedMessage.id);
-    setSelectedMessage(null);
+      setMessages(prev => prev.filter(m => m.id !== msgToDelete.id));
+      await supabase.from('messages').delete().eq('id', msgToDelete.id);
+    }, 50); // Small delay to let the modal close smoothly before confirm dialog
   };
 
   const startRecording = async () => {
@@ -446,7 +461,32 @@ export default function ChatDetailScreen() {
                 return (
                   <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div 
-                      onClick={() => setSelectedMessage(msg)}
+                      onPointerDown={() => {
+                        isLongPress.current = false;
+                        longPressTimer.current = setTimeout(() => {
+                          isLongPress.current = true;
+                          setSelectedMessage(msg);
+                        }, 400); // 400ms hold for Long Press
+                      }}
+                      onPointerUp={() => {
+                        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+                      }}
+                      onPointerCancel={() => {
+                        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+                      }}
+                      onClick={(e) => {
+                        if (isLongPress.current) return; // Prevent tap if it was a hold
+                        
+                        // Tap Action (View Fullscreen)
+                        if (msg.content.startsWith('File: ')) {
+                          const url = msg.content.replace('File: ', '');
+                          if (url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || url.includes('#.jpg')) {
+                            setFullScreenImage(url);
+                          } else {
+                            window.open(url, '_blank');
+                          }
+                        }
+                      }}
                       className={`max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm cursor-pointer transition-transform active:scale-[0.98] ${
                       isMe 
                         ? 'bg-[#00b4d8] text-white rounded-br-sm' 
@@ -495,6 +535,20 @@ export default function ChatDetailScreen() {
             </>
          )}
       </main>
+
+      {/* Fullscreen Image Viewer Modal */}
+      {fullScreenImage && (
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col animate-in fade-in duration-200">
+          <div className="flex justify-between items-center p-4 bg-black/50 absolute top-0 left-0 right-0 z-10">
+            <button onClick={() => setFullScreenImage(null)} className="text-white p-2 hover:bg-white/20 rounded-full transition-colors">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center overflow-hidden p-2">
+            <img src={fullScreenImage} alt="Fullscreen" className="max-w-full max-h-full object-contain" />
+          </div>
+        </div>
+      )}
 
       {/* Message Actions Modal */}
       {selectedMessage && (
