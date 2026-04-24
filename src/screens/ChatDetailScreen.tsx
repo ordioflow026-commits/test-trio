@@ -534,9 +534,6 @@ export default function ChatDetailScreen() {
                </div>
                <span className="text-xs text-slate-300 font-medium tracking-tight">File</span>
             </button>
-            <input type="file" accept="image/*,video/*" multiple ref={galleryInputRef} className="hidden" onChange={handleFileUpload} />
-            <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} className="hidden" onChange={handleFileUpload} />
-            <input type="file" accept="*/*" multiple ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
           </div>
         </div>
       )}
@@ -548,6 +545,11 @@ export default function ChatDetailScreen() {
             onClick={() => setShowAttachmentMenu(false)}
           />
       )}
+
+      {/* Hidden File Inputs (Must be outside conditional blocks to work with external buttons) */}
+      <input type="file" accept="image/*,video/*" multiple ref={galleryInputRef} className="hidden" onChange={handleFileUpload} />
+      <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} className="hidden" onChange={handleFileUpload} />
+      <input type="file" accept="*/*" multiple ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
 
       {/* Footer / Input Bar */}
       <footer className="px-2 pb-3 flex items-end gap-2 z-40 w-full mb-safe">
