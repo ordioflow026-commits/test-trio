@@ -354,8 +354,8 @@ export default function ContactsScreen() {
                 </div>
                 <div className="flex-1 border-b border-slate-800/60 pb-3 pt-1 flex justify-between items-center pr-2 min-w-0">
                   <div className="flex-1 min-w-0 pr-3">
-                    <div className="flex justify-between items-baseline mb-0.5">
-                      <h3 className={`font-semibold transition-colors text-[17px] truncate ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                    <div className="flex justify-between items-baseline mb-0.5 min-w-0 gap-2">
+                      <h3 className={`font-semibold transition-colors text-[17px] truncate flex-1 min-w-0 ${isSelected ? 'text-white' : 'text-slate-200'}`}>
                         {contact.name}
                       </h3>
                       {chatInfo?.lastTime && (
@@ -365,8 +365,8 @@ export default function ContactsScreen() {
                       )}
                     </div>
                     
-                    <div className="flex items-center gap-2">
-                       <p className={`text-[14px] truncate ${isSelected || (chatInfo?.unreadCount && chatInfo.unreadCount > 0) ? 'text-blue-100 font-medium' : 'text-slate-400'}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                       <p className={`text-[14px] truncate flex-1 min-w-0 ${isSelected || (chatInfo?.unreadCount && chatInfo.unreadCount > 0) ? 'text-blue-100 font-medium' : 'text-slate-400'}`}>
                          {chatInfo?.lastMessage 
                             ? (chatInfo.lastMessage.startsWith('File: ') ? '📎 Attachment' : chatInfo.lastMessage)
                             : (
