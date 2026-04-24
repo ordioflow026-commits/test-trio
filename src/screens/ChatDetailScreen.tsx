@@ -172,20 +172,39 @@ export default function ChatDetailScreen() {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
 
-    const files = Array.from(fileList);
+    const files: File[] = Array.from(fileList);
     setShowAttachmentMenu(false);
     setUploadingCount(prev => prev + files.length);
 
-    // INSTANTLY refresh inputs via React Key so the user can take another photo,
-    // WITHOUT destroying the Android File objects currently in memory!
+    // 1. DEEP COPY FILES TO RAM (Fixes Android Garbage Collection destroying blobs)
+    const memoryFiles: File[] = [];
+    for (const file of files) {
+      try {
+        const buffer = await file.arrayBuffer();
+        let fileName = file.name || `file_${Date.now()}`;
+        
+        // Force .jpg extension if it's an image input
+        const isImageInput = e.target.accept && e.target.accept.includes('image');
+        if ((file.type.startsWith('image/') || isImageInput) && !fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+          fileName += '.jpg';
+        }
+        
+        const fileType = file.type || (fileName.endsWith('.jpg') ? 'image/jpeg' : 'application/octet-stream');
+        memoryFiles.push(new File([buffer], fileName, { type: fileType }));
+      } catch (err) {
+        console.error("Failed to copy file to memory", err);
+      }
+    }
+
+    // 2. Safely reset input DOM now that files are safely isolated in RAM
     setInputKey(Date.now());
 
-    const localMessages: Message[] = files.map((file, index) => {
+    // 3. Create Previews
+    const localMessages: Message[] = memoryFiles.map((file, index) => {
       const localUrl = URL.createObjectURL(file);
       const tempId = generateUUID();
       
-      let originalName = file.name || `file_${index}`;
-      const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(originalName);
+      const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
       const previewUrl = isImage ? `${localUrl}#.jpg` : localUrl;
 
       return {
@@ -200,15 +219,11 @@ export default function ChatDetailScreen() {
 
     setMessages(prev => [...prev, ...localMessages]);
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    // 4. Sequential Upload from Memory
+    for (let i = 0; i < memoryFiles.length; i++) {
+      const file = memoryFiles[i];
       const msg = localMessages[i];
-      let originalName = file.name || `file_${i}`;
-      
-      if (file.type.startsWith('image/') && !originalName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-        originalName += '.jpg';
-      }
-      const safeName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${safeName}`;
 
       try {
@@ -232,7 +247,6 @@ export default function ChatDetailScreen() {
 
         if (insertError) throw insertError;
 
-        // CRITICAL: Replace local blob with real server URL so it survives
         setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'sent', content: `File: ${publicUrlData.publicUrl}` } : m));
       } catch (err) {
         console.error("Upload failed", err);
@@ -503,8 +517,16 @@ export default function ChatDetailScreen() {
                         </div>
                       ) : msg.content.startsWith('File: ') ? (
                         <div className="flex flex-col gap-1 mt-1">
-                          {msg.content.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
-                            <img src={msg.content.replace('File: ', '')} alt="Attachment" className="max-w-[200px] max-h-[200px] rounded-lg object-cover" />
+                          {msg.content.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || msg.content.includes('#.jpg') ? (
+                            <img 
+                              src={msg.content.replace('File: ', '')} 
+                              alt="Attachment" 
+                              className="max-w-[200px] max-h-[200px] min-w-[120px] min-h-[120px] rounded-lg object-cover bg-slate-700/50" 
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.parentElement?.insertAdjacentHTML('beforeend', '<span class="text-xs text-red-400 p-4 bg-slate-800 rounded-lg">خطأ في تحميل الصورة</span>');
+                              }}
+                            />
                           ) : (
                             <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="text-white underline text-sm break-all">
                               Download Attachment
