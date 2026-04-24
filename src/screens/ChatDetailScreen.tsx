@@ -27,6 +27,9 @@ export default function ChatDetailScreen() {
   const [contactProfileId, setContactProfileId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Extract contact from navigation state
@@ -269,6 +272,80 @@ export default function ChatDetailScreen() {
     setSelectedMessage(null);
   };
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        setIsUploading(true);
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        
+        const fileName = `audio_${Date.now()}.webm`;
+        
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from('chat-attachments')
+            .upload(`${user!.id}/${fileName}`, audioBlob);
+
+          if (uploadError) {
+            console.error("Audio upload error", uploadError);
+            alert("فشل رفع المقطع الصوتي");
+            return;
+          }
+
+          const { data: publicUrlData } = supabase.storage
+            .from('chat-attachments')
+            .getPublicUrl(`${user!.id}/${fileName}`);
+            
+          const fileUrl = publicUrlData.publicUrl;
+
+          const { data: insertedMsg, error: insertError } = await supabase.from('messages').insert({
+            sender_id: user!.id,
+            receiver_id: contactProfileId,
+            content: `Audio: ${fileUrl}`,
+            status: 'sent'
+          }).select().single();
+
+          if (insertError) {
+            console.error("Failed to send audio message", insertError);
+          } else if (insertedMsg) {
+            setMessages(prev => {
+              if (prev.find(m => m.id === insertedMsg.id)) return prev;
+              return [...prev, insertedMsg];
+            });
+          }
+        } catch (err) {
+          console.error("Audio upload process failed", err);
+        } finally {
+          setIsUploading(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Failed to start recording", err);
+      alert("لم نتمكن من الوصول إلى الميكروفون.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#0f172a] font-sans relative overflow-hidden" dir={dir}>
       {/* Dynamic Background gradient matching the image */}
@@ -335,7 +412,11 @@ export default function ChatDetailScreen() {
                         ? 'bg-[#00b4d8] text-white rounded-br-sm' 
                         : 'bg-slate-800/80 text-slate-100 rounded-bl-sm border border-slate-700/50'
                     }`}>
-                      {msg.content.startsWith('File: ') ? (
+                      {msg.content.startsWith('Audio: ') ? (
+                        <div className="mt-1">
+                          <audio controls src={msg.content.replace('Audio: ', '')} className="max-w-[220px] h-10" />
+                        </div>
+                      ) : msg.content.startsWith('File: ') ? (
                         <div className="flex flex-col gap-1 mt-1">
                           {msg.content.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
                             <img src={msg.content.replace('File: ', '')} alt="Attachment" className="max-w-[200px] max-h-[200px] rounded-lg object-cover" />
@@ -501,9 +582,21 @@ export default function ChatDetailScreen() {
               <Send strokeWidth={2} className="w-5 h-5 ml-1" />
             </button>
           ) : (
-            <button className="w-[48px] h-[48px] bg-[#00E5FF] rounded-full flex items-center justify-center text-[#0f172a] shadow-md hover:brightness-110 transition-colors">
-              <Mic strokeWidth={2.5} className="w-5 h-5" />
-            </button>
+            isRecording ? (
+              <button 
+                onClick={stopRecording}
+                className="w-[48px] h-[48px] bg-red-500 animate-pulse rounded-full flex items-center justify-center text-white shadow-md hover:brightness-110 transition-colors"
+              >
+                <Mic strokeWidth={2.5} className="w-5 h-5" />
+              </button>
+            ) : (
+              <button 
+                onClick={startRecording}
+                className="w-[48px] h-[48px] bg-[#00E5FF] rounded-full flex items-center justify-center text-[#0f172a] shadow-md hover:brightness-110 transition-colors"
+              >
+                <Mic strokeWidth={2.5} className="w-5 h-5" />
+              </button>
+            )
           )}
         </div>
       </footer>
