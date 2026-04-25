@@ -343,7 +343,7 @@ export default function ChatDetailScreen() {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
-      cancelRecordingRef.current = false; // Reset cancellation flag
+      cancelRecordingRef.current = false;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -352,7 +352,6 @@ export default function ChatDetailScreen() {
       };
 
       mediaRecorder.onstop = async () => {
-        // CRITICAL: If cancelled, exit immediately without uploading
         if (cancelRecordingRef.current) {
            cancelRecordingRef.current = false;
            return; 
@@ -360,7 +359,6 @@ export default function ChatDetailScreen() {
         
         setUploadingCount(prev => prev + 1);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        
         const fileName = `audio_${Date.now()}.webm`;
         
         try {
@@ -368,35 +366,24 @@ export default function ChatDetailScreen() {
             .from('chat-attachments')
             .upload(`${user!.id}/${fileName}`, audioBlob);
 
-          if (uploadError) {
-            console.error("Audio upload error", uploadError);
-            alert("فشل رفع المقطع الصوتي");
-            return;
-          }
+          if (uploadError) throw uploadError;
 
           const { data: publicUrlData } = supabase.storage
             .from('chat-attachments')
             .getPublicUrl(`${user!.id}/${fileName}`);
             
-          const fileUrl = publicUrlData.publicUrl;
-
           const { data: insertedMsg, error: insertError } = await supabase.from('messages').insert({
             sender_id: user!.id,
             receiver_id: contactProfileId,
-            content: `Audio: ${fileUrl}`,
+            content: `Audio: ${publicUrlData.publicUrl}`,
             status: 'sent'
           }).select().single();
 
-          if (insertError) {
-            console.error("Failed to send audio message", insertError);
-          } else if (insertedMsg) {
-            setMessages(prev => {
-              if (prev.find(m => m.id === insertedMsg.id)) return prev;
-              return [...prev, insertedMsg];
-            });
+          if (!insertError && insertedMsg) {
+            setMessages(prev => prev.find(m => m.id === insertedMsg.id) ? prev : [...prev, insertedMsg]);
           }
         } catch (err) {
-          console.error("Audio upload process failed", err);
+          console.error("Audio upload failed", err);
         } finally {
           setUploadingCount(prev => Math.max(0, prev - 1));
         }
@@ -405,18 +392,7 @@ export default function ChatDetailScreen() {
       mediaRecorder.start();
       setIsRecording(true);
     } catch (err: any) {
-      console.error("Microphone access error:", err);
-      const isArabic = dir === 'rtl';
-      
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        if (isArabic) {
-          alert("عذراً! لا يمكننا الوصول إلى الميكروفون. 🎙️\n\nلحل المشكلة بسهولة، اتبع هذه الخطوات:\n\n1- اضغط على (الثلاث نقاط ⋮) في أعلى المتصفح، ثم اختر (الإعدادات).\n2- انزل للأسفل واضغط على (إعدادات المواقع الإلكترونية).\n3- ابحث عن (الميكروفون) واضغط عليه.\n4- قم بتغيير الصلاحية إلى (السماح).\n\nأو ببساطة: اضغط على الرمز الموجود بجانب رابط الموقع بالأعلى وعدّل الصلاحية مباشرة.");
-        } else {
-          alert("Sorry! We cannot access the microphone. 🎙️\n\nTo easily fix this, follow these steps:\n\n1- Click the (three dots ⋮) at the top of your browser, then choose (Settings).\n2- Scroll down and click on (Site Settings).\n3- Find (Microphone) and click on it.\n4- Change the permission to (Allow).\n\nOr simply: click the icon next to the website URL at the top and change the permission directly.");
-        }
-      } else {
-        alert(isArabic ? "حدث خطأ أثناء محاولة تشغيل الميكروفون. تأكد من أن جهازك يدعم تسجيل الصوت." : "An error occurred while trying to access the microphone. Make sure your device supports audio recording.");
-      }
+      console.error("Microphone error:", err);
     }
   };
 

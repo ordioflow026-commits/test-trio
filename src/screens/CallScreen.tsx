@@ -22,7 +22,7 @@ export default function CallScreen() {
     const initCall = async () => {
       try {
           const appID = 21954096;
-          const serverSecret = "97cfa92cfa956ce642305577c5296acd9a5b92";
+          const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
 
           const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
           const safeTargetId = (targetId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
