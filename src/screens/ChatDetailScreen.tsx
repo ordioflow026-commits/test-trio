@@ -458,7 +458,7 @@ export default function ChatDetailScreen() {
               const targetUserId = (contactProfileId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
               zp.sendCallInvitation({
                   callees: [{ userID: targetUserId, userName: contact.name }],
-                  callType: ZegoUIKitPrebuilt.InvitationTypeVideoCall,
+                  type: ZegoUIKitPrebuilt.InvitationTypeVideoCall,
                   timeout: 60,
               }).then((res: any) => {
                   console.warn(res);
@@ -476,7 +476,7 @@ export default function ChatDetailScreen() {
               const targetUserId = (contactProfileId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
               zp.sendCallInvitation({
                   callees: [{ userID: targetUserId, userName: contact.name }],
-                  callType: ZegoUIKitPrebuilt.InvitationTypeVoiceCall,
+                  type: ZegoUIKitPrebuilt.InvitationTypeVoiceCall,
                   timeout: 60,
               }).then((res: any) => {
                   console.warn(res);

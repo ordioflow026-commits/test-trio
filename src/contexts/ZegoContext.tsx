@@ -37,7 +37,19 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
     zp.addPlugins({ ZIM });
 
     zp.setCallInvitationConfig({
-       // Let Zego handle default UI for incoming calls globally
+      ringtoneConfig: {
+        incomingCallUrl: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',
+        outgoingCallUrl: 'https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3',
+      },
+      onSetRoomConfigBeforeJoining: (callType: number) => {
+        const isVideo = callType === ZegoUIKitPrebuilt.InvitationTypeVideoCall;
+        return {
+          turnOnMicrophoneWhenJoining: true,
+          turnOnCameraWhenJoining: isVideo,
+          showMyCameraToggleButton: isVideo,
+          showAudioVideoSettingsButton: isVideo,
+        };
+      }
     });
 
     zpRef.current = zp;
