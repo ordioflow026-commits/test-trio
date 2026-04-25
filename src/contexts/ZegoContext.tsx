@@ -38,12 +38,15 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
 
     zp.setCallInvitationConfig({
       ringtoneConfig: {
-        incomingCallUrl: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',
-        outgoingCallUrl: 'https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3',
+        incomingCallUrl: 'https://actions.google.com/sounds/v1/alarms/phone_ringing.ogg',
+        outgoingCallUrl: 'https://actions.google.com/sounds/v1/alarms/dialing_telephone_ring.ogg',
       },
       onSetRoomConfigBeforeJoining: (callType: number) => {
         const isVideo = callType === 1; // 1 for Video Call
         return {
+          scenario: {
+            mode: ZegoUIKitPrebuilt.OneONoneCall,
+          },
           turnOnMicrophoneWhenJoining: true,
           turnOnCameraWhenJoining: isVideo,
           showMyCameraToggleButton: isVideo,
