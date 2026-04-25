@@ -5,7 +5,7 @@ import { UserProvider, useUser } from './contexts/UserContext';
 import { SelectionProvider } from './contexts/SelectionContext';
 import LoginScreen from './screens/LoginScreen';
 import MainScreen from './screens/MainScreen';
-import DummyCallScreen from './screens/DummyCallScreen';
+import CallScreen from './screens/CallScreen';
 import ChatDetailScreen from './screens/ChatDetailScreen';
 import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
@@ -101,7 +101,7 @@ export default function App() {
                 <Routes>
                 <Route path="/" element={<LoginScreen />} />
                 <Route path="/main" element={<MainScreen />} />
-                <Route path="/call" element={<DummyCallScreen />} />
+                <Route path="/call" element={<CallScreen />} />
                 <Route path="/chat" element={<ChatDetailScreen />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
