@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X, Square } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
+import { useZego } from '../contexts/ZegoContext';
+import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { supabase } from '../lib/supabase';
 
 const generateUUID = () => {
@@ -30,6 +32,7 @@ export default function ChatDetailScreen() {
   const location = useLocation();
   const { t, dir } = useLanguage();
   const { user } = useUser();
+  const { zp } = useZego();
   const [messageText, setMessageText] = useState('');
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -450,13 +453,37 @@ export default function ChatDetailScreen() {
 
         <div className="flex items-center gap-5 text-white pr-2">
           <button 
-            onClick={() => navigate('/call', { state: { title: contact.name, count: 1, type: 'video', targetId: contactProfileId }})}
+            onClick={() => {
+              if (!zp || !contactProfileId) return;
+              const targetUserId = (contactProfileId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+              zp.sendCallInvitation({
+                  callees: [{ userID: targetUserId, userName: contact.name }],
+                  callType: ZegoUIKitPrebuilt.InvitationTypeVideoCall,
+                  timeout: 60,
+              }).then((res: any) => {
+                  console.warn(res);
+              }).catch((err: any) => {
+                  console.warn(err);
+              });
+            }}
             className="hover:text-slate-200 transition-colors"
           >
             <Video strokeWidth={1.5} className="w-[22px] h-[22px]" />
           </button>
           <button 
-            onClick={() => navigate('/call', { state: { title: contact.name, count: 1, type: 'audio', targetId: contactProfileId }})}
+            onClick={() => {
+              if (!zp || !contactProfileId) return;
+              const targetUserId = (contactProfileId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+              zp.sendCallInvitation({
+                  callees: [{ userID: targetUserId, userName: contact.name }],
+                  callType: ZegoUIKitPrebuilt.InvitationTypeVoiceCall,
+                  timeout: 60,
+              }).then((res: any) => {
+                  console.warn(res);
+              }).catch((err: any) => {
+                  console.warn(err);
+              });
+            }}
             className="hover:text-slate-200 transition-colors"
           >
             <Phone strokeWidth={1.5} className="w-[22px] h-[22px]" />
