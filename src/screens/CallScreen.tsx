@@ -9,38 +9,36 @@ export default function CallScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
+  const zpRef = useRef<any>(null); // CRITICAL: Track instance to destroy ghosts
 
   const { title, type, targetId } = location.state || { title: 'Unknown', type: 'audio', targetId: 'unknown' };
 
   useEffect(() => {
     if (!containerRef.current || !user || targetId === 'unknown') return;
 
-    let zpInstance: any = null;
-
     const initCall = async () => {
       try {
           const appID = 21954096;
           const serverSecret = "97cfa92cfa956ce642305577c5296acd9a5b92";
 
-          // 1. CRITICAL FIX: Sanitize IDs to strictly alphanumeric & max 16 chars to prevent Zego Token Errors
           const safeUserId = user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
           const safeTargetId = targetId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
           
-          // Generate a clean room ID
           const roomID = `room_${[safeUserId, safeTargetId].sort().join('_')}`;
           const userName = user.email ? user.email.split('@')[0] : `User_${safeUserId}`;
 
           const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-            appID,
-            serverSecret,
-            roomID,
-            safeUserId,
-            userName
+            appID, serverSecret, roomID, safeUserId, userName
           );
 
-          zpInstance = ZegoUIKitPrebuilt.create(kitToken);
+          // CRITICAL FIX: Kill any existing instance before creating a new one
+          if (zpRef.current) {
+              zpRef.current.destroy();
+          }
+
+          zpRef.current = ZegoUIKitPrebuilt.create(kitToken);
           
-          zpInstance.joinRoom({
+          zpRef.current.joinRoom({
             container: containerRef.current,
             scenario: {
               mode: ZegoUIKitPrebuilt.OneONoneCall,
@@ -54,7 +52,6 @@ export default function CallScreen() {
           });
       } catch (error) {
           console.error("ZegoCloud Init Error:", error);
-          alert("حدث خطأ في تهيئة المكالمة. يرجى المحاولة مرة أخرى.");
           navigate(-1);
       }
     };
@@ -62,12 +59,13 @@ export default function CallScreen() {
     initCall();
 
     return () => {
-       // 2. CRITICAL FIX: Destroy instance on unmount to release Microphone/Camera locks!
-       if (zpInstance) {
+       // Force hardware unlock on unmount
+       if (zpRef.current) {
            try {
-               zpInstance.destroy();
+               zpRef.current.destroy();
+               zpRef.current = null;
            } catch (e) {
-               console.error("Error destroying Zego instance", e);
+               console.error("Cleanup error", e);
            }
        }
     };
@@ -76,7 +74,10 @@ export default function CallScreen() {
   return (
     <div className="w-full h-screen bg-[#0f172a] relative">
       <div className="absolute top-4 left-4 z-50">
-         <button onClick={() => navigate(-1)} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md transition-colors hover:bg-black/60">
+         <button onClick={() => {
+             if (zpRef.current) zpRef.current.destroy(); // Extra failsafe on back button
+             navigate(-1);
+         }} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md transition-colors hover:bg-black/60">
             <ArrowLeft className="w-6 h-6" />
          </button>
       </div>
