@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X, Square } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
@@ -41,6 +41,7 @@ export default function ChatDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [uploadingCount, setUploadingCount] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [inputKey, setInputKey] = useState(Date.now());
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -351,48 +352,55 @@ export default function ChatDetailScreen() {
         }
       };
 
-      mediaRecorder.onstop = async () => {
+      mediaRecorder.onstop = () => {
         if (cancelRecordingRef.current) {
            cancelRecordingRef.current = false;
            return; 
         }
-        
-        setUploadingCount(prev => prev + 1);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const fileName = `audio_${Date.now()}.webm`;
-        
-        try {
-          const { error: uploadError } = await supabase.storage
-            .from('chat-attachments')
-            .upload(`${user!.id}/${fileName}`, audioBlob);
-
-          if (uploadError) throw uploadError;
-
-          const { data: publicUrlData } = supabase.storage
-            .from('chat-attachments')
-            .getPublicUrl(`${user!.id}/${fileName}`);
-            
-          const { data: insertedMsg, error: insertError } = await supabase.from('messages').insert({
-            sender_id: user!.id,
-            receiver_id: contactProfileId,
-            content: `Audio: ${publicUrlData.publicUrl}`,
-            status: 'sent'
-          }).select().single();
-
-          if (!insertError && insertedMsg) {
-            setMessages(prev => prev.find(m => m.id === insertedMsg.id) ? prev : [...prev, insertedMsg]);
-          }
-        } catch (err) {
-          console.error("Audio upload failed", err);
-        } finally {
-          setUploadingCount(prev => Math.max(0, prev - 1));
-        }
+        setRecordedAudioBlob(audioBlob); // Save for user review
       };
 
       mediaRecorder.start();
       setIsRecording(true);
     } catch (err: any) {
       console.error("Microphone error:", err);
+    }
+  };
+
+  const sendRecordedAudio = async () => {
+    if (!recordedAudioBlob || !user || !contactProfileId) return;
+    
+    setUploadingCount(prev => prev + 1);
+    const fileName = `audio_${Date.now()}.webm`;
+    const blobToUpload = recordedAudioBlob;
+    setRecordedAudioBlob(null); // Clear UI immediately for snappy UX
+    
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('chat-attachments')
+        .upload(`${user.id}/${fileName}`, blobToUpload);
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('chat-attachments')
+        .getPublicUrl(`${user.id}/${fileName}`);
+        
+      const { data: insertedMsg, error: insertError } = await supabase.from('messages').insert({
+        sender_id: user.id,
+        receiver_id: contactProfileId,
+        content: `Audio: ${publicUrlData.publicUrl}`,
+        status: 'sent'
+      }).select().single();
+
+      if (!insertError && insertedMsg) {
+        setMessages(prev => prev.find(m => m.id === insertedMsg.id) ? prev : [...prev, insertedMsg]);
+      }
+    } catch (err) {
+      console.error("Audio upload failed", err);
+    } finally {
+      setUploadingCount(prev => Math.max(0, prev - 1));
     }
   };
 
@@ -405,6 +413,7 @@ export default function ChatDetailScreen() {
   };
 
   const cancelRecording = () => {
+    setRecordedAudioBlob(null); // Clear preview if exists
     if (mediaRecorderRef.current && isRecording) {
       cancelRecordingRef.current = true; // Mark as cancelled
       mediaRecorderRef.current.stop();
@@ -656,78 +665,87 @@ export default function ChatDetailScreen() {
       <input key={`file_${inputKey}`} type="file" accept="*/*" multiple ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
 
       {/* Footer / Input Bar */}
-      <footer className="px-2 pb-3 flex items-end gap-2 z-40 w-full mb-safe">
-        {/* Left Action Menu inside Pill */}
-        <div className="flex-1 bg-[#009fb7] rounded-full flex items-center shadow-sm pl-4 pr-1 min-h-[48px]">
-          <textarea 
-            value={isRecording ? "🔴 جاري تسجيل الصوت... (اضغط على الإرسال لإنهاء التسجيل)" : messageText}
-            disabled={isRecording}
-            onChange={(e) => setMessageText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
-              }
-            }}
-            placeholder={isRecording ? "" : "Message"}
-            className="flex-1 max-h-32 bg-transparent text-white placeholder-white/80 py-3 outline-none resize-none overflow-y-auto leading-tight"
-            rows={1}
-            dir={dir}
-            onFocus={() => setShowAttachmentMenu(false)}
-          />
-          {/* Icons inside the pill as per image */}
-          <div className="flex items-center gap-2 text-white shrink-0 ml-2">
-            <button 
-              className="p-2 hover:bg-white/20 rounded-full transition-colors"
-              onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-            >
-              <Paperclip strokeWidth={1.5} className="w-[22px] h-[22px]" />
+      <footer className="px-2 pb-3 mb-safe z-40 w-full relative">
+        {recordedAudioBlob ? (
+          /* STATE 1: REVIEWING AUDIO */
+          <div className="flex items-center gap-2 bg-[#009fb7] p-1 pl-2 rounded-[28px] shadow-sm animate-in fade-in zoom-in-95 duration-200">
+            <button onClick={cancelRecording} className="p-3 bg-red-400 text-white rounded-full hover:bg-red-500 transition-colors shadow-sm">
+              <Trash2 className="w-5 h-5" />
             </button>
-            <button 
-              onClick={() => cameraInputRef.current?.click()}
-              className="p-2 hover:bg-white/20 rounded-full transition-colors mr-1"
-            >
-              <Camera strokeWidth={1.5} className="w-[22px] h-[22px]" />
+            <div className="flex-1 flex items-center justify-center px-2">
+              <audio src={URL.createObjectURL(recordedAudioBlob)} controls className="h-10 w-full max-w-[200px]" />
+            </div>
+            <button onClick={sendRecordedAudio} className="w-[48px] h-[48px] bg-white rounded-full flex items-center justify-center text-[#009fb7] shadow-md hover:brightness-95 transition-colors shrink-0">
+              <Send className="w-5 h-5 ml-1" />
             </button>
           </div>
-        </div>
-
-        {/* Right Mic Button / Action Area */}
-        <div className="shrink-0 mb-[1px] flex items-center gap-2">
-          {isRecording && (
-            <button 
-              onClick={cancelRecording}
-              className="w-[48px] h-[48px] bg-slate-700 rounded-full flex items-center justify-center text-slate-300 shadow-md hover:bg-slate-600 transition-colors"
-            >
-              <X strokeWidth={2.5} className="w-5 h-5" />
+        ) : isRecording ? (
+          /* STATE 2: RECORDING IN PROGRESS */
+          <div className="flex items-center gap-2 bg-[#009fb7] p-1 pl-2 rounded-[28px] shadow-sm animate-in fade-in zoom-in-95 duration-200">
+            <button onClick={cancelRecording} className="p-3 bg-white/20 text-white rounded-full hover:bg-white/30 transition-colors">
+              <X className="w-5 h-5" />
             </button>
-          )}
-
-          {messageText.trim().length > 0 ? (
-            <button 
-              onClick={handleSendMessage}
-              className="w-[48px] h-[48px] bg-[#00E5FF] rounded-full flex items-center justify-center text-[#0f172a] shadow-md hover:brightness-110 transition-colors"
-            >
-              <Send strokeWidth={2} className="w-5 h-5 ml-1" />
+            <div className="flex-1 flex items-center justify-center gap-3 bg-white/10 rounded-full h-[48px]">
+              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+              <span className="text-white font-medium tracking-wide">جاري التسجيل...</span>
+            </div>
+            <button onClick={stopRecording} className="w-[48px] h-[48px] bg-red-500 text-white rounded-full flex items-center justify-center shadow-md hover:bg-red-600 transition-colors animate-pulse shrink-0">
+              <Square className="w-5 h-5 fill-current" />
             </button>
-          ) : (
-            isRecording ? (
-              <button 
-                onClick={stopRecording}
-                className="w-[48px] h-[48px] bg-red-500 animate-pulse rounded-full flex items-center justify-center text-white shadow-md hover:brightness-110 transition-colors"
-              >
-                <Send strokeWidth={2.5} className="w-5 h-5 ml-1" />
-              </button>
-            ) : (
-              <button 
-                onClick={startRecording}
-                className="w-[48px] h-[48px] bg-[#00E5FF] rounded-full flex items-center justify-center text-[#0f172a] shadow-md hover:brightness-110 transition-colors"
-              >
-                <Mic strokeWidth={2.5} className="w-5 h-5" />
-              </button>
-            )
-          )}
-        </div>
+          </div>
+        ) : (
+          /* STATE 3: IDLE (NORMAL TEXT INPUT) */
+          <div className="flex items-end gap-2">
+            <div className="flex-1 bg-[#009fb7] rounded-[28px] flex items-center shadow-sm pl-4 pr-1 min-h-[48px]">
+              <textarea 
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Message"
+                className="flex-1 max-h-32 bg-transparent text-white placeholder-white/80 py-3 outline-none resize-none overflow-y-auto leading-tight"
+                rows={1}
+                dir={dir}
+                onFocus={() => setShowAttachmentMenu(false)}
+              />
+              <div className="flex items-center gap-1 text-white shrink-0 ml-2">
+                <button 
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                  onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                >
+                  <Paperclip strokeWidth={1.5} className="w-[22px] h-[22px]" />
+                </button>
+                <button 
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                >
+                  <Camera strokeWidth={1.5} className="w-[22px] h-[22px]" />
+                </button>
+              </div>
+            </div>
+            <div className="shrink-0 mb-[1px]">
+              {messageText.trim().length > 0 ? (
+                <button 
+                  onClick={handleSendMessage}
+                  className="w-[48px] h-[48px] bg-[#00E5FF] rounded-full flex items-center justify-center text-[#0f172a] shadow-md hover:brightness-110 transition-colors"
+                >
+                  <Send strokeWidth={2} className="w-5 h-5 ml-1" />
+                </button>
+              ) : (
+                <button 
+                  onClick={startRecording}
+                  className="w-[48px] h-[48px] bg-[#00E5FF] rounded-full flex items-center justify-center text-[#0f172a] shadow-md hover:brightness-110 transition-colors"
+                >
+                  <Mic strokeWidth={2.5} className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </footer>
     </div>
   );
