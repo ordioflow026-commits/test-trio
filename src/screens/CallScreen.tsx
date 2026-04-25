@@ -9,20 +9,40 @@ export default function CallScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
-  const zpRef = useRef<any>(null); // CRITICAL: Track instance to destroy ghosts
+  const zpRef = useRef<any>(null);
+  
+  // 1. CRITICAL FIX: Navigation Lock to prevent jumping back 2 screens
+  const hasNavigated = useRef(false);
 
   const { title, type, targetId } = location.state || { title: 'Unknown', type: 'audio', targetId: 'unknown' };
 
+  // Centralized exit function to ensure hardware is released and we only navigate ONCE
+  const goBack = () => {
+      if (!hasNavigated.current) {
+          hasNavigated.current = true;
+          if (zpRef.current) {
+              try {
+                  zpRef.current.destroy();
+                  zpRef.current = null;
+              } catch (e) {
+                  console.error("Destruction error on exit", e);
+              }
+          }
+          navigate(-1);
+      }
+  };
+
   useEffect(() => {
-    if (!containerRef.current || !user || targetId === 'unknown') return;
+    if (!containerRef.current || !user) return;
 
     const initCall = async () => {
       try {
           const appID = 21954096;
           const serverSecret = "97cfa92cfa956ce642305577c5296acd9a5b92";
 
-          const safeUserId = user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-          const safeTargetId = targetId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+          // 2. CRITICAL FIX: Fallback to prevent Null exceptions on replace()
+          const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+          const safeTargetId = (targetId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
           
           const roomID = `room_${[safeUserId, safeTargetId].sort().join('_')}`;
           const userName = user.email ? user.email.split('@')[0] : `User_${safeUserId}`;
@@ -31,7 +51,6 @@ export default function CallScreen() {
             appID, serverSecret, roomID, safeUserId, userName
           );
 
-          // CRITICAL FIX: Kill any existing instance before creating a new one
           if (zpRef.current) {
               zpRef.current.destroy();
           }
@@ -47,20 +66,20 @@ export default function CallScreen() {
             turnOnCameraWhenJoining: type === 'video',
             showPreJoinView: false,
             onLeaveRoom: () => {
-              navigate(-1);
+              goBack(); // Uses the safe exit function
             },
           });
       } catch (error) {
           console.error("ZegoCloud Init Error:", error);
-          navigate(-1);
+          goBack();
       }
     };
 
     initCall();
 
     return () => {
-       // Force hardware unlock on unmount
-       if (zpRef.current) {
+       // Cleanup on unmount if user swipes back manually
+       if (zpRef.current && !hasNavigated.current) {
            try {
                zpRef.current.destroy();
                zpRef.current = null;
@@ -69,15 +88,12 @@ export default function CallScreen() {
            }
        }
     };
-  }, [user, targetId, type, navigate]);
+  }, [user, targetId, type]);
 
   return (
     <div className="w-full h-screen bg-[#0f172a] relative">
       <div className="absolute top-4 left-4 z-50">
-         <button onClick={() => {
-             if (zpRef.current) zpRef.current.destroy(); // Extra failsafe on back button
-             navigate(-1);
-         }} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md transition-colors hover:bg-black/60">
+         <button onClick={goBack} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md transition-colors hover:bg-black/60">
             <ArrowLeft className="w-6 h-6" />
          </button>
       </div>
