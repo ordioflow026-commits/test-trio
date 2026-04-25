@@ -9,41 +9,23 @@ export default function CallScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
-  const zpRef = useRef<any>(null);
-  
-  // 1. CRITICAL FIX: Navigation Lock to prevent jumping back 2 screens
   const hasNavigated = useRef(false);
 
   const { title, type, targetId } = location.state || { title: 'Unknown', type: 'audio', targetId: 'unknown' };
 
-  // Centralized exit function to ensure hardware is released and we only navigate ONCE
-  const goBack = () => {
-      if (!hasNavigated.current) {
-          hasNavigated.current = true;
-          if (zpRef.current) {
-              try {
-                  zpRef.current.destroy();
-                  zpRef.current = null;
-              } catch (e) {
-                  console.error("Destruction error on exit", e);
-              }
-          }
-          navigate(-1);
-      }
-  };
-
   useEffect(() => {
-    if (!containerRef.current || !user) return;
+    if (!containerRef.current || !user || targetId === 'unknown') return;
+
+    let isMounted = true; // Strict Mode & Async Protection
+    let zpInstance: any = null;
 
     const initCall = async () => {
       try {
           const appID = 21954096;
           const serverSecret = "97cfa92cfa956ce642305577c5296acd9a5b92";
 
-          // 2. CRITICAL FIX: Fallback to prevent Null exceptions on replace()
           const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
           const safeTargetId = (targetId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-          
           const roomID = `room_${[safeUserId, safeTargetId].sort().join('_')}`;
           const userName = user.email ? user.email.split('@')[0] : `User_${safeUserId}`;
 
@@ -51,14 +33,17 @@ export default function CallScreen() {
             appID, serverSecret, roomID, safeUserId, userName
           );
 
-          if (zpRef.current) {
-              zpRef.current.destroy();
+          if (!isMounted) return; // Prevent Ghost connection
+
+          zpInstance = ZegoUIKitPrebuilt.create(kitToken);
+          
+          if (!isMounted) {
+              zpInstance.destroy();
+              return;
           }
 
-          zpRef.current = ZegoUIKitPrebuilt.create(kitToken);
-          
-          zpRef.current.joinRoom({
-            container: containerRef.current,
+          zpInstance.joinRoom({
+            container: containerRef.current, // Now points to an EMPTY div
             scenario: {
               mode: ZegoUIKitPrebuilt.OneONoneCall,
             },
@@ -66,43 +51,59 @@ export default function CallScreen() {
             turnOnCameraWhenJoining: type === 'video',
             showPreJoinView: false,
             onLeaveRoom: () => {
-              goBack(); // Uses the safe exit function
+              if (!hasNavigated.current) {
+                  hasNavigated.current = true;
+                  if (zpInstance) zpInstance.destroy();
+                  navigate(-1);
+              }
             },
           });
       } catch (error) {
           console.error("ZegoCloud Init Error:", error);
-          goBack();
+          if (!hasNavigated.current && isMounted) {
+              hasNavigated.current = true;
+              navigate(-1);
+          }
       }
     };
 
     initCall();
 
     return () => {
-       // Cleanup on unmount if user swipes back manually
-       if (zpRef.current && !hasNavigated.current) {
+       isMounted = false; // Mark component as dead
+       if (zpInstance) {
            try {
-               zpRef.current.destroy();
-               zpRef.current = null;
+               zpInstance.destroy(); // CRITICAL: Release OS Microphone/Camera
            } catch (e) {
                console.error("Cleanup error", e);
            }
        }
     };
-  }, [user, targetId, type]);
+  }, [user, targetId, type, navigate]);
 
   return (
-    <div className="w-full h-screen bg-[#0f172a] relative">
+    <div className="w-full h-screen bg-[#0f172a] relative overflow-hidden">
       <div className="absolute top-4 left-4 z-50">
-         <button onClick={goBack} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md transition-colors hover:bg-black/60">
+         <button onClick={() => {
+             if (!hasNavigated.current) {
+                 hasNavigated.current = true;
+                 navigate(-1);
+             }
+         }} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md transition-colors hover:bg-black/60 shadow-lg">
             <ArrowLeft className="w-6 h-6" />
          </button>
       </div>
-      <div ref={containerRef} className="w-full h-full flex items-center justify-center">
+      
+      {/* Loading Layer (Behind ZegoCloud) */}
+      <div className="absolute inset-0 flex items-center justify-center z-0">
          <div className="animate-pulse flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-4 border-[#00E5FF] border-t-transparent rounded-full animate-spin"></div>
             <span className="text-slate-300 font-medium">جاري تهيئة الاتصال المشفّر...</span>
          </div>
       </div>
+
+      {/* ZegoCloud Container (On Top - MUST REMAIN EMPTY FOR ZEGO TO INJECT) */}
+      <div ref={containerRef} className="absolute inset-0 w-full h-full z-10" />
     </div>
   );
 }
