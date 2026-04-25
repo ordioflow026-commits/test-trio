@@ -44,6 +44,7 @@ export default function ChatDetailScreen() {
   const [inputKey, setInputKey] = useState(Date.now());
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const cancelRecordingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Extract contact from navigation state
@@ -342,6 +343,7 @@ export default function ChatDetailScreen() {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      cancelRecordingRef.current = false; // Reset cancellation flag
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -350,6 +352,12 @@ export default function ChatDetailScreen() {
       };
 
       mediaRecorder.onstop = async () => {
+        // CRITICAL: If cancelled, exit immediately without uploading
+        if (cancelRecordingRef.current) {
+           cancelRecordingRef.current = false;
+           return; 
+        }
+        
         setUploadingCount(prev => prev + 1);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
@@ -414,6 +422,15 @@ export default function ChatDetailScreen() {
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      cancelRecordingRef.current = true; // Mark as cancelled
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
@@ -698,8 +715,17 @@ export default function ChatDetailScreen() {
           </div>
         </div>
 
-        {/* Right Mic Button (vibrant cyan) */}
-        <div className="shrink-0 mb-[1px]">
+        {/* Right Mic Button / Action Area */}
+        <div className="shrink-0 mb-[1px] flex items-center gap-2">
+          {isRecording && (
+            <button 
+              onClick={cancelRecording}
+              className="w-[48px] h-[48px] bg-slate-700 rounded-full flex items-center justify-center text-slate-300 shadow-md hover:bg-slate-600 transition-colors"
+            >
+              <X strokeWidth={2.5} className="w-5 h-5" />
+            </button>
+          )}
+
           {messageText.trim().length > 0 ? (
             <button 
               onClick={handleSendMessage}
@@ -713,7 +739,7 @@ export default function ChatDetailScreen() {
                 onClick={stopRecording}
                 className="w-[48px] h-[48px] bg-red-500 animate-pulse rounded-full flex items-center justify-center text-white shadow-md hover:brightness-110 transition-colors"
               >
-                <Mic strokeWidth={2.5} className="w-5 h-5" />
+                <Send strokeWidth={2.5} className="w-5 h-5 ml-1" />
               </button>
             ) : (
               <button 
