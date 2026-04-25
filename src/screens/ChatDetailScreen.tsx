@@ -456,9 +456,10 @@ export default function ChatDetailScreen() {
             onClick={() => {
               if (!zp || !contactProfileId) return;
               const targetUserId = (contactProfileId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+              console.log("Calling video...", targetUserId);
               zp.sendCallInvitation({
-                  callees: [{ userID: targetUserId, userName: contact.name }],
-                  type: ZegoUIKitPrebuilt.InvitationTypeVideoCall,
+                  invitees: [{ userID: targetUserId, userName: contact.name }],
+                  callType: 1, // Video
                   timeout: 60,
               }).then((res: any) => {
                   console.warn(res);
@@ -474,9 +475,10 @@ export default function ChatDetailScreen() {
             onClick={() => {
               if (!zp || !contactProfileId) return;
               const targetUserId = (contactProfileId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+              console.log("Calling audio...", targetUserId);
               zp.sendCallInvitation({
-                  callees: [{ userID: targetUserId, userName: contact.name }],
-                  type: ZegoUIKitPrebuilt.InvitationTypeVoiceCall,
+                  invitees: [{ userID: targetUserId, userName: contact.name }],
+                  callType: 0, // Voice
                   timeout: 60,
               }).then((res: any) => {
                   console.warn(res);

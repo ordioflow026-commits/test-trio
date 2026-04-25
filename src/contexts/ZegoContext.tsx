@@ -42,7 +42,7 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
         outgoingCallUrl: 'https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3',
       },
       onSetRoomConfigBeforeJoining: (callType: number) => {
-        const isVideo = callType === ZegoUIKitPrebuilt.InvitationTypeVideoCall;
+        const isVideo = callType === 1; // 1 for Video Call
         return {
           turnOnMicrophoneWhenJoining: true,
           turnOnCameraWhenJoining: isVideo,
