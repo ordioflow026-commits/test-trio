@@ -4,8 +4,7 @@ import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIc
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { useZego } from '../contexts/ZegoContext';
-// @ts-ignore
-import { ZegoUIKitPrebuilt, ZegoSendCallInvitationButton } from '@zegocloud/zego-uikit-prebuilt';
+import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { supabase } from '../lib/supabase';
 
 const generateUUID = () => {
@@ -452,17 +451,36 @@ export default function ChatDetailScreen() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 pr-2">
-          <ZegoSendCallInvitationButton
-            invitees={[{ userID: (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16), userName: contact.name || 'User' }]}
-            isVideoCall={true}
-            resourceID={"zego_call"}
-          />
-          <ZegoSendCallInvitationButton
-            invitees={[{ userID: (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16), userName: contact.name || 'User' }]}
-            isVideoCall={false}
-            resourceID={"zego_call"}
-          />
+        <div className="flex items-center gap-5 text-white pr-2">
+          {/* VIDEO CALL BUTTON */}
+          <button 
+            onClick={() => {
+              if (!zp) return console.error("Zego instance not found");
+              zp.sendCallInvitation({
+                callees: [{ userID: (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16), userName: contact.name || 'User' }],
+                callType: 1, // 1 is for Video
+                timeout: 60
+              }).catch((err: any) => console.error("Call failed:", err));
+            }}
+            className="hover:text-slate-200 transition-colors"
+          >
+            <Video strokeWidth={1.5} className="w-[22px] h-[22px]" />
+          </button>
+
+          {/* AUDIO CALL BUTTON */}
+          <button 
+            onClick={() => {
+              if (!zp) return console.error("Zego instance not found");
+              zp.sendCallInvitation({
+                callees: [{ userID: (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16), userName: contact.name || 'User' }],
+                callType: 0, // 0 is for Audio
+                timeout: 60
+              }).catch((err: any) => console.error("Call failed:", err));
+            }}
+            className="hover:text-slate-200 transition-colors"
+          >
+            <Phone strokeWidth={1.5} className="w-[20px] h-[20px]" />
+          </button>
         </div>
       </header>
 
