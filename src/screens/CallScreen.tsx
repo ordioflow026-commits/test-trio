@@ -21,9 +21,7 @@ export default function CallScreen() {
               try {
                   zpRef.current.destroy();
                   zpRef.current = null;
-              } catch(e) {
-                  console.error("Cleanup error:", e);
-              }
+              } catch(e) {}
           }
           navigate(-1);
       }
@@ -37,7 +35,7 @@ export default function CallScreen() {
     const initCall = async () => {
       try {
           const appID = 21954096;
-          const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4"; // Verified correct Web Secret
+          const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4"; // Confirmed correct Web Secret
 
           const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
           const safeTargetId = (targetId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
@@ -48,23 +46,19 @@ export default function CallScreen() {
             appID, serverSecret, roomID, safeUserId, userName
           );
 
-          if (!isMounted) return; // Prevent Strict Mode Ghost Mounting
+          if (!isMounted) return;
 
           const zp = ZegoUIKitPrebuilt.create(kitToken);
           zpRef.current = zp;
           
-          const isVideo = type === 'video';
-
+          // CRITICAL: Removed custom show/hide UI flags. Let Zego use its safe defaults.
           zp.joinRoom({
             container: containerRef.current,
             scenario: {
               mode: ZegoUIKitPrebuilt.OneONoneCall,
             },
             turnOnMicrophoneWhenJoining: true,
-            turnOnCameraWhenJoining: isVideo, // False for Audio
-            showMyCameraToggleButton: isVideo, // CRITICAL: Completely hide camera button in audio calls
-            showAudioVideoSettingsButton: isVideo, // CRITICAL: Prevent camera access request in audio calls
-            showScreenSharingButton: false,
+            turnOnCameraWhenJoining: type === 'video',
             showPreJoinView: false,
             onLeaveRoom: () => {
               goBack();
@@ -82,7 +76,7 @@ export default function CallScreen() {
        isMounted = false;
        if (zpRef.current && !hasNavigated.current) {
            try {
-               zpRef.current.destroy(); // Hardware unlock
+               zpRef.current.destroy();
                zpRef.current = null;
            } catch (e) {}
        }
