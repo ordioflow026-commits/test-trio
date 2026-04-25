@@ -8,89 +8,69 @@ export default function CallScreen() {
   const { user } = useUser();
   const location = useLocation();
   const navigate = useNavigate();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const joined = useRef(false); // CRITICAL: Lock to prevent double join in React 18
   const zpRef = useRef<any>(null);
-  const hasNavigated = useRef(false);
 
   const { title, type, targetId } = location.state || { title: 'Unknown', type: 'audio', targetId: 'unknown' };
 
-  const goBack = () => {
-      if (!hasNavigated.current) {
-          hasNavigated.current = true;
-          if (zpRef.current) {
-              try {
-                  zpRef.current.destroy();
-                  zpRef.current = null;
-              } catch(e) {}
-          }
-          navigate(-1);
-      }
+  const myMeeting = async (element: HTMLDivElement | null) => {
+    if (!element || !user || targetId === 'unknown' || joined.current) return;
+    
+    joined.current = true; // Lock immediately so it only runs ONCE
+
+    try {
+        const appID = 21954096;
+        const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
+
+        const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+        const safeTargetId = (targetId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+        const roomID = `room_${[safeUserId, safeTargetId].sort().join('_')}`;
+        const userName = user.email ? user.email.split('@')[0] : `User_${safeUserId}`;
+
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+          appID, serverSecret, roomID, safeUserId, userName
+        );
+
+        const zp = ZegoUIKitPrebuilt.create(kitToken);
+        zpRef.current = zp;
+        
+        zp.joinRoom({
+          container: element,
+          scenario: {
+            mode: ZegoUIKitPrebuilt.OneONoneCall,
+          },
+          turnOnMicrophoneWhenJoining: true,
+          turnOnCameraWhenJoining: type === 'video',
+          showPreJoinView: false,
+          onLeaveRoom: () => {
+            navigate(-1);
+          },
+        });
+    } catch (err) {
+      console.error("Zego Error:", err);
+      navigate(-1);
+    }
   };
 
   useEffect(() => {
-    if (!containerRef.current || !user || targetId === 'unknown') return;
-
-    let isMounted = true;
-
-    const initCall = async () => {
-      try {
-          const appID = 21954096;
-          const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4"; // Confirmed correct Web Secret
-
-          const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-          const safeTargetId = (targetId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-          const roomID = `room_${[safeUserId, safeTargetId].sort().join('_')}`;
-          const userName = user.email ? user.email.split('@')[0] : `User_${safeUserId}`;
-
-          const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-            appID, serverSecret, roomID, safeUserId, userName
-          );
-
-          if (!isMounted) return;
-
-          const zp = ZegoUIKitPrebuilt.create(kitToken);
-          zpRef.current = zp;
-          
-          // CRITICAL: Removed custom show/hide UI flags. Let Zego use its safe defaults.
-          zp.joinRoom({
-            container: containerRef.current,
-            scenario: {
-              mode: ZegoUIKitPrebuilt.OneONoneCall,
-            },
-            turnOnMicrophoneWhenJoining: true,
-            turnOnCameraWhenJoining: type === 'video',
-            showPreJoinView: false,
-            onLeaveRoom: () => {
-              goBack();
-            },
-          });
-      } catch (err) {
-        console.error("Zego Init Error:", err);
-        goBack();
-      }
-    };
-
-    initCall();
-
-    return () => {
-       isMounted = false;
-       if (zpRef.current && !hasNavigated.current) {
-           try {
-               zpRef.current.destroy();
-               zpRef.current = null;
-           } catch (e) {}
-       }
-    };
-  }, [user, targetId, type]);
+      return () => {
+          if (zpRef.current) {
+              try { zpRef.current.destroy(); } catch(e) {}
+          }
+      };
+  }, []);
 
   return (
     <div className="w-full h-screen bg-[#0f172a] relative overflow-hidden">
       <div className="absolute top-4 left-4 z-50">
-         <button onClick={goBack} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md transition-colors hover:bg-black/60 shadow-lg">
+         <button onClick={() => {
+             if (zpRef.current) { try { zpRef.current.destroy(); } catch(e){} }
+             navigate(-1);
+         }} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md transition-colors hover:bg-black/60 shadow-lg">
             <ArrowLeft className="w-6 h-6" />
          </button>
       </div>
-      <div ref={containerRef} className="w-full h-full" />
+      <div ref={myMeeting} className="w-full h-full" />
     </div>
   );
 }

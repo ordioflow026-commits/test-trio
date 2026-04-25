@@ -660,7 +660,8 @@ export default function ChatDetailScreen() {
         {/* Left Action Menu inside Pill */}
         <div className="flex-1 bg-[#009fb7] rounded-full flex items-center shadow-sm pl-4 pr-1 min-h-[48px]">
           <textarea 
-            value={messageText}
+            value={isRecording ? "🔴 جاري تسجيل الصوت... (اضغط على الإرسال لإنهاء التسجيل)" : messageText}
+            disabled={isRecording}
             onChange={(e) => setMessageText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -668,7 +669,7 @@ export default function ChatDetailScreen() {
                 handleSendMessage();
               }
             }}
-            placeholder="Message"
+            placeholder={isRecording ? "" : "Message"}
             className="flex-1 max-h-32 bg-transparent text-white placeholder-white/80 py-3 outline-none resize-none overflow-y-auto leading-tight"
             rows={1}
             dir={dir}
