@@ -36,7 +36,8 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
     const zp = ZegoUIKitPrebuilt.create(kitToken);
     zp.addPlugins({ ZIM });
 
-    // Configure call invitations explicitly
+    // Configure call invitations explicitly as requested
+    console.log("Setting ZegoCallInvitationConfig with ringtones...");
     zp.setCallInvitationConfig({
       ringtoneConfig: {
         incomingCallUrl: 'https://actions.google.com/sounds/v1/alarms/phone_ringing.ogg',
