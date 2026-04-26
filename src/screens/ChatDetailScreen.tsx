@@ -455,13 +455,24 @@ export default function ChatDetailScreen() {
           {/* VIDEO CALL BUTTON */}
           <button 
             onClick={() => {
-              if (!zp) return console.error("Zego instance not found");
+              if (!zp) return alert("خطأ: نظام الاتصال (zp) غير مفعل في هذه الصفحة");
+              
               const targetZegoId = (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+              alert(`جاري الاتصال بـ: ${targetZegoId}`);
+
               zp.sendCallInvitation({
                 callees: [{ userID: targetZegoId, userName: contact.name || 'User' }],
                 callType: 1, // 1 is for Video
                 timeout: 60
-              }).catch((err: any) => console.error("Call failed:", err));
+              }).then((res: any) => {
+                if (res.errorInvitees && res.errorInvitees.length > 0) {
+                  alert("فشل الرنين: المستخدم الآخر غير متصل، أو الـ ID غير متطابق.\n" + JSON.stringify(res.errorInvitees));
+                } else {
+                  alert("تم إرسال إشارة الرنين بنجاح للسيرفر! ينتظر رد الطرف الآخر...");
+                }
+              }).catch((err: any) => {
+                alert("خطأ في السيرفر: " + JSON.stringify(err));
+              });
             }}
             className="hover:text-slate-200 transition-colors"
           >
@@ -471,13 +482,24 @@ export default function ChatDetailScreen() {
           {/* AUDIO CALL BUTTON */}
           <button 
             onClick={() => {
-              if (!zp) return console.error("Zego instance not found");
+              if (!zp) return alert("خطأ: نظام الاتصال (zp) غير مفعل في هذه الصفحة");
+              
               const targetZegoId = (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+              alert(`جاري الاتصال بـ: ${targetZegoId}`);
+
               zp.sendCallInvitation({
                 callees: [{ userID: targetZegoId, userName: contact.name || 'User' }],
                 callType: 0, // 0 is for Audio
                 timeout: 60
-              }).catch((err: any) => console.error("Call failed:", err));
+              }).then((res: any) => {
+                if (res.errorInvitees && res.errorInvitees.length > 0) {
+                  alert("فشل الرنين: المستخدم الآخر غير متصل، أو الـ ID غير متطابق.\n" + JSON.stringify(res.errorInvitees));
+                } else {
+                  alert("تم إرسال إشارة الرنين بنجاح للسيرفر! ينتظر رد الطرف الآخر...");
+                }
+              }).catch((err: any) => {
+                alert("خطأ في السيرفر: " + JSON.stringify(err));
+              });
             }}
             className="hover:text-slate-200 transition-colors"
           >
