@@ -45,6 +45,10 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
             incomingCallUrl: 'https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-incoming.mp3',
             outgoingCallUrl: 'https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-outgoing.mp3',
           },
+          // INJECT THIS DEBUGGER:
+          onIncomingCallReceived: (callID: string, caller: any, callType: number, callees: any[]) => {
+            alert("نجاح التقاط الإشارة! المتصل هو: " + caller.userName + "\nالمشكلة إذن في رسم واجهة المكالمة فقط.");
+          },
           onSetRoomConfigBeforeJoining: (callType: number) => {
             const isVideo = callType === 1; 
             return {
