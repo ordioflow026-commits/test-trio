@@ -34,7 +34,7 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
         const userName = user.fullName || (user.email ? user.email.split('@')[0] : `User_${safeUserId}`);
 
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-          appID, serverSecret, 'global_ring', safeUserId, userName
+          appID, serverSecret, '', safeUserId, userName
         );
 
         const zp = ZegoUIKitPrebuilt.create(kitToken);

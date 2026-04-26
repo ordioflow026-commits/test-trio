@@ -456,8 +456,9 @@ export default function ChatDetailScreen() {
           <button 
             onClick={() => {
               if (!zp) return console.error("Zego instance not found");
+              const targetZegoId = (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
               zp.sendCallInvitation({
-                callees: [{ userID: (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16), userName: contact.name || 'User' }],
+                callees: [{ userID: targetZegoId, userName: contact.name || 'User' }],
                 callType: 1, // 1 is for Video
                 timeout: 60
               }).catch((err: any) => console.error("Call failed:", err));
@@ -471,8 +472,9 @@ export default function ChatDetailScreen() {
           <button 
             onClick={() => {
               if (!zp) return console.error("Zego instance not found");
+              const targetZegoId = (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
               zp.sendCallInvitation({
-                callees: [{ userID: (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16), userName: contact.name || 'User' }],
+                callees: [{ userID: targetZegoId, userName: contact.name || 'User' }],
                 callType: 0, // 0 is for Audio
                 timeout: 60
               }).catch((err: any) => console.error("Call failed:", err));
