@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { ZIM } from 'zego-zim-web';
 import { useUser } from './UserContext';
@@ -13,56 +13,66 @@ export const useZego = () => useContext(ZegoContext);
 
 export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useUser();
-  const zpRef = useRef<any>(null);
+  const [zpInstance, setZpInstance] = useState<any>(null); // CRITICAL: Use State, not Ref!
 
   useEffect(() => {
     if (!user) {
-      if (zpRef.current) {
-        // Logout maybe or destroy?
+      if (zpInstance) {
+          zpInstance.destroy();
+          setZpInstance(null);
       }
       return;
     }
 
-    const appID = 21954096;
-    const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
+    let isMounted = true;
 
-    const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-    const userName = user.fullName || (user.email ? user.email.split('@')[0] : `User_${safeUserId}`);
+    const initZego = async () => {
+        const appID = 21954096;
+        const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
 
-    const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-      appID, serverSecret, 'global_ring', safeUserId, userName
-    );
+        const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+        const userName = user.fullName || (user.email ? user.email.split('@')[0] : `User_${safeUserId}`);
 
-    const zp = ZegoUIKitPrebuilt.create(kitToken);
-    zp.addPlugins({ ZIM });
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+          appID, serverSecret, 'global_ring', safeUserId, userName
+        );
 
-    // Configure call invitations explicitly as requested
-    console.log("Setting ZegoCallInvitationConfig with ringtones...");
-    zp.setCallInvitationConfig({
-      ringtoneConfig: {
-        incomingCallUrl: 'https://actions.google.com/sounds/v1/alarms/phone_ringing.ogg',
-        outgoingCallUrl: 'https://actions.google.com/sounds/v1/alarms/dialing_telephone_ring.ogg',
-      },
-      onSetRoomConfigBeforeJoining: (callType: number) => {
-        const isVideo = callType === 1; // 1 for Video Call
-        return {
-          scenario: {
-            mode: ZegoUIKitPrebuilt.OneONoneCall,
+        const zp = ZegoUIKitPrebuilt.create(kitToken);
+        zp.addPlugins({ ZIM });
+
+        zp.setCallInvitationConfig({
+          ringtoneConfig: {
+            incomingCallUrl: 'https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-incoming.mp3',
+            outgoingCallUrl: 'https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-outgoing.mp3',
           },
-          turnOnMicrophoneWhenJoining: true,
-          turnOnCameraWhenJoining: isVideo,
-          showMyCameraToggleButton: isVideo,
-          showAudioVideoSettingsButton: isVideo,
-        };
-      }
-    });
+          onSetRoomConfigBeforeJoining: (callType: number) => {
+            const isVideo = callType === 1; 
+            return {
+              scenario: {
+                mode: ZegoUIKitPrebuilt.OneONoneCall,
+              },
+              turnOnMicrophoneWhenJoining: true,
+              turnOnCameraWhenJoining: isVideo,
+              showMyCameraToggleButton: isVideo,
+              showAudioVideoSettingsButton: isVideo,
+            };
+          }
+        });
 
-    zpRef.current = zp;
+        if (isMounted) {
+            setZpInstance(zp); // Trigger re-render to provide 'zp' to app
+        }
+    };
 
+    initZego();
+
+    return () => {
+        isMounted = false;
+    };
   }, [user]);
 
   return (
-    <ZegoContext.Provider value={{ zp: zpRef.current }}>
+    <ZegoContext.Provider value={{ zp: zpInstance }}>
       {children}
     </ZegoContext.Provider>
   );
