@@ -16,7 +16,7 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
   const [zpInstance, setZpInstance] = useState<any>(null); // CRITICAL: Use State, not Ref!
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !user.id) {
       if (zpInstance) {
           zpInstance.destroy();
           setZpInstance(null);
@@ -30,7 +30,7 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
         const appID = 21954096;
         const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
 
-        const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+        const safeUserId = user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
         const userName = user.fullName || (user.email ? user.email.split('@')[0] : `User_${safeUserId}`);
 
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
