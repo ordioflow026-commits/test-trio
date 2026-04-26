@@ -539,7 +539,7 @@ export default function ChatDetailScreen() {
                     }`}>
                       {msg.content.startsWith('Audio: ') ? (
                         <div className="mt-1">
-                          <audio controls src={msg.content.replace('Audio: ', '')} className="w-[240px] h-10" />
+                          <audio controls src={msg.content.replace('Audio: ', '')} className="w-full max-w-xs h-10 mt-2" style={{ width: '250px' }} />
                         </div>
                       ) : msg.content.startsWith('File: ') ? (
                         <div className="flex flex-col gap-1 mt-1">
@@ -697,7 +697,7 @@ export default function ChatDetailScreen() {
               <Trash2 className="w-5 h-5" />
             </button>
             <div className="flex-1 flex items-center justify-center px-2">
-              <audio src={URL.createObjectURL(recordedAudioBlob)} controls className="h-10 w-full max-w-[200px]" />
+              <audio src={URL.createObjectURL(recordedAudioBlob)} controls className="h-10 w-full max-w-[200px]" style={{ width: '200px' }} />
             </div>
             <button onClick={sendRecordedAudio} className="w-[48px] h-[48px] bg-white rounded-full flex items-center justify-center text-[#009fb7] shadow-md hover:brightness-95 transition-colors shrink-0">
               <Send className="w-5 h-5 ml-1" />

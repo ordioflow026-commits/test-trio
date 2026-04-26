@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { ZIM } from 'zego-zim-web';
 import { useUser } from './UserContext';
-import { Video, Phone, Check, X } from 'lucide-react';
+import { Video, Phone, Check, X, PhoneOff } from 'lucide-react';
 
 interface ZegoContextType {
   zp: any;
@@ -97,32 +97,27 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
     <ZegoContext.Provider value={{ zp: zpInstance }}>
       {children}
       {incomingCall && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" dir="rtl">
-          <div className="bg-slate-800 rounded-2xl shadow-2xl overflow-hidden w-full max-w-sm border border-slate-700/50 flex flex-col pt-8 pb-6 px-6 relative items-center text-center animate-in zoom-in-95 duration-300">
-            {incomingCall.callType === 1 ? (
-              <div className="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mb-4">
-                <Video className="w-8 h-8" />
-              </div>
-            ) : (
-              <div className="w-16 h-16 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mb-4">
-                <Phone className="w-8 h-8" />
-              </div>
-            )}
+        <div className="fixed top-0 left-0 right-0 z-[9999] p-4 flex justify-center animate-in slide-in-from-top-10 fade-in duration-300" dir="rtl">
+          <div className="bg-slate-900 rounded-2xl shadow-2xl overflow-hidden w-full max-w-sm border border-slate-700/80 flex flex-col pt-6 pb-6 px-6 relative items-center text-center">
+            {/* Avatar */}
+            <div className="w-20 h-20 bg-slate-700 text-slate-300 rounded-full flex items-center justify-center mb-3 overflow-hidden text-3xl font-bold">
+               {incomingCall.caller.userName?.substring(0, 2).toUpperCase() || 'م'}
+            </div>
             
-            <h3 className="text-xl font-bold text-white mb-2">
+            <h3 className="text-xl font-bold text-white mb-1">
               {incomingCall.caller.userName || 'مستخدم غير معروف'}
             </h3>
-            <p className="text-slate-300 mb-8 font-medium">
+            <p className="text-slate-400 mb-8 font-medium">
               يدعوك إلى {incomingCall.callType === 1 ? 'مكالمة فيديو 📹' : 'مكالمة صوتية 📞'}
             </p>
             
-            <div className="flex gap-6 justify-center w-full">
+            <div className="flex gap-10 justify-center w-full">
               <button 
                 onClick={handleReject}
                 className="flex flex-col items-center gap-2 group"
               >
-                <div className="w-14 h-14 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-red-500/30 group-hover:bg-red-600 group-hover:scale-105 transition-all">
-                  <X className="w-6 h-6" strokeWidth={2.5}/>
+                <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-red-500/30 group-hover:bg-red-600 group-hover:scale-105 transition-all">
+                  <PhoneOff className="w-7 h-7" strokeWidth={2.5}/>
                 </div>
                 <span className="text-red-400 font-medium text-sm">رفض</span>
               </button>
@@ -131,8 +126,8 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
                 onClick={handleAccept}
                 className="flex flex-col items-center gap-2 group"
               >
-                <div className="w-14 h-14 bg-green-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-green-500/30 group-hover:bg-green-600 group-hover:scale-105 transition-all">
-                  <Check className="w-6 h-6" strokeWidth={2.5}/>
+                <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-green-500/30 group-hover:bg-green-600 group-hover:scale-105 transition-all">
+                  {incomingCall.callType === 1 ? <Video className="w-7 h-7" strokeWidth={2.5}/> : <Phone className="w-7 h-7" strokeWidth={2.5}/>}
                 </div>
                 <span className="text-green-400 font-medium text-sm">قبول</span>
               </button>
