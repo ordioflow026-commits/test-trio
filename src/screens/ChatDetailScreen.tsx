@@ -539,7 +539,7 @@ export default function ChatDetailScreen() {
                     }`}>
                       {msg.content.startsWith('Audio: ') ? (
                         <div className="mt-1">
-                          <audio controls src={msg.content.replace('Audio: ', '')} className="max-w-[220px] h-10" />
+                          <audio controls src={msg.content.replace('Audio: ', '')} className="w-[240px] h-10" />
                         </div>
                       ) : msg.content.startsWith('File: ') ? (
                         <div className="flex flex-col gap-1 mt-1">
