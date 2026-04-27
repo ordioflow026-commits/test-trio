@@ -376,14 +376,24 @@ export default function ChatDetailScreen() {
     if (!recordedAudioBlob || !user || !contactProfileId) return;
     
     setUploadingCount(prev => prev + 1);
-    const fileName = `audio_${Date.now()}.webm`;
-    const blobToUpload = recordedAudioBlob;
-    setRecordedAudioBlob(null); // Clear UI immediately for snappy UX
     
     try {
+      // 1. DEEP COPY TO RAM: Extract buffer BEFORE clearing UI to prevent Android GC destruction
+      const buffer = await recordedAudioBlob.arrayBuffer();
+      const mimeType = recordedAudioBlob.type || 'audio/webm';
+      const ext = mimeType.includes('mp4') ? 'm4a' : 'webm'; // Fix for iOS Safari compatibility
+      const fileName = `audio_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+      
+      // Create a stable File object in memory
+      const fileToUpload = new File([buffer], fileName, { type: mimeType });
+      
+      // 2. NOW it is safe to clear the UI
+      setRecordedAudioBlob(null); 
+      
+      // 3. Upload the stable file
       const { error: uploadError } = await supabase.storage
         .from('chat-attachments')
-        .upload(`${user.id}/${fileName}`, blobToUpload);
+        .upload(`${user.id}/${fileName}`, fileToUpload);
 
       if (uploadError) throw uploadError;
 
@@ -403,7 +413,7 @@ export default function ChatDetailScreen() {
       }
     } catch (err) {
       console.error("Audio upload failed", err);
-      alert("فشل الرفع! السيرفر يرفض الملف. تأكد من إعدادات Supabase Storage Policies.");
+      alert("فشل الرفع! يرجى المحاولة مرة أخرى.");
     } finally {
       setUploadingCount(prev => Math.max(0, prev - 1));
     }
