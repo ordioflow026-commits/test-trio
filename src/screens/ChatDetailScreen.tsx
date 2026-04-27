@@ -540,13 +540,29 @@ export default function ChatDetailScreen() {
                         : 'bg-slate-800/80 text-slate-100 rounded-bl-sm border border-slate-700/50'
                     }`}>
                       {msg.content.startsWith('Audio: ') ? (
-                        <div className="mt-1 pb-1" dir="ltr">
+                        <div className="mt-1 pb-1 flex flex-col gap-1" dir="ltr">
                           <audio 
                             controls 
                             preload="metadata"
                             src={msg.content.replace('Audio: ', '')} 
-                            className="w-[240px] h-[50px] outline-none" 
+                            className="w-[240px] h-[50px] outline-none rounded-full bg-slate-100/10"
+                            style={{ display: 'block', minWidth: '240px' }}
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              target.style.opacity = '0.3';
+                              if (!target.parentElement?.querySelector('.audio-err')) {
+                                target.parentElement?.insertAdjacentHTML('beforeend', '<div class="audio-err text-xs text-red-400 mt-1 text-center bg-slate-800 p-1 rounded">⚠️ خطأ: السيرفر يرفض تحميل الملف</div>');
+                              }
+                            }}
                           />
+                          <a 
+                            href={msg.content.replace('Audio: ', '')} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-[11px] text-blue-300 underline px-2 break-all text-center mt-1"
+                          >
+                            🔗 اضغط لاختبار رابط الصوت المباشر
+                          </a>
                         </div>
                       ) : msg.content.startsWith('File: ') ? (
                         <div className="flex flex-col gap-1 mt-1">
