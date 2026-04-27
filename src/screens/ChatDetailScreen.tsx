@@ -255,6 +255,7 @@ export default function ChatDetailScreen() {
         setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'sent', content: `File: ${publicUrlData.publicUrl}` } : m));
       } catch (err) {
         console.error("Upload failed", err);
+        alert("فشل الرفع! السيرفر يرفض الملف. تأكد من إعدادات Supabase Storage Policies.");
         setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'error' } : m));
       } finally {
         setUploadingCount(prev => Math.max(0, prev - 1));
@@ -402,6 +403,7 @@ export default function ChatDetailScreen() {
       }
     } catch (err) {
       console.error("Audio upload failed", err);
+      alert("فشل الرفع! السيرفر يرفض الملف. تأكد من إعدادات Supabase Storage Policies.");
     } finally {
       setUploadingCount(prev => Math.max(0, prev - 1));
     }
@@ -539,7 +541,7 @@ export default function ChatDetailScreen() {
                     }`}>
                       {msg.content.startsWith('Audio: ') ? (
                         <div className="mt-1">
-                          <audio controls src={msg.content.replace('Audio: ', '')} className="w-48 h-10"></audio>
+                          <audio controls src={msg.content.replace('Audio: ', '')} className="w-[240px] h-[44px]" style={{ minWidth: '240px' }}></audio>
                         </div>
                       ) : msg.content.startsWith('File: ') ? (
                         <div className="flex flex-col gap-1 mt-1">
@@ -697,7 +699,7 @@ export default function ChatDetailScreen() {
               <Trash2 className="w-5 h-5" />
             </button>
             <div className="flex-1 flex items-center justify-center px-2">
-              <audio src={URL.createObjectURL(recordedAudioBlob)} controls className="w-48 h-10"></audio>
+              <audio src={URL.createObjectURL(recordedAudioBlob)} controls className="w-[240px] h-[44px]" style={{ minWidth: '240px' }}></audio>
             </div>
             <button onClick={sendRecordedAudio} className="w-[48px] h-[48px] bg-white rounded-full flex items-center justify-center text-[#009fb7] shadow-md hover:brightness-95 transition-colors shrink-0">
               <Send className="w-5 h-5 ml-1" />
