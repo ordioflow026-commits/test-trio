@@ -540,13 +540,12 @@ export default function ChatDetailScreen() {
                         : 'bg-slate-800/80 text-slate-100 rounded-bl-sm border border-slate-700/50'
                     }`}>
                       {msg.content.startsWith('Audio: ') ? (
-                        <div className="mt-1 pb-1 w-full" style={{ minWidth: '220px' }}>
+                        <div className="mt-1 pb-1" dir="ltr">
                           <audio 
                             controls 
                             preload="metadata"
                             src={msg.content.replace('Audio: ', '')} 
-                            className="w-full flex-shrink-0" 
-                            style={{ height: '54px', minHeight: '54px', maxHeight: '54px' }}
+                            className="w-[240px] h-[50px] outline-none" 
                           />
                         </div>
                       ) : msg.content.startsWith('File: ') ? (
@@ -704,13 +703,12 @@ export default function ChatDetailScreen() {
             <button onClick={cancelRecording} className="p-3 bg-red-400 text-white rounded-full hover:bg-red-500 transition-colors shadow-sm">
               <Trash2 className="w-5 h-5" />
             </button>
-            <div className="flex-1 flex items-center justify-center px-1" style={{ minWidth: '220px' }}>
+            <div className="flex-1 flex items-center justify-center px-1" dir="ltr">
               <audio 
                 src={URL.createObjectURL(recordedAudioBlob)} 
                 controls 
                 preload="metadata"
-                className="w-full flex-shrink-0" 
-                style={{ height: '54px', minHeight: '54px', maxHeight: '54px' }}
+                className="w-[230px] h-[50px] outline-none" 
               />
             </div>
             <button onClick={sendRecordedAudio} className="w-[48px] h-[48px] bg-white rounded-full flex items-center justify-center text-[#009fb7] shadow-md hover:brightness-95 transition-colors shrink-0">
