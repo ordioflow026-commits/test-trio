@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X, Square } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, Copy, Trash2, X, Square } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { useZego } from '../contexts/ZegoContext';
@@ -37,6 +37,7 @@ export default function ChatDetailScreen() {
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   const [contactProfileId, setContactProfileId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [uploadingCount, setUploadingCount] = useState(0);
@@ -44,6 +45,7 @@ export default function ChatDetailScreen() {
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [inputKey, setInputKey] = useState(Date.now());
   
+  const longPressTimer = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const cancelRecordingRef = useRef(false);
@@ -115,6 +117,33 @@ export default function ChatDetailScreen() {
     return () => { isMounted = false; if (channel) supabase.removeChannel(channel); };
   }, [contact.phone, user]);
 
+  useEffect(() => {
+    const markMessagesAsRead = async () => {
+      if (!user || !contactProfileId || messages.length === 0) return;
+      if (document.visibilityState !== 'visible') return; 
+      
+      const unreadMessages = messages.filter(m => m.receiver_id === user.id && m.status !== 'read');
+      
+      if (unreadMessages.length > 0) {
+        await supabase
+          .from('messages')
+          .update({ status: 'read' })
+          .eq('receiver_id', user.id)
+          .eq('sender_id', contactProfileId)
+          .neq('status', 'read');
+      }
+    };
+
+    markMessagesAsRead();
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') markMessagesAsRead();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [messages, user, contactProfileId]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
@@ -147,6 +176,20 @@ export default function ChatDetailScreen() {
     setSelectedMessage(null);
     setMessages(prev => prev.filter(m => m.id !== msgId));
     await supabase.from('messages').update({ deleted_for: user.id }).eq('id', msgId);
+  };
+
+  const handleDeleteForEveryone = async () => {
+    if (!selectedMessage) return;
+    const msgId = selectedMessage.id;
+    setSelectedMessage(null);
+    
+    setTimeout(async () => {
+      const confirmDelete = window.confirm("هل أنت متأكد أنك تريد حذف هذه الرسالة لدى الجميع؟");
+      if (!confirmDelete) return;
+
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+      await supabase.from('messages').delete().eq('id', msgId);
+    }, 50);
   };
 
   const startRecording = async () => {
@@ -246,26 +289,63 @@ export default function ChatDetailScreen() {
                           <audio controls preload="metadata" src={msg.content.replace('Audio: ', '')} style={{ display: 'block', width: '100%', minWidth: '200px', height: '54px', minHeight: '54px', flexShrink: 0 }} className="outline-none rounded-full bg-slate-100/10" />
                         </div>
                       ) : msg.content.startsWith('File: ') ? (
-                        <img src={msg.content.replace('File: ', '')} className="max-w-[200px] rounded-lg" alt="attachment" />
+                        <div className="flex flex-col gap-1 mt-1">
+                          {msg.content.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || msg.content.includes('#.jpg') ? (
+                            <img src={msg.content.replace('File: ', '')} className="max-w-[200px] rounded-lg cursor-pointer" alt="attachment" onClick={() => setFullScreenImage(msg.content.replace('File: ', ''))} />
+                          ) : (
+                            <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="text-white underline text-sm break-all">
+                              تحميل المرفق
+                            </a>
+                          )}
+                        </div>
                       ) : <p className="text-[15px]">{msg.content}</p>}
-                      <div className="flex justify-end gap-1 mt-1">
-                        <span className="text-[10px] opacity-60">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        {msg.status === 'read' && <Check className="w-3 h-3 text-[#00E5FF]" />}
+                      <div className="flex items-center justify-end gap-1 mt-1">
+                        <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        {/* استخدام علامة صح واحدة فقط بناءً على التصميم الأصلي */}
+                        {msg.status === 'read' && <Check strokeWidth={3} className="w-[14px] h-[14px] text-[#00E5FF]" />}
                       </div>
                     </div>
                   </div>
                 );
               })}
+              {uploadingCount > 0 && (
+                <div className="flex justify-end mb-2">
+                  <div className="max-w-[75%] px-4 py-3 rounded-2xl bg-[#00b4d8] text-white rounded-br-sm shadow-sm flex items-center gap-3">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-sm">جاري الإرسال...</span>
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </>
          )}
       </main>
+
+      {/* عارض الصور بملء الشاشة */}
+      {fullScreenImage && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col animate-in fade-in duration-200">
+          <div className="flex justify-between items-center p-4 bg-black/50 absolute top-0 left-0 right-0 z-10">
+            <button onClick={() => setFullScreenImage(null)} className="text-white p-2 hover:bg-white/20 rounded-full transition-colors">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center overflow-hidden p-2">
+            <img src={fullScreenImage} alt="Fullscreen" className="max-w-full max-h-full object-contain" />
+          </div>
+        </div>
+      )}
 
       {selectedMessage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedMessage(null)}>
           <div className="bg-slate-800 rounded-2xl w-full max-w-xs overflow-hidden border border-slate-700" onClick={e => e.stopPropagation()}>
             <button onClick={() => { navigator.clipboard.writeText(selectedMessage.content); setSelectedMessage(null); }} className="w-full p-4 text-left text-white flex items-center gap-3 border-b border-slate-700 hover:bg-slate-700"><Copy className="w-5 h-5 text-blue-400" /> نسخ</button>
             <button onClick={handleDeleteForMe} className="w-full p-4 text-left text-red-400 flex items-center gap-3 hover:bg-slate-700"><Trash2 className="w-5 h-5" /> حذف لدي</button>
+            
+            {selectedMessage.sender_id === user?.id && (
+              <button onClick={handleDeleteForEveryone} className="w-full p-4 text-left text-red-500 flex items-center gap-3 border-t border-slate-700 hover:bg-slate-700">
+                <Trash2 className="w-5 h-5" /> حذف لدى الجميع
+              </button>
+            )}
           </div>
         </div>
       )}
