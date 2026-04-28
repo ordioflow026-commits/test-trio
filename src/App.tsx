@@ -3,10 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 import { LanguageProvider } from './contexts/LanguageContext';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { SelectionProvider } from './contexts/SelectionContext';
-import { ZegoProvider } from './contexts/ZegoContext';
 import LoginScreen from './screens/LoginScreen';
 import MainScreen from './screens/MainScreen';
-import CallScreen from './screens/CallScreen';
+import DummyCallScreen from './screens/DummyCallScreen';
 import ChatDetailScreen from './screens/ChatDetailScreen';
 import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
@@ -99,17 +98,15 @@ export default function App() {
           <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl overflow-hidden relative">
             <SelectionProvider>
               <SessionChecker>
-                <ZegoProvider>
-                  <Routes>
-                    <Route path="/" element={<LoginScreen />} />
-                    <Route path="/main" element={<MainScreen />} />
-                    <Route path="/call" element={<CallScreen />} />
-                    <Route path="/chat" element={<ChatDetailScreen />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </ZegoProvider>
-              </SessionChecker>
-            </SelectionProvider>
+                <Routes>
+                <Route path="/" element={<LoginScreen />} />
+                <Route path="/main" element={<MainScreen />} />
+                <Route path="/call" element={<DummyCallScreen />} />
+                <Route path="/chat" element={<ChatDetailScreen />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </SessionChecker>
+          </SelectionProvider>
         </div>
       </BrowserRouter>
     </UserProvider>
