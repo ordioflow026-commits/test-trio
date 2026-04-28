@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X, Square } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X, Square, ArrowDown } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { useZego } from '../contexts/ZegoContext';
@@ -47,11 +47,13 @@ export default function ChatDetailScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [inputKey, setInputKey] = useState(Date.now());
+  const [showScrollButton, setShowScrollButton] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const cancelRecordingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
   
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -70,7 +72,7 @@ export default function ChatDetailScreen() {
 
     const initChat = async () => {
       try {
-        const cleanPhone = contact.phone.replace(/\\D/g, '').slice(-9);
+        const cleanPhone = contact.phone.replace(/\D/g, '').slice(-9);
         const { data: profileData } = await supabase
           .from('profiles')
           .select('id')
@@ -142,6 +144,27 @@ export default function ChatDetailScreen() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [messages, user, contactProfileId]);
 
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    setShowScrollButton(scrollHeight - scrollTop - clientHeight > 150);
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const formatDateSeparator = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) return 'اليوم';
+    if (date.toDateString() === yesterday.toDateString()) return 'أمس';
+
+    return date.toLocaleDateString(dir === 'rtl' ? 'ar-EG' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
@@ -176,7 +199,7 @@ export default function ChatDetailScreen() {
         if (m.content.startsWith('File: ')) return '[ملف مرفق]';
         return m.content;
       })
-      .join('\\n\\n');
+      .join('\n\n');
     try {
       await navigator.clipboard.writeText(textsToCopy);
       setSelectedMessageIds([]); 
@@ -265,6 +288,8 @@ export default function ChatDetailScreen() {
     finally { setUploadingCount(prev => Math.max(0, prev - 1)); }
   };
 
+  let lastDateString = '';
+
   return (
     <div className="flex flex-col h-screen bg-[#0f172a] font-sans relative overflow-hidden" dir={dir}>
       <div className="absolute inset-0 bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3] opacity-80 pointer-events-none" />
@@ -301,7 +326,11 @@ export default function ChatDetailScreen() {
         </header>
       )}
 
-      <main className="flex-1 overflow-y-auto w-full relative z-10 px-4 flex flex-col gap-2 py-4">
+      <main 
+        ref={mainScrollRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto w-full relative z-10 px-4 flex flex-col gap-2 py-4 scroll-smooth"
+      >
          {isLoading ? (
             <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
          ) : !contactProfileId ? (
@@ -316,63 +345,75 @@ export default function ChatDetailScreen() {
                 const isMe = msg.sender_id === user?.id;
                 const isSelected = selectedMessageIds.includes(msg.id);
                 
+                const msgDateString = new Date(msg.created_at).toDateString();
+                const showDateSeparator = msgDateString !== lastDateString;
+                lastDateString = msgDateString;
+                
                 return (
-                  <div 
-                    key={msg.id} 
-                    className={`flex items-center w-full py-1.5 px-2 rounded-xl transition-colors ${isSelected ? 'bg-blue-500/20' : ''}`}
-                    onClick={() => {
-                      if (selectedMessageIds.length > 0) {
-                        setSelectedMessageIds(prev => prev.includes(msg.id) ? prev.filter(id => id !== msg.id) : [...prev, msg.id]);
-                      }
-                    }}
-                  >
-                    {selectedMessageIds.length > 0 && (
-                      <div className="mx-2 shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors"
-                           style={{ borderColor: isSelected ? '#3b82f6' : 'rgba(255,255,255,0.4)', backgroundColor: isSelected ? '#3b82f6' : 'transparent' }}>
-                        {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                  <React.Fragment key={msg.id}>
+                    {showDateSeparator && (
+                      <div className="flex justify-center my-4 animate-in fade-in duration-500">
+                        <span className="px-4 py-1 bg-slate-800/60 text-slate-200 text-[11px] font-medium rounded-full shadow-sm backdrop-blur-md border border-slate-700/50">
+                          {formatDateSeparator(msg.created_at)}
+                        </span>
                       </div>
                     )}
+                    <div 
+                      className={`flex items-center w-full py-1.5 px-2 rounded-xl transition-colors animate-in fade-in duration-300 ${isSelected ? 'bg-blue-500/20' : ''}`}
+                      onClick={() => {
+                        if (selectedMessageIds.length > 0) {
+                          setSelectedMessageIds(prev => prev.includes(msg.id) ? prev.filter(id => id !== msg.id) : [...prev, msg.id]);
+                        }
+                      }}
+                    >
+                      {selectedMessageIds.length > 0 && (
+                        <div className="mx-2 shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors"
+                             style={{ borderColor: isSelected ? '#3b82f6' : 'rgba(255,255,255,0.4)', backgroundColor: isSelected ? '#3b82f6' : 'transparent' }}>
+                          {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                        </div>
+                      )}
 
-                    <div className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      <div 
-                        onContextMenu={(e) => { 
-                          e.preventDefault(); 
-                          if (!selectedMessageIds.includes(msg.id)) {
-                            setSelectedMessageIds(prev => [...prev, msg.id]);
-                          }
-                        }}
-                        className={`max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm text-white select-none relative ${isMe ? 'bg-[#00b4d8] rounded-br-none' : 'bg-slate-800/80 rounded-bl-none border border-slate-700/50'}`}
-                      >
-                        {selectedMessageIds.length > 0 && <div className="absolute inset-0 z-10 cursor-pointer rounded-2xl" />}
+                      <div className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <div 
+                          onContextMenu={(e) => { 
+                            e.preventDefault(); 
+                            if (!selectedMessageIds.includes(msg.id)) {
+                              setSelectedMessageIds(prev => [...prev, msg.id]);
+                            }
+                          }}
+                          className={`max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm text-white select-none relative ${isMe ? 'bg-[#00b4d8] rounded-br-none' : 'bg-slate-800/80 rounded-bl-none border border-slate-700/50'}`}
+                        >
+                          {selectedMessageIds.length > 0 && <div className="absolute inset-0 z-10 cursor-pointer rounded-2xl" />}
 
-                        {msg.content.startsWith('Audio: ') ? (
-                          <div dir="ltr" style={{ minWidth: '200px', width: '100%', maxWidth: '240px' }}>
-                            <audio controls preload="metadata" src={msg.content.replace('Audio: ', '')} style={{ display: 'block', width: '100%', minWidth: '200px', height: '54px', minHeight: '54px', flexShrink: 0 }} className="outline-none rounded-full bg-slate-100/10" />
+                          {msg.content.startsWith('Audio: ') ? (
+                            <div dir="ltr" style={{ minWidth: '200px', width: '100%', maxWidth: '240px' }}>
+                              <audio controls preload="metadata" src={msg.content.replace('Audio: ', '')} style={{ display: 'block', width: '100%', minWidth: '200px', height: '54px', minHeight: '54px', flexShrink: 0 }} className="outline-none rounded-full bg-slate-100/10" />
+                            </div>
+                          ) : msg.content.startsWith('File: ') ? (
+                            <div className="flex flex-col gap-1 mt-1">
+                              {msg.content.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || msg.content.includes('#.jpg') ? (
+                                <img src={msg.content.replace('File: ', '')} className="max-w-[200px] rounded-lg cursor-pointer" alt="attachment" onClick={() => setFullScreenImage(msg.content.replace('File: ', ''))} />
+                              ) : (
+                                <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/20 rounded-xl hover:bg-black/30 transition-colors mt-1 relative z-20">
+                                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                                    <FileText className="w-5 h-5 text-white" />
+                                  </div>
+                                  <span className="text-sm font-medium text-white underline-offset-4 underline truncate max-w-[150px]">
+                                    عرض الملف المرفق
+                                  </span>
+                                </a>
+                              )}
+                            </div>
+                          ) : <p className="text-[15px]">{msg.content}</p>}
+                          
+                          <div className="flex items-center justify-end gap-1 mt-1 relative z-0">
+                            <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            {isMe && (msg.status === 'read' ? <CheckCheck className="w-[14px] h-[14px] text-[#00E5FF]" /> : <Check strokeWidth={3} className="w-[14px] h-[14px] text-white/70" />)}
                           </div>
-                        ) : msg.content.startsWith('File: ') ? (
-                          <div className="flex flex-col gap-1 mt-1">
-                            {msg.content.match(/\\.(jpeg|jpg|gif|png|webp)(\\?.*)?$/i) || msg.content.includes('#.jpg') ? (
-                              <img src={msg.content.replace('File: ', '')} className="max-w-[200px] rounded-lg cursor-pointer" alt="attachment" onClick={() => setFullScreenImage(msg.content.replace('File: ', ''))} />
-                            ) : (
-                              <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/20 rounded-xl hover:bg-black/30 transition-colors mt-1 relative z-20">
-                                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                                  <FileText className="w-5 h-5 text-white" />
-                                </div>
-                                <span className="text-sm font-medium text-white underline-offset-4 underline truncate max-w-[150px]">
-                                  عرض الملف المرفق
-                                </span>
-                              </a>
-                            )}
-                          </div>
-                        ) : <p className="text-[15px]">{msg.content}</p>}
-                        
-                        <div className="flex items-center justify-end gap-1 mt-1 relative z-0">
-                          <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          {isMe && (msg.status === 'read' ? <CheckCheck className="w-[14px] h-[14px] text-[#00E5FF]" /> : <Check strokeWidth={3} className="w-[14px] h-[14px] text-white/70" />)}
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </React.Fragment>
                 );
               })}
               {uploadingCount > 0 && (
@@ -383,10 +424,20 @@ export default function ChatDetailScreen() {
                   </div>
                 </div>
               )}
-              <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} className="h-2" />
             </>
          )}
       </main>
+
+      {/* Floating Scroll to Bottom Button */}
+      {showScrollButton && (
+        <button 
+          onClick={scrollToBottom}
+          className="absolute bottom-24 right-4 z-30 p-3 bg-[#0f283d] text-white rounded-full shadow-2xl border border-white/10 hover:bg-[#1a3a54] transition-all animate-in zoom-in duration-200"
+        >
+          <ArrowDown className="w-5 h-5" />
+        </button>
+      )}
 
       {showDeleteOptions && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteOptions(false)}>
