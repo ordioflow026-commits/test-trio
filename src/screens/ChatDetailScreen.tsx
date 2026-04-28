@@ -147,7 +147,7 @@ export default function ChatDetailScreen() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
-    const files = Array.from(fileList);
+    const files = Array.from(fileList) as File[];
     setShowAttachmentMenu(false);
     setUploadingCount(prev => prev + files.length);
     for (const file of files) {
@@ -394,9 +394,10 @@ export default function ChatDetailScreen() {
         </div>
       )}
 
-      <input key={`gallery_${inputKey}`} type="file" multiple ref={galleryInputRef} className="hidden" onChange={handleFileUpload} />
-      <input key={`camera_${inputKey}`} type="file" capture="environment" ref={cameraInputRef} className="hidden" onChange={handleFileUpload} />
-      <input key={`file_${inputKey}`} type="file" multiple ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+      {/* FIXED INPUTS BELOW */}
+      <input key={`gallery_${inputKey}`} type="file" accept="image/*,video/*" multiple ref={galleryInputRef} className="hidden" onChange={handleFileUpload} />
+      <input key={`camera_${inputKey}`} type="file" accept="image/*" capture="environment" ref={cameraInputRef} className="hidden" onChange={handleFileUpload} />
+      <input key={`file_${inputKey}`} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,application/*" multiple ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
     </div>
   );
 }
