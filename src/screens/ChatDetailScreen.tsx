@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X, Square, ArrowDown, Clock } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, Copy, Trash2, X, Square, ArrowDown } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { useZego } from '../contexts/ZegoContext';
@@ -441,11 +441,8 @@ export default function ChatDetailScreen() {
                           
                           <div className="flex items-center justify-end gap-1 mt-1 relative z-0">
                             <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            {isMe && (
-                               msg.status === 'sending' ? <Clock className="w-3 h-3 text-white/50" /> : 
-                               msg.status === 'read' ? <CheckCheck className="w-[14px] h-[14px] text-[#00E5FF]" /> : 
-                               <Check strokeWidth={3} className="w-[14px] h-[14px] text-white/70" />
-                            )}
+                            {/* إظهار علامة صح واحدة فقط (وأخيراً) لكلا الطرفين عند القراءة، وعدم إظهار شيء قبل ذلك */}
+                            {msg.status === 'read' && <Check strokeWidth={3} className="w-[14px] h-[14px] text-[#00E5FF]" />}
                           </div>
                         </div>
                       </div>
