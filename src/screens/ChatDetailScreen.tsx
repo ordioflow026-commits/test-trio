@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, Copy, Trash2, X, Square, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X, Square, ArrowDown } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { useZego } from '../contexts/ZegoContext';
@@ -166,7 +166,6 @@ export default function ChatDetailScreen() {
     return date.toLocaleDateString(dir === 'rtl' ? 'ar-EG' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   };
 
-  // ⚡ SPEED FIX: Parallel File Uploads (Promise.all)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
@@ -191,7 +190,6 @@ export default function ChatDetailScreen() {
     setInputKey(Date.now());
   };
 
-  // ⚡ SPEED FIX: Optimistic UI Updates (Instant Send)
   const handleSendMessage = async () => {
     if (!messageText.trim() || !user || !contactProfileId) return;
     const content = messageText.trim();
@@ -356,6 +354,38 @@ export default function ChatDetailScreen() {
               </div>
             </div>
           </div>
+
+          {/* استعادة أيقونات الاتصال هنا */}
+          <div className="flex items-center gap-4 pr-2">
+            <button 
+              onClick={() => {
+                if (!zp || !contactProfileId) return;
+                const targetZegoId = contactProfileId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+                zp.sendCallInvitation({
+                  callees: [{ userID: targetZegoId, userName: contact.name }],
+                  callType: 1, // Video
+                  timeout: 60
+                }).catch(console.error);
+              }}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            >
+              <Video strokeWidth={1.5} className="w-[22px] h-[22px] text-white" />
+            </button>
+            <button 
+              onClick={() => {
+                if (!zp || !contactProfileId) return;
+                const targetZegoId = contactProfileId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+                zp.sendCallInvitation({
+                  callees: [{ userID: targetZegoId, userName: contact.name }],
+                  callType: 0, // Audio
+                  timeout: 60
+                }).catch(console.error);
+              }}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            >
+              <Phone strokeWidth={1.5} className="w-[20px] h-[20px] text-white" />
+            </button>
+          </div>
         </header>
       )}
 
@@ -441,7 +471,7 @@ export default function ChatDetailScreen() {
                           
                           <div className="flex items-center justify-end gap-1 mt-1 relative z-0">
                             <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            {/* إظهار علامة صح واحدة فقط (وأخيراً) لكلا الطرفين عند القراءة، وعدم إظهار شيء قبل ذلك */}
+                            {/* إظهار علامة صح واحدة فقط لكلا الطرفين عند القراءة، وعدم إظهار شيء قبل ذلك */}
                             {msg.status === 'read' && <Check strokeWidth={3} className="w-[14px] h-[14px] text-[#00E5FF]" />}
                           </div>
                         </div>
