@@ -36,7 +36,10 @@ export default function ChatDetailScreen() {
   const [messageText, setMessageText] = useState('');
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [showDeleteOptions, setShowDeleteOptions] = useState(false);
+  
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   const [contactProfileId, setContactProfileId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,7 +48,6 @@ export default function ChatDetailScreen() {
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [inputKey, setInputKey] = useState(Date.now());
   
-  const longPressTimer = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const cancelRecordingRef = useRef(false);
@@ -68,7 +70,7 @@ export default function ChatDetailScreen() {
 
     const initChat = async () => {
       try {
-        const cleanPhone = contact.phone.replace(/\D/g, '').slice(-9);
+        const cleanPhone = contact.phone.replace(/\\D/g, '').slice(-9);
         const { data: profileData } = await supabase
           .from('profiles')
           .select('id')
@@ -135,12 +137,8 @@ export default function ChatDetailScreen() {
     };
 
     markMessagesAsRead();
-    
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') markMessagesAsRead();
-    };
+    const handleVisibilityChange = () => { if (document.visibilityState === 'visible') markMessagesAsRead(); };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [messages, user, contactProfileId]);
 
@@ -170,25 +168,46 @@ export default function ChatDetailScreen() {
     await supabase.from('messages').insert({ sender_id: user.id, receiver_id: contactProfileId, content, status: 'sent' });
   };
 
-  const handleDeleteForMe = async () => {
-    if (!selectedMessage || !user) return;
-    const msgId = selectedMessage.id;
-    setSelectedMessage(null);
-    setMessages(prev => prev.filter(m => m.id !== msgId));
-    await supabase.from('messages').update({ deleted_for: user.id }).eq('id', msgId);
+  const handleCopyMultiple = async () => {
+    const textsToCopy = messages
+      .filter(m => selectedMessageIds.includes(m.id))
+      .map(m => {
+        if (m.content.startsWith('Audio: ')) return '[رسالة صوتية]';
+        if (m.content.startsWith('File: ')) return '[ملف مرفق]';
+        return m.content;
+      })
+      .join('\\n\\n');
+    try {
+      await navigator.clipboard.writeText(textsToCopy);
+      setSelectedMessageIds([]); 
+    } catch (err) { console.error("Copy failed", err); }
   };
 
-  const handleDeleteForEveryone = async () => {
-    if (!selectedMessage) return;
-    const msgId = selectedMessage.id;
-    setSelectedMessage(null);
+  const handleDeleteForMeMultiple = async () => {
+    const idsToDelete = [...selectedMessageIds];
+    setSelectedMessageIds([]);
+    setShowDeleteOptions(false);
+    
+    setMessages(prev => prev.filter(m => !idsToDelete.includes(m.id)));
+    for (const id of idsToDelete) {
+      await supabase.from('messages').update({ deleted_for: user?.id }).eq('id', id);
+    }
+  };
+
+  const handleDeleteForEveryoneMultiple = async () => {
+    const idsToDelete = [...selectedMessageIds];
+    setShowDeleteOptions(false);
     
     setTimeout(async () => {
-      const confirmDelete = window.confirm("هل أنت متأكد أنك تريد حذف هذه الرسالة لدى الجميع؟");
+      const confirmDelete = window.confirm("هل أنت متأكد أنك تريد حذف الرسائل المحددة لدى الجميع؟");
       if (!confirmDelete) return;
 
-      setMessages(prev => prev.filter(m => m.id !== msgId));
-      await supabase.from('messages').delete().eq('id', msgId);
+      setSelectedMessageIds([]);
+      setMessages(prev => prev.filter(m => !idsToDelete.includes(m.id)));
+      
+      for (const id of idsToDelete) {
+        await supabase.from('messages').delete().eq('id', id);
+      }
     }, 50);
   };
 
@@ -203,7 +222,6 @@ export default function ChatDetailScreen() {
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
-      
       mediaRecorder.onstop = () => {
         if (cancelRecordingRef.current) {
           cancelRecordingRef.current = false;
@@ -211,7 +229,6 @@ export default function ChatDetailScreen() {
         }
         setRecordedAudioBlob(new Blob(audioChunksRef.current, { type: 'audio/webm' }));
       };
-      
       mediaRecorder.start();
       setIsRecording(true);
     } catch (err) { console.error(err); }
@@ -252,20 +269,39 @@ export default function ChatDetailScreen() {
     <div className="flex flex-col h-screen bg-[#0f172a] font-sans relative overflow-hidden" dir={dir}>
       <div className="absolute inset-0 bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3] opacity-80 pointer-events-none" />
       
-      <header className="flex items-center justify-between px-3 py-4 z-20 text-white">
-        <div className="flex items-center gap-3 flex-1">
-          <button onClick={() => navigate(-1)} className="p-1"><ArrowLeft className="w-[22px] h-[22px]" /></button>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#3b82f6] flex items-center justify-center font-semibold shrink-0">{contact.initials}</div>
-            <div className="flex flex-col">
-              <span className="font-semibold text-[17px] leading-tight truncate max-w-[150px]">{contact.name}</span>
-              <span className="text-[13px] text-slate-300 mt-0.5">{contact.phone}</span>
+      {selectedMessageIds.length > 0 ? (
+        <header className="flex items-center justify-between px-4 py-4 z-30 bg-[#0f283d] text-white shadow-md border-b border-white/10 transition-all">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setSelectedMessageIds([])} className="p-2 -ml-2 hover:bg-white/10 rounded-full transition-colors">
+              <X className="w-6 h-6 text-white" />
+            </button>
+            <span className="font-semibold text-[18px]">{selectedMessageIds.length}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={handleCopyMultiple} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+              <Copy className="w-6 h-6 text-white" />
+            </button>
+            <button onClick={() => setShowDeleteOptions(true)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+              <Trash2 className="w-6 h-6 text-white" />
+            </button>
+          </div>
+        </header>
+      ) : (
+        <header className="flex items-center justify-between px-3 py-4 z-20 text-white transition-all">
+          <div className="flex items-center gap-3 flex-1">
+            <button onClick={() => navigate(-1)} className="p-1"><ArrowLeft className="w-[22px] h-[22px]" /></button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#3b82f6] flex items-center justify-center font-semibold shrink-0">{contact.initials}</div>
+              <div className="flex flex-col">
+                <span className="font-semibold text-[17px] leading-tight truncate max-w-[150px]">{contact.name}</span>
+                <span className="text-[13px] text-slate-300 mt-0.5">{contact.phone}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <main className="flex-1 overflow-y-auto w-full relative z-10 px-4 flex flex-col gap-3 py-4">
+      <main className="flex-1 overflow-y-auto w-full relative z-10 px-4 flex flex-col gap-2 py-4">
          {isLoading ? (
             <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
          ) : !contactProfileId ? (
@@ -276,39 +312,64 @@ export default function ChatDetailScreen() {
          ) : (
             <>
               {messages.length === 0 && <div className="text-center text-slate-400 mt-10">Say hi to {contact.name}!</div>}
-              {messages.map((msg, idx) => {
+              {messages.map((msg) => {
                 const isMe = msg.sender_id === user?.id;
+                const isSelected = selectedMessageIds.includes(msg.id);
+                
                 return (
-                  <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div 
-                      onContextMenu={(e) => { e.preventDefault(); setSelectedMessage(msg); }}
-                      className={`max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm text-white select-none ${isMe ? 'bg-[#00b4d8] rounded-br-none' : 'bg-slate-800/80 rounded-bl-none border border-slate-700/50'}`}
-                    >
-                      {msg.content.startsWith('Audio: ') ? (
-                        <div dir="ltr" style={{ minWidth: '200px', width: '100%', maxWidth: '240px' }}>
-                          <audio controls preload="metadata" src={msg.content.replace('Audio: ', '')} style={{ display: 'block', width: '100%', minWidth: '200px', height: '54px', minHeight: '54px', flexShrink: 0 }} className="outline-none rounded-full bg-slate-100/10" />
+                  <div 
+                    key={msg.id} 
+                    className={`flex items-center w-full py-1.5 px-2 rounded-xl transition-colors ${isSelected ? 'bg-blue-500/20' : ''}`}
+                    onClick={() => {
+                      if (selectedMessageIds.length > 0) {
+                        setSelectedMessageIds(prev => prev.includes(msg.id) ? prev.filter(id => id !== msg.id) : [...prev, msg.id]);
+                      }
+                    }}
+                  >
+                    {selectedMessageIds.length > 0 && (
+                      <div className="mx-2 shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors"
+                           style={{ borderColor: isSelected ? '#3b82f6' : 'rgba(255,255,255,0.4)', backgroundColor: isSelected ? '#3b82f6' : 'transparent' }}>
+                        {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                      </div>
+                    )}
+
+                    <div className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div 
+                        onContextMenu={(e) => { 
+                          e.preventDefault(); 
+                          if (!selectedMessageIds.includes(msg.id)) {
+                            setSelectedMessageIds(prev => [...prev, msg.id]);
+                          }
+                        }}
+                        className={`max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm text-white select-none relative ${isMe ? 'bg-[#00b4d8] rounded-br-none' : 'bg-slate-800/80 rounded-bl-none border border-slate-700/50'}`}
+                      >
+                        {selectedMessageIds.length > 0 && <div className="absolute inset-0 z-10 cursor-pointer rounded-2xl" />}
+
+                        {msg.content.startsWith('Audio: ') ? (
+                          <div dir="ltr" style={{ minWidth: '200px', width: '100%', maxWidth: '240px' }}>
+                            <audio controls preload="metadata" src={msg.content.replace('Audio: ', '')} style={{ display: 'block', width: '100%', minWidth: '200px', height: '54px', minHeight: '54px', flexShrink: 0 }} className="outline-none rounded-full bg-slate-100/10" />
+                          </div>
+                        ) : msg.content.startsWith('File: ') ? (
+                          <div className="flex flex-col gap-1 mt-1">
+                            {msg.content.match(/\\.(jpeg|jpg|gif|png|webp)(\\?.*)?$/i) || msg.content.includes('#.jpg') ? (
+                              <img src={msg.content.replace('File: ', '')} className="max-w-[200px] rounded-lg cursor-pointer" alt="attachment" onClick={() => setFullScreenImage(msg.content.replace('File: ', ''))} />
+                            ) : (
+                              <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/20 rounded-xl hover:bg-black/30 transition-colors mt-1 relative z-20">
+                                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                                  <FileText className="w-5 h-5 text-white" />
+                                </div>
+                                <span className="text-sm font-medium text-white underline-offset-4 underline truncate max-w-[150px]">
+                                  عرض الملف المرفق
+                                </span>
+                              </a>
+                            )}
+                          </div>
+                        ) : <p className="text-[15px]">{msg.content}</p>}
+                        
+                        <div className="flex items-center justify-end gap-1 mt-1 relative z-0">
+                          <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          {isMe && (msg.status === 'read' ? <CheckCheck className="w-[14px] h-[14px] text-[#00E5FF]" /> : <Check strokeWidth={3} className="w-[14px] h-[14px] text-white/70" />)}
                         </div>
-                      ) : msg.content.startsWith('File: ') ? (
-                        <div className="flex flex-col gap-1 mt-1">
-                          {msg.content.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || msg.content.includes('#.jpg') ? (
-                            <img src={msg.content.replace('File: ', '')} className="max-w-[200px] rounded-lg cursor-pointer" alt="attachment" onClick={() => setFullScreenImage(msg.content.replace('File: ', ''))} />
-                          ) : (
-                            <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/20 rounded-xl hover:bg-black/30 transition-colors mt-1">
-                              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                                <FileText className="w-5 h-5 text-white" />
-                              </div>
-                              <span className="text-sm font-medium text-white underline-offset-4 underline truncate max-w-[150px]">
-                                عرض الملف المرفق
-                              </span>
-                            </a>
-                          )}
-                        </div>
-                      ) : <p className="text-[15px]">{msg.content}</p>}
-                      <div className="flex items-center justify-end gap-1 mt-1">
-                        <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        {isMe && (
-                          msg.status === 'read' ? <CheckCheck className="w-[14px] h-[14px] text-[#00E5FF]" /> : <Check strokeWidth={3} className="w-[14px] h-[14px] text-white/70" />
-                        )}
                       </div>
                     </div>
                   </div>
@@ -327,6 +388,22 @@ export default function ChatDetailScreen() {
          )}
       </main>
 
+      {showDeleteOptions && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteOptions(false)}>
+          <div className="bg-slate-800 rounded-2xl w-full max-w-xs overflow-hidden border border-slate-700 shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <button onClick={handleDeleteForMeMultiple} className="w-full p-5 text-start text-red-400 flex items-center gap-3 hover:bg-slate-700 transition-colors">
+              <Trash2 className="w-5 h-5" /> <span className="font-medium">حذف لدي</span>
+            </button>
+            
+            {selectedMessageIds.every(id => messages.find(m => m.id === id)?.sender_id === user?.id) && (
+              <button onClick={handleDeleteForEveryoneMultiple} className="w-full p-5 text-start text-red-500 flex items-center gap-3 border-t border-slate-700 hover:bg-slate-700 transition-colors">
+                <Trash2 className="w-5 h-5" /> <span className="font-medium">حذف لدى الجميع</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {fullScreenImage && (
         <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col animate-in fade-in duration-200">
           <div className="flex justify-between items-center p-4 bg-black/50 absolute top-0 left-0 right-0 z-10">
@@ -340,22 +417,7 @@ export default function ChatDetailScreen() {
         </div>
       )}
 
-      {selectedMessage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedMessage(null)}>
-          <div className="bg-slate-800 rounded-2xl w-full max-w-xs overflow-hidden border border-slate-700" onClick={e => e.stopPropagation()}>
-            <button onClick={() => { navigator.clipboard.writeText(selectedMessage.content); setSelectedMessage(null); }} className="w-full p-4 text-left text-white flex items-center gap-3 border-b border-slate-700 hover:bg-slate-700"><Copy className="w-5 h-5 text-blue-400" /> نسخ</button>
-            <button onClick={handleDeleteForMe} className="w-full p-4 text-left text-red-400 flex items-center gap-3 hover:bg-slate-700"><Trash2 className="w-5 h-5" /> حذف لدي</button>
-            
-            {selectedMessage.sender_id === user?.id && (
-              <button onClick={handleDeleteForEveryone} className="w-full p-4 text-left text-red-500 flex items-center gap-3 border-t border-slate-700 hover:bg-slate-700">
-                <Trash2 className="w-5 h-5" /> حذف لدى الجميع
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <footer className={`px-2 pb-3 mb-safe z-40 w-full relative ${(!contactProfileId && !isLoading) ? 'opacity-40 pointer-events-none' : ''}`}>
+      <footer className={`px-2 pb-3 mb-safe z-40 w-full relative ${(!contactProfileId && !isLoading) || selectedMessageIds.length > 0 ? 'opacity-40 pointer-events-none' : ''}`}>
         {recordedAudioBlob ? (
           <div className="flex items-center gap-2 bg-[#009fb7] p-1 pl-2 rounded-[28px] shadow-sm">
             <button onClick={cancelRecording} className="p-3 bg-red-400 text-white rounded-full hover:bg-red-500 transition-colors shadow-sm"><Trash2 className="w-5 h-5" /></button>
@@ -393,9 +455,7 @@ export default function ChatDetailScreen() {
 
       {showAttachmentMenu && (
         <>
-          {/* Transparent Overlay to handle outside clicks */}
           <div className="fixed inset-0 z-30" onClick={() => setShowAttachmentMenu(false)} />
-          
           <div className="absolute bottom-20 left-4 right-4 bg-slate-800/95 backdrop-blur-md rounded-2xl p-4 z-40 grid grid-cols-3 gap-6 shadow-xl border border-slate-700/50">
             <div onClick={() => galleryInputRef.current?.click()} className="flex flex-col items-center gap-2 relative z-50 cursor-pointer"><div className="w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center text-white"><ImageIcon /></div><span className="text-xs text-slate-300">Gallery</span></div>
             <div onClick={() => cameraInputRef.current?.click()} className="flex flex-col items-center gap-2 relative z-50 cursor-pointer"><div className="w-14 h-14 bg-violet-500 rounded-full flex items-center justify-center text-white"><Camera /></div><span className="text-xs text-slate-300">Camera</span></div>
