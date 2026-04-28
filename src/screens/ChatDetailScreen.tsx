@@ -67,7 +67,7 @@ export default function ChatDetailScreen() {
     let channel: any = null;
 
     const initChat = async () => {
-      const cleanPhone = contact.phone.replace(/\\D/g, '').slice(-9);
+      const cleanPhone = contact.phone.replace(/\D/g, '').slice(-9);
       const { data: profileData } = await supabase
         .from('profiles')
         .select('id')
@@ -77,58 +77,56 @@ export default function ChatDetailScreen() {
       const receiverId = profileData?.id || null;
       if (isMounted) setContactProfileId(receiverId);
 
-      // Fetch history
-      const { data: history, error } = await supabase
-        .from('messages')
-        .select('*')
-        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${user.id})`)
-        .order('created_at', { ascending: true });
+      if (receiverId) {
+        // Fetch history only if receiver is found
+        const { data: history, error } = await supabase
+          .from('messages')
+          .select('*')
+          .or(`and(sender_id.eq.${user.id},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${user.id})`)
+          .order('created_at', { ascending: true });
 
-      if (isMounted) {
-        if (!error && history) {
+        if (isMounted && !error && history) {
           setMessages(history.filter(m => m.deleted_for !== user.id));
         }
-        setIsLoading(false);
-      }
 
-      // Start Realtime listener
-      channel = supabase.channel(`chat_${user.id}_${receiverId}`)
-        .on('postgres_changes', { 
-            event: '*', // Listen to ALL events (INSERT, UPDATE, DELETE)
-            schema: 'public', 
-            table: 'messages',
-        }, (payload) => {
-          if (payload.eventType === 'DELETE') {
-            setMessages(prev => prev.filter(m => m.id !== payload.old.id));
-            return;
-          }
-          
-          const newMsg = payload.new as Message;
-          
-          setMessages(prev => {
-            // Handle UPDATE: Replace the existing message, do NOT duplicate
-            if (payload.eventType === 'UPDATE') {
-              if (newMsg.deleted_for === user.id) {
-                 return prev.filter(m => m.id !== newMsg.id);
-              }
-              return prev.map(m => m.id === newMsg.id ? newMsg : m);
+        // Start Realtime listener
+        channel = supabase.channel(`chat_${user.id}_${receiverId}`)
+          .on('postgres_changes', { 
+              event: '*',
+              schema: 'public', 
+              table: 'messages',
+          }, (payload) => {
+            if (payload.eventType === 'DELETE') {
+              setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+              return;
             }
             
-            // Handle INSERT: Add only if it doesn't already exist
-            if (payload.eventType === 'INSERT') {
-              if (
-                (newMsg.sender_id === user.id && newMsg.receiver_id === receiverId) ||
-                (newMsg.sender_id === receiverId && newMsg.receiver_id === user.id)
-              ) {
-                if (prev.find(m => m.id === newMsg.id)) return prev;
-                return [...prev, newMsg];
-              }
-            }
+            const newMsg = payload.new as Message;
             
-            return prev;
-          });
-        })
-        .subscribe();
+            setMessages(prev => {
+              if (payload.eventType === 'UPDATE') {
+                if (newMsg.deleted_for === user.id) {
+                   return prev.filter(m => m.id !== newMsg.id);
+                }
+                return prev.map(m => m.id === newMsg.id ? newMsg : m);
+              }
+              
+              if (payload.eventType === 'INSERT') {
+                if (
+                  (newMsg.sender_id === user.id && newMsg.receiver_id === receiverId) ||
+                  (newMsg.sender_id === receiverId && newMsg.receiver_id === user.id)
+                ) {
+                  if (prev.find(m => m.id === newMsg.id)) return prev;
+                  return [...prev, newMsg];
+                }
+              }
+              return prev;
+            });
+          })
+          .subscribe();
+      }
+      
+      if (isMounted) setIsLoading(false);
     };
 
     initChat();
@@ -143,9 +141,8 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     const markMessagesAsRead = async () => {
       if (!user || !contactProfileId || messages.length === 0) return;
-      if (document.visibilityState !== 'visible') return; // Prevent background marking
+      if (document.visibilityState !== 'visible') return; 
       
-      // Find incoming messages that are not yet marked as read
       const unreadMessages = messages.filter(m => m.receiver_id === user.id && m.status !== 'read');
       
       if (unreadMessages.length > 0) {
@@ -160,7 +157,6 @@ export default function ChatDetailScreen() {
 
     markMessagesAsRead();
     
-    // Add event listener to mark as read when user switches back to the app/tab
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') markMessagesAsRead();
     };
@@ -181,16 +177,14 @@ export default function ChatDetailScreen() {
     setShowAttachmentMenu(false);
     setUploadingCount(prev => prev + files.length);
 
-    // 1. DEEP COPY FILES TO RAM (Fixes Android Garbage Collection destroying blobs)
     const memoryFiles: File[] = [];
     for (const file of files) {
       try {
         const buffer = await file.arrayBuffer();
         let fileName = file.name || `file_${Date.now()}`;
         
-        // Force .jpg extension if it's an image input
         const isImageInput = e.target.accept && e.target.accept.includes('image');
-        if ((file.type.startsWith('image/') || isImageInput) && !fileName.match(/\\.(jpg|jpeg|png|gif|webp)$/i)) {
+        if ((file.type.startsWith('image/') || isImageInput) && !fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
           fileName += '.jpg';
         }
         
@@ -201,15 +195,13 @@ export default function ChatDetailScreen() {
       }
     }
 
-    // 2. Safely reset input DOM now that files are safely isolated in RAM
     setInputKey(Date.now());
 
-    // 3. Create Previews
     const localMessages: Message[] = memoryFiles.map((file, index) => {
       const localUrl = URL.createObjectURL(file);
       const tempId = generateUUID();
       
-      const isImage = file.type.startsWith('image/') || file.name.match(/\\.(jpg|jpeg|png|gif|webp)$/i);
+      const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
       const previewUrl = isImage ? `${localUrl}#.jpg` : localUrl;
 
       return {
@@ -224,7 +216,6 @@ export default function ChatDetailScreen() {
 
     setMessages(prev => [...prev, ...localMessages]);
 
-    // 4. Sequential Upload from Memory
     for (let i = 0; i < memoryFiles.length; i++) {
       const file = memoryFiles[i];
       const msg = localMessages[i];
@@ -255,7 +246,6 @@ export default function ChatDetailScreen() {
         setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'sent', content: `File: ${publicUrlData.publicUrl}` } : m));
       } catch (err) {
         console.error("Upload failed", err);
-        alert("فشل الرفع! السيرفر يرفض الملف. تأكد من إعدادات Supabase Storage Policies.");
         setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, status: 'error' } : m));
       } finally {
         setUploadingCount(prev => Math.max(0, prev - 1));
@@ -267,9 +257,8 @@ export default function ChatDetailScreen() {
     if (!messageText.trim() || !user || !contactProfileId) return;
     
     const msgContent = messageText.trim();
-    setMessageText(''); // Clear input instantly
+    setMessageText('');
 
-    // INSTANT UI UPDATE (Zero lag, no waiting for network)
     const tempMsg: Message = {
       id: generateUUID(),
       sender_id: user.id,
@@ -281,7 +270,6 @@ export default function ChatDetailScreen() {
 
     setMessages(prev => [...prev, tempMsg]);
 
-    // Send gracefully in the background
     const { error } = await supabase.from('messages').insert({
       id: tempMsg.id,
       sender_id: user.id,
@@ -291,7 +279,6 @@ export default function ChatDetailScreen() {
     });
 
     if (error) {
-      console.error("Failed to send message", error);
       setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'error' } : m));
     } else {
       setMessages(prev => prev.map(m => m.id === tempMsg.id ? { ...m, status: 'sent' } : m));
@@ -300,16 +287,11 @@ export default function ChatDetailScreen() {
 
   const handleCopy = async () => {
     if (!selectedMessage) return;
-    
     try {
       await navigator.clipboard.writeText(selectedMessage.content);
-      // Close the modal
       setSelectedMessage(null);
-      // Show a quick success alert/toast
-      alert("تم نسخ الرسالة بنجاح! ✔️");
     } catch (err) {
       console.error("Failed to copy!", err);
-      alert("حدث خطأ أثناء النسخ.");
     }
   };
 
@@ -317,8 +299,8 @@ export default function ChatDetailScreen() {
     if (!selectedMessage || !user) return;
     const msgToDelete = selectedMessage;
     
-    setSelectedMessage(null); // INSTANT UI CLOSE
-    setMessages(prev => prev.filter(m => m.id !== msgToDelete.id)); // OPTIMISTIC REMOVE
+    setSelectedMessage(null);
+    setMessages(prev => prev.filter(m => m.id !== msgToDelete.id)); 
     
     if (msgToDelete.deleted_for) {
        await supabase.from('messages').delete().eq('id', msgToDelete.id);
@@ -331,7 +313,7 @@ export default function ChatDetailScreen() {
     if (!selectedMessage) return;
     const msgToDelete = selectedMessage;
     
-    setSelectedMessage(null); // INSTANT UI CLOSE
+    setSelectedMessage(null);
     
     setTimeout(async () => {
       const confirmDelete = window.confirm("هل أنت متأكد أنك تريد حذف هذه الرسالة لدى الجميع؟");
@@ -339,7 +321,7 @@ export default function ChatDetailScreen() {
 
       setMessages(prev => prev.filter(m => m.id !== msgToDelete.id));
       await supabase.from('messages').delete().eq('id', msgToDelete.id);
-    }, 50); // Small delay to let the modal close smoothly before confirm dialog
+    }, 50);
   };
 
   const startRecording = async () => {
@@ -362,7 +344,7 @@ export default function ChatDetailScreen() {
            return; 
         }
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setRecordedAudioBlob(audioBlob); // Save for user review
+        setRecordedAudioBlob(audioBlob); 
       };
 
       mediaRecorder.start();
@@ -382,7 +364,6 @@ export default function ChatDetailScreen() {
       const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
       const fileName = `audio_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
       
-      // Upload the Blob DIRECTLY — do NOT clear state until AFTER upload succeeds
       const { error: uploadError } = await supabase.storage
         .from('chat-attachments')
         .upload(`${user.id}/${fileName}`, recordedAudioBlob, {
@@ -391,8 +372,6 @@ export default function ChatDetailScreen() {
 
       if (uploadError) throw uploadError;
 
-      // ✅ ONLY clear the blob AFTER the upload fully resolves — prevents GC from
-      // destroying the Blob mid-flight on Android WebKit
       setRecordedAudioBlob(null);
       
       const { data: publicUrlData } = supabase.storage
@@ -411,7 +390,6 @@ export default function ChatDetailScreen() {
       }
     } catch (err: any) {
       console.error("Audio upload failed", err);
-      alert(`فشل الرفع! السبب: ${err.message || 'خطأ غير معروف في السيرفر'}`);
     } finally {
       setUploadingCount(prev => Math.max(0, prev - 1));
     }
@@ -426,9 +404,9 @@ export default function ChatDetailScreen() {
   };
 
   const cancelRecording = () => {
-    setRecordedAudioBlob(null); // Clear preview if exists
+    setRecordedAudioBlob(null);
     if (mediaRecorderRef.current && isRecording) {
-      cancelRecordingRef.current = true; // Mark as cancelled
+      cancelRecordingRef.current = true;
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
@@ -437,7 +415,6 @@ export default function ChatDetailScreen() {
 
   return (
     <div className="flex flex-col h-screen bg-[#0f172a] font-sans relative overflow-hidden" dir={dir}>
-      {/* Dynamic Background gradient matching the image */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3] opacity-80 pointer-events-none" />
 
       {/* Header */}
@@ -462,15 +439,13 @@ export default function ChatDetailScreen() {
         </div>
 
         <div className="flex items-center gap-5 text-white pr-2">
-          {/* VIDEO CALL BUTTON */}
           <button 
             onClick={() => {
-              if (!zp) return console.error("Zego not initialized");
+              if (!zp) return;
               const targetZegoId = (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-              
               zp.sendCallInvitation({
                 callees: [{ userID: targetZegoId, userName: contact.name || 'User' }],
-                callType: 1, // 1 is for Video
+                callType: 1,
                 timeout: 60
               }).catch((err: any) => console.error("Call failed:", err));
             }}
@@ -479,15 +454,13 @@ export default function ChatDetailScreen() {
             <Video strokeWidth={1.5} className="w-[22px] h-[22px]" />
           </button>
 
-          {/* AUDIO CALL BUTTON */}
           <button 
             onClick={() => {
-              if (!zp) return console.error("Zego not initialized");
+              if (!zp) return;
               const targetZegoId = (contactProfileId || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-              
               zp.sendCallInvitation({
                 callees: [{ userID: targetZegoId, userName: contact.name || 'User' }],
-                callType: 0, // 0 is for Audio
+                callType: 0,
                 timeout: 60
               }).catch((err: any) => console.error("Call failed:", err));
             }}
@@ -503,6 +476,15 @@ export default function ChatDetailScreen() {
          {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+         ) : !contactProfileId ? (
+            /* FIX 1: Warning Message for Unregistered Contact */
+            <div className="flex flex-col items-center justify-center h-full text-center px-6 animate-in fade-in duration-300">
+               <div className="w-16 h-16 bg-slate-800/80 rounded-full flex items-center justify-center mb-4 shadow-lg border border-slate-700/50">
+                 <X className="w-8 h-8 text-red-400" />
+               </div>
+               <p className="text-slate-200 font-medium text-lg mb-1">جهة الاتصال غير مسجلة</p>
+               <p className="text-slate-400 text-sm">هذا الرقم غير مسجل في التطبيق. يرجى التأكد من أن الرقم صحيح ومسجل.</p>
             </div>
          ) : (
             <>
@@ -521,7 +503,7 @@ export default function ChatDetailScreen() {
                         longPressTimer.current = setTimeout(() => {
                           isLongPress.current = true;
                           setSelectedMessage(msg);
-                        }, 400); // 400ms hold for Long Press
+                        }, 400);
                       }}
                       onPointerUp={() => {
                         if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -530,12 +512,10 @@ export default function ChatDetailScreen() {
                         if (longPressTimer.current) clearTimeout(longPressTimer.current);
                       }}
                       onClick={(e) => {
-                        if (isLongPress.current) return; // Prevent tap if it was a hold
-                        
-                        // Tap Action (View Fullscreen)
+                        if (isLongPress.current) return;
                         if (msg.content.startsWith('File: ')) {
                           const url = msg.content.replace('File: ', '');
-                          if (url.match(/\\.(jpeg|jpg|gif|png|webp)$/i) || url.includes('#.jpg')) {
+                          if (url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || url.includes('#.jpg')) {
                             setFullScreenImage(url);
                           } else {
                             window.open(url, '_blank');
@@ -548,10 +528,11 @@ export default function ChatDetailScreen() {
                         : 'bg-slate-800/80 text-slate-100 rounded-bl-sm border border-slate-700/50'
                     }`}>
                       {msg.content.startsWith('Audio: ') ? (
+                        /* FIX 3: Responsive Audio Player in Bubble */
                         <div
                           className="mt-1 pb-1 flex flex-col gap-1"
                           dir="ltr"
-                          style={{ minWidth: '260px', width: '260px' }}
+                          style={{ minWidth: '200px', width: '100%', maxWidth: '240px' }}
                         >
                           <audio
                             controls
@@ -559,8 +540,9 @@ export default function ChatDetailScreen() {
                             src={msg.content.replace('Audio: ', '')}
                             style={{
                               display: 'block',
-                              width: '260px',
-                              minWidth: '260px',
+                              width: '100%',
+                              minWidth: '200px',
+                              maxWidth: '240px',
                               height: '54px',
                               minHeight: '54px',
                               flexShrink: 0,
@@ -572,31 +554,19 @@ export default function ChatDetailScreen() {
                               if (!target.parentElement?.querySelector('.audio-err')) {
                                 target.parentElement?.insertAdjacentHTML(
                                   'beforeend',
-                                  '<div class="audio-err text-xs text-red-400 mt-1 text-center bg-slate-800 p-1 rounded">⚠️ خطأ: السيرفر يرفض تحميل الملف</div>'
+                                  '<div class="audio-err text-xs text-red-400 mt-1 text-center bg-slate-800 p-1 rounded">⚠️ خطأ في التحميل</div>'
                                 );
                               }
                             }}
                           />
-                          <a
-                            href={msg.content.replace('Audio: ', '')}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] text-blue-300 underline px-2 break-all text-center mt-1"
-                          >
-                            🔗 اضغط لاختبار رابط الصوت المباشر
-                          </a>
                         </div>
                       ) : msg.content.startsWith('File: ') ? (
                         <div className="flex flex-col gap-1 mt-1">
-                          {msg.content.match(/\\.(jpeg|jpg|gif|png|webp)(\\?.*)?$/i) || msg.content.includes('#.jpg') ? (
+                          {msg.content.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || msg.content.includes('#.jpg') ? (
                             <img 
                               src={msg.content.replace('File: ', '')} 
                               alt="Attachment" 
                               className="max-w-[200px] max-h-[200px] min-w-[120px] min-h-[120px] rounded-lg object-cover bg-slate-700/50" 
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                e.currentTarget.parentElement?.insertAdjacentHTML('beforeend', '<span class="text-xs text-red-400 p-4 bg-slate-800 rounded-lg">خطأ في تحميل الصورة</span>');
-                              }}
                             />
                           ) : (
                             <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="text-white underline text-sm break-all">
@@ -625,7 +595,7 @@ export default function ChatDetailScreen() {
                 <div className="flex justify-end mb-2">
                   <div className="max-w-[75%] px-4 py-3 rounded-2xl bg-[#00b4d8] text-white rounded-br-sm shadow-sm flex items-center gap-3">
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-sm">جاري إرسال {uploadingCount > 1 ? `${uploadingCount} ملفات` : 'الملف'}...</span>
+                    <span className="text-sm">جاري الإرسال...</span>
                   </div>
                 </div>
               )}
@@ -720,7 +690,6 @@ export default function ChatDetailScreen() {
         </div>
       )}
 
-      {/* Background Dimmer when Attachment Menu is open */}
       {showAttachmentMenu && (
           <div 
             className="absolute inset-0 z-30" 
@@ -728,19 +697,18 @@ export default function ChatDetailScreen() {
           />
       )}
 
-      {/* Hidden File Inputs (Using Keys to remount safely without destroying Android memory) */}
       <input key={`gallery_${inputKey}`} type="file" accept="image/*,video/*" multiple ref={galleryInputRef} className="hidden" onChange={handleFileUpload} />
       <input key={`camera_${inputKey}`} type="file" accept="image/*" capture="environment" ref={cameraInputRef} className="hidden" onChange={handleFileUpload} />
       <input key={`file_${inputKey}`} type="file" accept="*/*" multiple ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
 
-      {/* Footer / Input Bar */}
-      <footer className="px-2 pb-3 mb-safe z-40 w-full relative">
+      {/* FIX 2: Disable footer conditionally */}
+      <footer className={`px-2 pb-3 mb-safe z-40 w-full relative ${(!contactProfileId && !isLoading) ? 'pointer-events-none opacity-40' : ''}`}>
         {recordedAudioBlob ? (
-          /* STATE 1: REVIEWING AUDIO */
           <div className="flex items-center gap-2 bg-[#009fb7] p-1 pl-2 rounded-[28px] shadow-sm animate-in fade-in zoom-in-95 duration-200">
             <button onClick={cancelRecording} className="p-3 bg-red-400 text-white rounded-full hover:bg-red-500 transition-colors shadow-sm">
               <Trash2 className="w-5 h-5" />
             </button>
+            {/* FIX 4: Responsive Audio Review Footer */}
             <div
               className="flex-1 flex items-center justify-center px-1"
               dir="ltr"
@@ -752,8 +720,9 @@ export default function ChatDetailScreen() {
                 preload="metadata"
                 style={{
                   display: 'block',
-                  width: '220px',
-                  minWidth: '220px',
+                  width: '100%',
+                  minWidth: '200px',
+                  maxWidth: '240px',
                   height: '50px',
                   minHeight: '50px',
                   flexShrink: 0,
@@ -766,7 +735,6 @@ export default function ChatDetailScreen() {
             </button>
           </div>
         ) : isRecording ? (
-          /* STATE 2: RECORDING IN PROGRESS */
           <div className="flex items-center gap-2 bg-[#009fb7] p-1 pl-2 rounded-[28px] shadow-sm animate-in fade-in zoom-in-95 duration-200">
             <button onClick={cancelRecording} className="p-3 bg-white/20 text-white rounded-full hover:bg-white/30 transition-colors">
               <X className="w-5 h-5" />
@@ -780,7 +748,6 @@ export default function ChatDetailScreen() {
             </button>
           </div>
         ) : (
-          /* STATE 3: IDLE (NORMAL TEXT INPUT) */
           <div className="flex items-end gap-2">
             <div className="flex-1 bg-[#009fb7] rounded-[28px] flex items-center shadow-sm pl-4 pr-1 min-h-[48px]">
               <textarea 
