@@ -67,7 +67,7 @@ export default function ChatDetailScreen() {
     let channel: any = null;
 
     const initChat = async () => {
-      const cleanPhone = contact.phone.replace(/\D/g, '').slice(-9);
+      const cleanPhone = contact.phone.replace(/\\D/g, '').slice(-9);
       const { data: profileData } = await supabase
         .from('profiles')
         .select('id')
@@ -190,7 +190,7 @@ export default function ChatDetailScreen() {
         
         // Force .jpg extension if it's an image input
         const isImageInput = e.target.accept && e.target.accept.includes('image');
-        if ((file.type.startsWith('image/') || isImageInput) && !fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+        if ((file.type.startsWith('image/') || isImageInput) && !fileName.match(/\\.(jpg|jpeg|png|gif|webp)$/i)) {
           fileName += '.jpg';
         }
         
@@ -209,7 +209,7 @@ export default function ChatDetailScreen() {
       const localUrl = URL.createObjectURL(file);
       const tempId = generateUUID();
       
-      const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+      const isImage = file.type.startsWith('image/') || file.name.match(/\\.(jpg|jpeg|png|gif|webp)$/i);
       const previewUrl = isImage ? `${localUrl}#.jpg` : localUrl;
 
       return {
@@ -382,7 +382,7 @@ export default function ChatDetailScreen() {
       const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
       const fileName = `audio_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
       
-      // Upload the Blob DIRECTLY. Do not use arrayBuffer() or new File()
+      // Upload the Blob DIRECTLY — do NOT clear state until AFTER upload succeeds
       const { error: uploadError } = await supabase.storage
         .from('chat-attachments')
         .upload(`${user.id}/${fileName}`, recordedAudioBlob, {
@@ -391,8 +391,9 @@ export default function ChatDetailScreen() {
 
       if (uploadError) throw uploadError;
 
-      // ONLY clear the UI AFTER a successful upload! This stops the 0-byte Android bug.
-      setRecordedAudioBlob(null); 
+      // ✅ ONLY clear the blob AFTER the upload fully resolves — prevents GC from
+      // destroying the Blob mid-flight on Android WebKit
+      setRecordedAudioBlob(null);
       
       const { data: publicUrlData } = supabase.storage
         .from('chat-attachments')
@@ -534,7 +535,7 @@ export default function ChatDetailScreen() {
                         // Tap Action (View Fullscreen)
                         if (msg.content.startsWith('File: ')) {
                           const url = msg.content.replace('File: ', '');
-                          if (url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || url.includes('#.jpg')) {
+                          if (url.match(/\\.(jpeg|jpg|gif|png|webp)$/i) || url.includes('#.jpg')) {
                             setFullScreenImage(url);
                           } else {
                             window.open(url, '_blank');
@@ -547,25 +548,39 @@ export default function ChatDetailScreen() {
                         : 'bg-slate-800/80 text-slate-100 rounded-bl-sm border border-slate-700/50'
                     }`}>
                       {msg.content.startsWith('Audio: ') ? (
-                        <div className="mt-1 pb-1 flex flex-col gap-1" dir="ltr">
-                          <audio 
-                            controls 
+                        <div
+                          className="mt-1 pb-1 flex flex-col gap-1"
+                          dir="ltr"
+                          style={{ minWidth: '260px', width: '260px' }}
+                        >
+                          <audio
+                            controls
                             preload="metadata"
-                            src={msg.content.replace('Audio: ', '')} 
-                            className="w-[240px] h-[50px] outline-none rounded-full bg-slate-100/10"
-                            style={{ display: 'block', minWidth: '240px' }}
+                            src={msg.content.replace('Audio: ', '')}
+                            style={{
+                              display: 'block',
+                              width: '260px',
+                              minWidth: '260px',
+                              height: '54px',
+                              minHeight: '54px',
+                              flexShrink: 0,
+                            }}
+                            className="rounded-full bg-slate-100/10 outline-none"
                             onError={(e) => {
                               const target = e.currentTarget;
                               target.style.opacity = '0.3';
                               if (!target.parentElement?.querySelector('.audio-err')) {
-                                target.parentElement?.insertAdjacentHTML('beforeend', '<div class="audio-err text-xs text-red-400 mt-1 text-center bg-slate-800 p-1 rounded">⚠️ خطأ: السيرفر يرفض تحميل الملف</div>');
+                                target.parentElement?.insertAdjacentHTML(
+                                  'beforeend',
+                                  '<div class="audio-err text-xs text-red-400 mt-1 text-center bg-slate-800 p-1 rounded">⚠️ خطأ: السيرفر يرفض تحميل الملف</div>'
+                                );
                               }
                             }}
                           />
-                          <a 
-                            href={msg.content.replace('Audio: ', '')} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
+                          <a
+                            href={msg.content.replace('Audio: ', '')}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-[11px] text-blue-300 underline px-2 break-all text-center mt-1"
                           >
                             🔗 اضغط لاختبار رابط الصوت المباشر
@@ -573,7 +588,7 @@ export default function ChatDetailScreen() {
                         </div>
                       ) : msg.content.startsWith('File: ') ? (
                         <div className="flex flex-col gap-1 mt-1">
-                          {msg.content.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || msg.content.includes('#.jpg') ? (
+                          {msg.content.match(/\\.(jpeg|jpg|gif|png|webp)(\\?.*)?$/i) || msg.content.includes('#.jpg') ? (
                             <img 
                               src={msg.content.replace('File: ', '')} 
                               alt="Attachment" 
@@ -726,12 +741,24 @@ export default function ChatDetailScreen() {
             <button onClick={cancelRecording} className="p-3 bg-red-400 text-white rounded-full hover:bg-red-500 transition-colors shadow-sm">
               <Trash2 className="w-5 h-5" />
             </button>
-            <div className="flex-1 flex items-center justify-center px-1" dir="ltr">
-              <audio 
-                src={URL.createObjectURL(recordedAudioBlob)} 
-                controls 
+            <div
+              className="flex-1 flex items-center justify-center px-1"
+              dir="ltr"
+              style={{ minWidth: 0 }}
+            >
+              <audio
+                src={URL.createObjectURL(recordedAudioBlob)}
+                controls
                 preload="metadata"
-                className="w-[230px] h-[50px] outline-none" 
+                style={{
+                  display: 'block',
+                  width: '220px',
+                  minWidth: '220px',
+                  height: '50px',
+                  minHeight: '50px',
+                  flexShrink: 0,
+                }}
+                className="outline-none"
               />
             </div>
             <button onClick={sendRecordedAudio} className="w-[48px] h-[48px] bg-white rounded-full flex items-center justify-center text-[#009fb7] shadow-md hover:brightness-95 transition-colors shrink-0">
