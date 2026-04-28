@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, Copy, Trash2, X, Square } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X, Square } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { useZego } from '../contexts/ZegoContext';
@@ -293,16 +293,22 @@ export default function ChatDetailScreen() {
                           {msg.content.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || msg.content.includes('#.jpg') ? (
                             <img src={msg.content.replace('File: ', '')} className="max-w-[200px] rounded-lg cursor-pointer" alt="attachment" onClick={() => setFullScreenImage(msg.content.replace('File: ', ''))} />
                           ) : (
-                            <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="text-white underline text-sm break-all">
-                              تحميل المرفق
+                            <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/20 rounded-xl hover:bg-black/30 transition-colors mt-1">
+                              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                                <FileText className="w-5 h-5 text-white" />
+                              </div>
+                              <span className="text-sm font-medium text-white underline-offset-4 underline truncate max-w-[150px]">
+                                عرض الملف المرفق
+                              </span>
                             </a>
                           )}
                         </div>
                       ) : <p className="text-[15px]">{msg.content}</p>}
                       <div className="flex items-center justify-end gap-1 mt-1">
                         <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        {/* استخدام علامة صح واحدة فقط بناءً على التصميم الأصلي */}
-                        {msg.status === 'read' && <Check strokeWidth={3} className="w-[14px] h-[14px] text-[#00E5FF]" />}
+                        {isMe && (
+                          msg.status === 'read' ? <CheckCheck className="w-[14px] h-[14px] text-[#00E5FF]" /> : <Check strokeWidth={3} className="w-[14px] h-[14px] text-white/70" />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -321,7 +327,6 @@ export default function ChatDetailScreen() {
          )}
       </main>
 
-      {/* عارض الصور بملء الشاشة */}
       {fullScreenImage && (
         <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col animate-in fade-in duration-200">
           <div className="flex justify-between items-center p-4 bg-black/50 absolute top-0 left-0 right-0 z-10">
@@ -387,14 +392,18 @@ export default function ChatDetailScreen() {
       </footer>
 
       {showAttachmentMenu && (
-        <div className="absolute bottom-20 left-4 right-4 bg-slate-800/95 backdrop-blur-md rounded-2xl p-4 z-40 grid grid-cols-3 gap-6 shadow-xl border border-slate-700/50">
-          <div onClick={() => galleryInputRef.current?.click()} className="flex flex-col items-center gap-2"><div className="w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center text-white"><ImageIcon /></div><span className="text-xs text-slate-300">Gallery</span></div>
-          <div onClick={() => cameraInputRef.current?.click()} className="flex flex-col items-center gap-2"><div className="w-14 h-14 bg-violet-500 rounded-full flex items-center justify-center text-white"><Camera /></div><span className="text-xs text-slate-300">Camera</span></div>
-          <div onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-2"><div className="w-14 h-14 bg-green-500 rounded-full flex items-center justify-center text-white"><File /></div><span className="text-xs text-slate-300">File</span></div>
-        </div>
+        <>
+          {/* Transparent Overlay to handle outside clicks */}
+          <div className="fixed inset-0 z-30" onClick={() => setShowAttachmentMenu(false)} />
+          
+          <div className="absolute bottom-20 left-4 right-4 bg-slate-800/95 backdrop-blur-md rounded-2xl p-4 z-40 grid grid-cols-3 gap-6 shadow-xl border border-slate-700/50">
+            <div onClick={() => galleryInputRef.current?.click()} className="flex flex-col items-center gap-2 relative z-50 cursor-pointer"><div className="w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center text-white"><ImageIcon /></div><span className="text-xs text-slate-300">Gallery</span></div>
+            <div onClick={() => cameraInputRef.current?.click()} className="flex flex-col items-center gap-2 relative z-50 cursor-pointer"><div className="w-14 h-14 bg-violet-500 rounded-full flex items-center justify-center text-white"><Camera /></div><span className="text-xs text-slate-300">Camera</span></div>
+            <div onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-2 relative z-50 cursor-pointer"><div className="w-14 h-14 bg-green-500 rounded-full flex items-center justify-center text-white"><File /></div><span className="text-xs text-slate-300">File</span></div>
+          </div>
+        </>
       )}
 
-      {/* FIXED INPUTS BELOW */}
       <input key={`gallery_${inputKey}`} type="file" accept="image/*,video/*" multiple ref={galleryInputRef} className="hidden" onChange={handleFileUpload} />
       <input key={`camera_${inputKey}`} type="file" accept="image/*" capture="environment" ref={cameraInputRef} className="hidden" onChange={handleFileUpload} />
       <input key={`file_${inputKey}`} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,application/*" multiple ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
