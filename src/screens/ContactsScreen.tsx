@@ -30,6 +30,7 @@ export default function ContactsScreen() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
+  const [chatSummaries, setChatSummaries] = useState<Record<string, { lastMessage: string, lastTime: string, unreadCount: number }>>({});
   const navigate = useNavigate();
   
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
@@ -47,9 +48,61 @@ export default function ContactsScreen() {
     const handleFetch = () => triggerContactFetch();
     window.addEventListener('fetch-contacts', handleFetch);
 
+    // Fetch Chat Summaries
+    let channel: any = null;
+    const fetchChats = async () => {
+      if (!user || !isMounted) return;
+      
+      const { data: profiles } = await supabase.from('profiles').select('id, phone');
+      if (!profiles || !isMounted) return;
+      
+      const profileToPhone = new Map<string, string>();
+      const newSummaries: Record<string, { lastMessage: string, lastTime: string, unreadCount: number }> = {};
+      
+      profiles.forEach(p => {
+        if (p.phone) {
+          const cleanPhone = p.phone.replace(/\D/g, '').slice(-9);
+          profileToPhone.set(p.id, cleanPhone);
+          newSummaries[cleanPhone] = { lastMessage: '', lastTime: '', unreadCount: 0 };
+        }
+      });
+
+      const { data: messages } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order('created_at', { ascending: true });
+
+      if (!messages || !isMounted) return;
+
+      messages.forEach(msg => {
+        const otherId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
+        const otherPhone = profileToPhone.get(otherId);
+        if (!otherPhone) return;
+
+        newSummaries[otherPhone].lastMessage = msg.content;
+        newSummaries[otherPhone].lastTime = msg.created_at;
+
+        if (msg.receiver_id === user.id && msg.status !== 'read') {
+          newSummaries[otherPhone].unreadCount += 1;
+        }
+      });
+
+      setChatSummaries(newSummaries);
+    };
+
+    fetchChats();
+
+    channel = supabase.channel('contacts_messages')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+        fetchChats();
+      })
+      .subscribe();
+
     return () => {
       isMounted = false;
       window.removeEventListener('fetch-contacts', handleFetch);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [user]);
 
@@ -175,9 +228,9 @@ export default function ContactsScreen() {
     }
   };
 
-  const startGroupCall = () => {
+  const startGroupCall = (isVideo: boolean = true) => {
     // We could clear selection or leave it
-    navigate('/call', { state: { title: t('groupVideoCall') } });
+    navigate('/call', { state: { title: t('groupVideoCall'), count: selectedContactIds.length, type: isVideo ? 'video' : 'audio' } });
   };
 
   const lastSelectedContactPhone = selectedContactIds.length > 0 ? selectedContactIds[selectedContactIds.length - 1] : null;
@@ -278,6 +331,9 @@ export default function ContactsScreen() {
 
         {contacts.map((contact) => {
             const isSelected = selectedContactIds.includes(contact.phone);
+            const cleanPhone = contact.phone.replace(/\D/g, '').slice(-9);
+            const chatInfo = chatSummaries[cleanPhone];
+            
             return (
             <div key={`${contact.id}-${contact.phone}`} className="relative">
               <div
@@ -291,26 +347,54 @@ export default function ContactsScreen() {
                   isSelected ? 'bg-[#0070a8]' : 'hover:bg-slate-800/50'
                 }`}
               >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold mr-4 transition-all duration-300 ${
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold mr-4 transition-all duration-300 shrink-0 ${
                   isSelected ? 'bg-[#00b4d8] text-white shadow-md' : 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30'
                 }`}>
                   {isSelected ? <Check className="w-6 h-6" /> : contact.initials}
                 </div>
-                <div className="flex-1 border-b border-slate-800/60 pb-3 pt-1 flex justify-between items-center pr-2">
-                  <div>
-                    <h3 className={`font-semibold transition-colors text-[17px] ${isSelected ? 'text-white' : 'text-slate-200'}`}>{contact.name}</h3>
-                    <p className={`text-[13px] mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-400'}`} dir="ltr">{contact.phone}</p>
+                <div className="flex-1 border-b border-slate-800/60 pb-3 pt-1 flex justify-between items-center pr-2 min-w-0">
+                  <div className="flex-1 min-w-0 pr-3">
+                    <div className="flex justify-between items-baseline mb-0.5 min-w-0 gap-2">
+                      <h3 className={`font-semibold transition-colors text-[17px] truncate flex-1 min-w-0 ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                        {contact.name}
+                      </h3>
+                      {chatInfo?.lastTime && (
+                         <span className={`text-[11px] shrink-0 ml-2 ${chatInfo.unreadCount > 0 ? 'text-blue-400 font-semibold' : 'text-slate-500'}`}>
+                           {new Date(chatInfo.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                         </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 min-w-0">
+                       <p className={`text-[14px] truncate flex-1 min-w-0 ${isSelected || (chatInfo?.unreadCount && chatInfo.unreadCount > 0) ? 'text-blue-100 font-medium' : 'text-slate-400'}`}>
+                         {chatInfo?.lastMessage 
+                            ? (chatInfo.lastMessage.startsWith('File: ') ? '📎 Attachment' : chatInfo.lastMessage)
+                            : (
+                               <span className="text-[13px]" dir="ltr">{contact.phone}</span>
+                            )
+                         }
+                       </p>
+                    </div>
                   </div>
                   
-                  {/* Delete Button */}
-                  {!isSelectionMode && (
-                    <button
-                      onClick={(e) => handleDeleteContact(e, contact)}
-                      className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-full transition-colors active:scale-95"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* Unread Badge */}
+                    {chatInfo && chatInfo.unreadCount > 0 && !isSelectionMode && (
+                      <div className="bg-blue-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full min-w-[20px] flex items-center justify-center">
+                        {chatInfo.unreadCount}
+                      </div>
+                    )}
+                    
+                    {/* Delete Button */}
+                    {!isSelectionMode && (!chatInfo || chatInfo.lastMessage === '') && (
+                      <button
+                        onClick={(e) => handleDeleteContact(e, contact)}
+                        className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-full transition-colors active:scale-95"
+                      >
+                        <Trash2 className="w-[18px] h-[18px]" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -326,13 +410,13 @@ export default function ContactsScreen() {
                     transition={{ type: "spring", stiffness: 400, damping: 25 }}
                   >
                     <button
-                        onClick={(e) => { e.stopPropagation(); startGroupCall(); }}
+                        onClick={(e) => { e.stopPropagation(); startGroupCall(false); }}
                         className="w-[48px] h-[48px] rounded-full bg-[#00b4d8] text-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,180,216,0.5)] hover:brightness-110 active:scale-95 transition-all outline-none"
                     >
                          <Phone fill="currentColor" stroke="none" className="w-[20px] h-[20px]" />
                     </button>
                     <button
-                        onClick={(e) => { e.stopPropagation(); startGroupCall(); }}
+                        onClick={(e) => { e.stopPropagation(); startGroupCall(true); }}
                         className="w-[48px] h-[48px] rounded-full bg-[#00e676] text-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,230,118,0.5)] hover:brightness-110 active:scale-95 transition-all outline-none"
                     >
                          <Video fill="currentColor" stroke="none" className="w-[20px] h-[20px]" />

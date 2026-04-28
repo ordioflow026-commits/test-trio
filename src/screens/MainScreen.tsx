@@ -1,20 +1,124 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Bell, User, Users, Lock, Radio, Globe, MessageSquare, Plus, LogIn, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Home, Bell, User, Users, Lock, Radio, Globe, MessageSquare, Plus, LogIn, X, Phone, Video, PhoneOff } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useUser } from '../contexts/UserContext';
+import { supabase } from '../lib/supabase';
 import ContactsScreen from './ContactsScreen';
 import PrivateRoomScreen from './PrivateRoomScreen';
 import BroadcastScreen from './BroadcastScreen';
 import { useSelection } from '../contexts/SelectionContext';
 
+function CallOverlay({ activeCall, onClose }: { activeCall: { isVideo: boolean; title: string; count: number }; onClose: () => void }) {
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const [stream, setStream] = React.useState<MediaStream | null>(null);
+  
+  React.useEffect(() => {
+    let activeStream: MediaStream | null = null;
+    const initMedia = async () => {
+      try {
+        const ms = await navigator.mediaDevices.getUserMedia({ 
+          video: activeCall.isVideo, 
+          audio: true 
+        });
+        activeStream = ms;
+        setStream(ms);
+        if (videoRef.current && activeCall.isVideo) {
+          videoRef.current.srcObject = ms;
+        }
+
+        // Ideally here we send signal via supabase.channel('group').send(...)
+        
+      } catch (err) {
+        console.error("Failed to access media devices:", err);
+      }
+    };
+    
+    initMedia();
+
+    return () => {
+      if (activeStream) {
+        activeStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [activeCall.isVideo]);
+
+  return (
+    <div className="absolute inset-0 bg-[#0B1120]/95 backdrop-blur-xl z-[100] flex flex-col items-center justify-between pb-16 pt-24 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+        {activeCall.isVideo && (
+          <div className="absolute inset-0 z-0 bg-slate-900">
+             <video 
+               ref={videoRef} 
+               autoPlay 
+               playsInline 
+               muted 
+               className="w-full h-full object-cover"
+             />
+             <div className="absolute inset-0 bg-gradient-to-t from-[#0B1120] via-transparent to-[#0B1120]/60 pointer-events-none" />
+          </div>
+        )}
+
+       <div className="flex flex-col items-center gap-6 mt-10 z-10 relative">
+          {!activeCall.isVideo && (
+            <div className="relative">
+              <div className="absolute inset-0 bg-[#00b4d8] rounded-full blur-xl opacity-20 animate-pulse" />
+              <div className="w-28 h-28 rounded-full bg-slate-800 flex items-center justify-center border-2 border-[#00b4d8] shadow-[0_0_30px_rgba(0,180,216,0.5)] z-10 relative">
+                <Phone className="w-12 h-12 text-[#00b4d8]" fill="currentColor" />
+              </div>
+            </div>
+          )}
+          <div className="text-center drop-shadow-md">
+             <h2 className="text-3xl font-bold text-white tracking-tight mb-2">Calling...</h2>
+             <p className="text-lg text-slate-300 font-medium bg-black/40 px-4 py-1 rounded-full backdrop-blur-md">
+               {activeCall.title} ({activeCall.count} {activeCall.count === 1 ? 'Person' : 'People'})
+             </p>
+          </div>
+       </div>
+
+       <button
+         onClick={onClose}
+         className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow-[0_0_20px_rgba(239,68,68,0.5)] active:scale-95 z-10 relative"
+       >
+         <PhoneOff className="w-8 h-8 text-white" fill="currentColor" />
+       </button>
+    </div>
+  );
+}
+
 export default function MainScreen() {
+  const navigate = useNavigate();
   const [activeMainTab, setActiveMainTab] = useState('home');
   const [activeSubTab, setActiveSubTab] = useState('contacts');
   const { t, dir, language, toggleLanguage } = useLanguage();
   const { isSelectionMode, selectedContactIds, clearSelection } = useSelection();
+  const { user } = useUser();
   const [userData, setUserData] = useState({ fullName: 'Guest', phone: '' });
   const [hasNotifications, setHasNotifications] = useState(true);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [isFirstLogin, setIsFirstLogin] = useState(true);
+
+  // Call Overlay State
+  const [activeCall, setActiveCall] = useState<{ isVideo: boolean; title: string; count: number } | null>(null);
+
+  // Incoming Call Listener
+  useEffect(() => {
+    if (!user) return;
+    
+    const channel = supabase.channel(`signal_${user.id}`)
+      .on('broadcast', { event: 'incoming_call' }, (payload) => {
+         const { fromName, isVideo } = payload.payload;
+         setActiveCall({
+           isVideo,
+           title: `${fromName} is calling...`,
+           count: 1
+         });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -175,6 +279,20 @@ export default function MainScreen() {
             </button>
             <span className="font-semibold text-lg">{selectedContactIds.length} {t('selected') || 'Selected'}</span>
           </div>
+          <div className="flex items-center gap-4 pr-2">
+            <button
+               onClick={() => setActiveCall({ isVideo: true, title: 'Group Call', count: selectedContactIds.length })}
+               className="hover:scale-110 transition-transform"
+            >
+              <Video className="w-6 h-6 fill-white" />
+            </button>
+            <button
+               onClick={() => setActiveCall({ isVideo: false, title: 'Group Call', count: selectedContactIds.length })}
+               className="hover:scale-110 transition-transform"
+            >
+              <Phone className="w-5 h-5 fill-white" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -213,6 +331,11 @@ export default function MainScreen() {
           </div>
         )}
       </main>
+
+      {/* Call Interface Overlay */}
+      {activeCall && (
+        <CallOverlay activeCall={activeCall} onClose={() => setActiveCall(null)} />
+      )}
     </div>
   );
 }
