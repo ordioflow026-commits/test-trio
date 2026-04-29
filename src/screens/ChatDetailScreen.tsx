@@ -104,7 +104,6 @@ export default function ChatDetailScreen() {
                     if (newMsg.deleted_for === user.id) return prev.filter(m => m.id !== newMsg.id);
                     return prev.map(m => m.id === newMsg.id ? newMsg : m);
                   }
-                  // For Optimistic UI: Replace temp message with real one if id matches, else append
                   return prev.find(m => m.id === newMsg.id) ? prev.map(m => m.id === newMsg.id ? newMsg : m) : [...prev, newMsg];
                 });
               }
@@ -164,6 +163,38 @@ export default function ChatDetailScreen() {
     if (date.toDateString() === yesterday.toDateString()) return 'أمس';
 
     return date.toLocaleDateString(dir === 'rtl' ? 'ar-EG' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  };
+
+  // 💡 التحديث الجديد: إرسال سجل للمكالمة داخل المحادثة بشكل آمن
+  const logCallInChat = async (isVideo: boolean) => {
+    if (!user || !contactProfileId) return;
+    const content = isVideo ? '📹 مكالمة فيديو' : '📞 مكالمة صوتية';
+    
+    const tempId = generateUUID();
+    const tempMsg: Message = {
+      id: tempId,
+      sender_id: user.id,
+      receiver_id: contactProfileId,
+      content,
+      created_at: new Date().toISOString(),
+      status: 'sending'
+    };
+    
+    setMessages(prev => [...prev, tempMsg]);
+    setTimeout(scrollToBottom, 50);
+
+    const { error } = await supabase.from('messages').insert({ 
+      id: tempId, 
+      sender_id: user.id, 
+      receiver_id: contactProfileId, 
+      content, 
+      status: 'sent' 
+    });
+
+    if (error) {
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      console.error("Failed to log call", error);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -355,7 +386,6 @@ export default function ChatDetailScreen() {
             </div>
           </div>
 
-          {/* استعادة أيقونات الاتصال هنا */}
           <div className="flex items-center gap-4 pr-2">
             <button 
               onClick={() => {
@@ -366,6 +396,7 @@ export default function ChatDetailScreen() {
                   callType: 1, // Video
                   timeout: 60
                 }).catch(console.error);
+                logCallInChat(true); // 💡 تسجيل المكالمة
               }}
               className="p-2 hover:bg-white/10 rounded-full transition-colors"
             >
@@ -380,6 +411,7 @@ export default function ChatDetailScreen() {
                   callType: 0, // Audio
                   timeout: 60
                 }).catch(console.error);
+                logCallInChat(false); // 💡 تسجيل المكالمة
               }}
               className="p-2 hover:bg-white/10 rounded-full transition-colors"
             >
@@ -472,7 +504,7 @@ export default function ChatDetailScreen() {
                           <div className="flex items-center justify-end gap-1 mt-1 relative z-0">
                             <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             {/* إظهار علامة صح واحدة فقط لكلا الطرفين عند القراءة، وعدم إظهار شيء قبل ذلك */}
-                            {msg.status === 'read' && <Check strokeWidth={3} className="w-[14px] h-[14px] text-[#00E5FF]" />}
+                            {msg.status === 'read' ? <Check strokeWidth={3} className="w-[14px] h-[14px] text-[#00E5FF]" /> : <Check strokeWidth={3} className="w-[14px] h-[14px] text-white/70" />}
                           </div>
                         </div>
                       </div>
