@@ -7,6 +7,7 @@ import { Contacts } from '@capacitor-community/contacts';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { useSelection } from '../contexts/SelectionContext';
+import { useZego } from '../contexts/ZegoContext';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface Contact {
@@ -19,6 +20,7 @@ interface Contact {
 export default function ContactsScreen() {
   const { t } = useLanguage();
   const { user } = useUser();
+  const { zp } = useZego(); // 💡 التحديث: استيراد مشغل الاتصال
   const { isSelectionMode, selectedContactIds, selectedContacts, toggleSelection } = useSelection();
   const [contacts, setContacts] = useState<Contact[]>(() => {
     const saved = localStorage.getItem('triosync_device_contacts');
@@ -42,13 +44,9 @@ export default function ContactsScreen() {
   useEffect(() => {
     let isMounted = true;
 
-    // We do not load mock contacts anymore. 
-    // And we rely on user action or previously saved contacts in localStorage.
-
     const handleFetch = () => triggerContactFetch();
     window.addEventListener('fetch-contacts', handleFetch);
 
-    // Fetch Chat Summaries
     let channel: any = null;
     const fetchChats = async () => {
       if (!user || !isMounted) return;
@@ -61,7 +59,7 @@ export default function ContactsScreen() {
       
       profiles.forEach(p => {
         if (p.phone) {
-          const cleanPhone = p.phone.replace(/\D/g, '').slice(-9);
+          const cleanPhone = p.phone.replace(/\\D/g, '').slice(-9);
           profileToPhone.set(p.id, cleanPhone);
           newSummaries[cleanPhone] = { lastMessage: '', lastTime: '', unreadCount: 0 };
         }
@@ -130,9 +128,8 @@ export default function ContactsScreen() {
   };
 
   const handleDeleteContact = (e: React.MouseEvent, contact: Contact) => {
-    e.stopPropagation(); // prevent tapping the row
+    e.stopPropagation();
     setContacts(prev => prev.filter(c => c.phone !== contact.phone));
-    // If it was selected, un-select it
     if (selectedContactIds.includes(contact.phone)) {
       toggleSelection({ id: contact.phone, name: contact.name }, false);
     }
@@ -168,7 +165,6 @@ export default function ContactsScreen() {
           setErrorMessage('Permission denied for native device contacts.');
         }
       } else {
-        // Web Contacts API
         if ('contacts' in navigator && 'ContactsManager' in window) {
           const webContacts = await (navigator as any).contacts.select(['name', 'tel'], { multiple: true });
           
@@ -207,11 +203,10 @@ export default function ContactsScreen() {
   const handleTouchStart = (contact: Contact) => {
     longPressTimer.current = setTimeout(() => {
       if (!isSelectionMode) {
-        // Automatically selects by calling to Context
         toggleSelection({ id: contact.phone, name: contact.name }, true);
         setExpandedContactId(null);
       }
-    }, 500); // 500ms for long press
+    }, 500); 
   };
 
   const handleTouchEnd = () => {
@@ -228,9 +223,46 @@ export default function ContactsScreen() {
     }
   };
 
-  const startGroupCall = (isVideo: boolean = true) => {
-    // We could clear selection or leave it
-    navigate('/call', { state: { title: t('groupVideoCall'), count: selectedContactIds.length, type: isVideo ? 'video' : 'audio' } });
+  // 💡 التحديث الجديد: برمجة زر الاتصال الجماعي بأمان باستخدام Zego Invite
+  const startGroupCall = async (isVideo: boolean = true) => {
+    if (!zp || selectedContactIds.length === 0) return;
+
+    try {
+      // 1. جلب بيانات المستخدمين المسجلين في التطبيق للبحث عن المحددين
+      const { data: profiles } = await supabase.from('profiles').select('id, phone');
+      if (!profiles) return;
+
+      const callees: any[] = [];
+      
+      // 2. مطابقة الأرقام المحددة مع الأرقام المسجلة في قاعدة البيانات
+      selectedContactIds.forEach(phone => {
+        const cleanPhone = phone.replace(/\\D/g, '').slice(-9);
+        const profile = profiles.find(p => p.phone && p.phone.replace(/\\D/g, '').slice(-9) === cleanPhone);
+        
+        if (profile) {
+          const targetZegoId = profile.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+          const contactObj = contacts.find(c => c.phone === phone);
+          callees.push({ userID: targetZegoId, userName: contactObj?.name || 'User' });
+        }
+      });
+
+      // 3. إرسال دعوة جماعية في حال وجود أرقام صالحة
+      if (callees.length > 0) {
+        zp.sendCallInvitation({
+          callees: callees,
+          callType: isVideo ? 1 : 0,
+          timeout: 60
+        }).catch(console.error);
+
+        // 4. إلغاء التحديد بشكل أنيق بعد إرسال المكالمة
+        const currentSelected = [...selectedContactIds];
+        currentSelected.forEach(id => toggleSelection({ id, name: '' }));
+      } else {
+        alert('لا يوجد أي شخص مسجل في التطبيق من بين جهات الاتصال المحددة.'); 
+      }
+    } catch (err) {
+      console.error("Error starting group call:", err);
+    }
   };
 
   const lastSelectedContactPhone = selectedContactIds.length > 0 ? selectedContactIds[selectedContactIds.length - 1] : null;
@@ -238,7 +270,6 @@ export default function ContactsScreen() {
   return (
     <div className="flex flex-col h-full bg-slate-900 relative">
       
-      {/* Contact Tools Header */}
       <div className="px-4 py-3 flex justify-between items-center border-b border-slate-800/60 bg-slate-900 z-10 shadow-sm">
         <button 
           onClick={() => triggerContactFetch()} 
@@ -300,10 +331,8 @@ export default function ContactsScreen() {
         )}
       </AnimatePresence>
 
-      {/* Contacts List */}
       <div className="flex-1 overflow-y-auto pt-2 pb-20">
         
-        {/* Inline Loading Spinner */}
         {isLoadingContacts && (
           <div className="flex flex-col items-center justify-center p-6 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-2" />
@@ -311,7 +340,6 @@ export default function ContactsScreen() {
           </div>
         )}
 
-        {/* Error / Fallback Message Rendering */}
         {!isLoadingContacts && (!contacts || contacts.length === 0 || errorMessage) && (
           <div className="flex flex-col items-center justify-center p-6 mt-10 text-center">
             <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-700 shadow-lg">
@@ -331,7 +359,7 @@ export default function ContactsScreen() {
 
         {contacts.map((contact) => {
             const isSelected = selectedContactIds.includes(contact.phone);
-            const cleanPhone = contact.phone.replace(/\D/g, '').slice(-9);
+            const cleanPhone = contact.phone.replace(/\\D/g, '').slice(-9);
             const chatInfo = chatSummaries[cleanPhone];
             
             return (
@@ -378,14 +406,12 @@ export default function ContactsScreen() {
                   </div>
                   
                   <div className="flex items-center gap-3 shrink-0">
-                    {/* Unread Badge */}
                     {chatInfo && chatInfo.unreadCount > 0 && !isSelectionMode && (
                       <div className="bg-blue-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full min-w-[20px] flex items-center justify-center">
                         {chatInfo.unreadCount}
                       </div>
                     )}
                     
-                    {/* Delete Button */}
                     {!isSelectionMode && (!chatInfo || chatInfo.lastMessage === '') && (
                       <button
                         onClick={(e) => handleDeleteContact(e, contact)}
@@ -398,7 +424,6 @@ export default function ContactsScreen() {
                 </div>
               </div>
               
-              {/* Dynamic Floating Action Buttons for Last Selected Contact */}
               <AnimatePresence>
                 {isSelectionMode && contact.phone === lastSelectedContactPhone && (
                   <motion.div
