@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, SquareArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
@@ -22,7 +22,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
 
   const zpRef = useRef<any>(null);
   const zegoJoined = useRef(false);
-  const channelRef = useRef<any>(null); // 💡 قناة اتصال دائمة لسرعة البرق
+  const channelRef = useRef<any>(null);
 
   const canInteract = isHost || viewMode === 'free';
   const myName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'User');
@@ -54,7 +54,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
           });
           setParticipants(activeUsers);
         }).on('broadcast', { event: 'room_state' }, (payload) => {
-          // 💡 الزائر يطبق أوامر المضيف فوراً بدون شروط معقدة
           if (!isHost) {
              if (payload.payload.slots) setSlots(payload.payload.slots);
              if (payload.payload.viewMode) setViewMode(payload.payload.viewMode);
@@ -67,7 +66,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
         channelRef.current = null;
       };
     }
-  // 💡 تم إزالة viewMode من هنا لمنع انقطاع الاتصال
   }, [roomId, isHost, user, myName]);
 
   const initHiddenAudio = async (element: HTMLDivElement | null) => {
@@ -91,7 +89,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
   const handleExit = () => { if (zpRef.current) { try { zpRef.current.destroy(); } catch (e) {} } onExit(); };
 
   const broadcastState = async (slotIndex: number, newSlots: SlotData[], mode: ViewMode) => {
-    // 💡 الإرسال الفوري عبر القناة المفتوحة دائماً
     if (channelRef.current && canInteract) { 
       try { await channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots: newSlots, currentSlot: slotIndex, viewMode: mode } }); } catch (err) {} 
     }
@@ -170,25 +167,31 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
     <div className="fixed inset-0 z-50 bg-[#0A0E14] flex flex-col overflow-hidden font-sans" dir={dir}>
       <div ref={initHiddenAudio} className="fixed top-[-9999px] left-[-9999px] w-[100px] h-[100px] opacity-0 z-[-1]" />
       
-      {/* 🔔 الزر العائم للمشاركة */}
-      <button 
-        onClick={handleShare} 
-        className="absolute bottom-[110px] right-6 z-50 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full shadow-[0_0_20px_rgba(37,99,235,0.5)] active:scale-95 transition-all"
-      >
-        <Share2 className="w-5 h-5" /> 
-        <span className="font-bold text-sm">مشاركة</span>
-      </button>
+      {/* 💡 التصميم الذي أردته: خروج يساراً، مزامنة بالوسط، ورقم الغرفة ومشاركة يميناً */}
+      <div className="absolute top-0 left-0 right-0 h-16 z-[100] flex items-center justify-between px-4 bg-gradient-to-b from-black/80 to-transparent">
+        
+        {/* زر الخروج - يسار */}
+        <button onClick={handleExit} className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500/40 rounded-full transition-all backdrop-blur-sm">
+          <LogOut className="w-5 h-5" />
+        </button>
 
-      <div className="absolute top-0 left-0 right-0 h-16 z-20 flex items-center justify-between px-4 bg-gradient-to-b from-black/60 to-transparent">
-        <div className="flex items-center gap-3">
-          <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-          <span className="text-white font-mono font-bold tracking-widest text-sm opacity-90 uppercase hidden sm:inline-block">ROOM: {roomId}</span>
+        {/* وضع المزامنة - وسط */}
+        <div className="flex justify-center">
+             <button onClick={handleToggleMode} disabled={!isHost} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border backdrop-blur-sm ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>{viewMode === 'sync' ? <><Lock className="w-3.5 h-3.5" /><span className="text-[11px] font-bold">Sync</span></> : <><Unlock className="w-3.5 h-3.5" /><span className="text-[11px] font-bold">Free</span></>}</button>
         </div>
-        <div className="flex-1 flex justify-center">
-             <button onClick={handleToggleMode} disabled={!isHost} className={`flex items-center gap-2 px-4 py-1.5 rounded-full border ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>{viewMode === 'sync' ? <><Lock className="w-3.5 h-3.5" /><span className="text-xs font-bold">Sync View</span></> : <><Unlock className="w-3.5 h-3.5" /><span className="text-xs font-bold">Free View</span></>}</button>
+
+        {/* زر المشاركة ورقم الغرفة - يمين */}
+        <div className="flex items-center gap-2">
+          <span className="text-white font-mono font-bold tracking-widest text-[11px] opacity-80 uppercase hidden sm:inline-block">ID: {roomId}</span>
+          <button 
+            onClick={handleShare} 
+            className="flex items-center justify-center p-2.5 bg-blue-600 text-white rounded-full shadow-[0_0_15px_rgba(37,99,235,0.6)] animate-pulse hover:bg-blue-500 active:scale-95 transition-all"
+          >
+            <Share2 className="w-5 h-5" />
+          </button>
         </div>
-        <button onClick={handleExit} className="flex items-center gap-2 px-3 py-2 text-red-400 hover:text-red-300 font-bold bg-red-500/10 rounded-full"><SquareArrowRight className="w-4 h-4" /><span className="text-xs">Exit</span></button>
       </div>
+
       <div className="flex-1 w-full flex flex-col">
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
             {canInteract && (
