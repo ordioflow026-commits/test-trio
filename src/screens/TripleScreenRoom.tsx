@@ -33,8 +33,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
     { type: 'empty' }
   ]);
 
-  // 💡 مراجع الاتصال الصوتي المخفي
-  const audioContainerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
   const zegoJoined = useRef(false);
 
@@ -83,54 +81,50 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
     }
   }, [roomId, isHost, viewMode, user]);
 
-  // 2️⃣ إعدادات الاتصال الصوتي المخفي عبر ZegoCloud
-  useEffect(() => {
-    if (!roomId || !user || zegoJoined.current || !audioContainerRef.current) return;
+  // 2️⃣ التهيئة الذكية للاتصال الصوتي المخفي (تتجاوز مشاكل React 18)
+  const initHiddenAudio = async (element: HTMLDivElement | null) => {
+    if (!element || !roomId || !user || zegoJoined.current) return;
     zegoJoined.current = true;
 
-    const initZegoAudio = async () => {
-      try {
-        const appID = 21954096;
-        const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
-        const safeUserId = user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-        const userName = user.fullName || (user.email ? user.email.split('@')[0] : `User_${safeUserId}`);
+    try {
+      const appID = 21954096;
+      const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
+      const safeUserId = user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+      const userName = user.fullName || (user.email ? user.email.split('@')[0] : `User_${safeUserId}`);
 
-        // نستخدم roomId ليكون الغرفة الجماعية للصوت
-        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, roomId, safeUserId, userName);
-        const zp = ZegoUIKitPrebuilt.create(kitToken);
-        zpRef.current = zp;
+      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, roomId, safeUserId, userName);
+      const zp = ZegoUIKitPrebuilt.create(kitToken);
+      zpRef.current = zp;
 
-        // إخفاء الواجهة تماماً وفتح الميكروفون فقط
-        zp.joinRoom({
-          container: audioContainerRef.current,
-          scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
-          turnOnMicrophoneWhenJoining: true,
-          turnOnCameraWhenJoining: false,
-          showPreJoinView: false,
-          showMyCameraToggleButton: false,
-          showMyMicrophoneToggleButton: false,
-          showAudioVideoSettingsButton: false,
-          showScreenSharingButton: false,
-          showTextChat: false,
-          showUserList: false,
-          showRoomTimer: false,
-          layout: 'Grid',
-        });
-      } catch (err) {
-        console.error("Zego Background Audio Error:", err);
-      }
-    };
+      zp.joinRoom({
+        container: element,
+        scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
+        turnOnMicrophoneWhenJoining: true,
+        turnOnCameraWhenJoining: false,
+        showPreJoinView: false,
+        showMyCameraToggleButton: false,
+        showMyMicrophoneToggleButton: false,
+        showAudioVideoSettingsButton: false,
+        showScreenSharingButton: false,
+        showTextChat: false,
+        showUserList: false,
+        showRoomTimer: false,
+        layout: 'Grid',
+      });
+    } catch (err) {
+      console.error("Zego Background Audio Error:", err);
+    }
+  };
 
-    initZegoAudio();
-
+  // تنظيف الاتصال عند الخروج الفعلي من المكون
+  useEffect(() => {
     return () => {
       if (zpRef.current) {
         try { zpRef.current.destroy(); } catch (e) {}
       }
     };
-  }, [roomId, user]);
+  }, []);
 
-  // 💡 تأمين الخروج من الغرفة لقطع الصوت
   const handleExit = () => {
     if (zpRef.current) {
       try { zpRef.current.destroy(); } catch (e) {}
@@ -306,8 +300,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
   return (
     <div className="fixed inset-0 z-50 bg-[#0A0E14] flex flex-col overflow-hidden font-sans" dir={dir}>
       
-      {/* 💡 الحاوية المخفية التي يعمل بداخلها الاتصال الصوتي */}
-      <div ref={audioContainerRef} className="absolute w-0 h-0 overflow-hidden pointer-events-none opacity-0" />
+      {/* 💡 الحاوية المخفية: تم تصحيح أبعادها ومكانها لتجنب حظر المتصفح للصوت */}
+      <div ref={initHiddenAudio} className="fixed top-[-9999px] left-[-9999px] w-[100px] h-[100px] opacity-0 pointer-events-none z-[-1]" />
 
       {/* Top Header */}
       <div className="absolute top-0 left-0 right-0 h-16 bg-transparent z-20 flex items-center justify-between px-6">
