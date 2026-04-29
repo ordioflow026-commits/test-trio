@@ -38,7 +38,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
 
   const canInteract = isHost || viewMode === 'free';
 
-  // 1️⃣ إعدادات التزامن (Sync View) وتتبع الحضور (Presence)
+  // تحديد اسم المستخدم الحالي وحرفه الأول للعرض
+  const myName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'User');
+  const myInitial = myName.charAt(0).toUpperCase();
+
   useEffect(() => {
     if (roomId && user) {
       const channel = supabase.channel(`room_${roomId}`, {
@@ -71,7 +74,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
         .subscribe(async (status) => {
           if (status === 'SUBSCRIBED') {
             await channel.track({
-              name: user.fullName || (user.email ? user.email.split('@')[0] : 'User'),
+              name: myName,
               id: user.id
             });
           }
@@ -79,9 +82,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
 
       return () => { supabase.removeChannel(channel); };
     }
-  }, [roomId, isHost, viewMode, user]);
+  }, [roomId, isHost, viewMode, user, myName]);
 
-  // 2️⃣ التهيئة الذكية للاتصال الصوتي المخفي (تتجاوز مشاكل React 18)
   const initHiddenAudio = async (element: HTMLDivElement | null) => {
     if (!element || !roomId || !user || zegoJoined.current) return;
     zegoJoined.current = true;
@@ -90,7 +92,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
       const appID = 21954096;
       const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
       const safeUserId = user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-      const userName = user.fullName || (user.email ? user.email.split('@')[0] : `User_${safeUserId}`);
+      const userName = myName;
 
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, roomId, safeUserId, userName);
       const zp = ZegoUIKitPrebuilt.create(kitToken);
@@ -116,7 +118,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
     }
   };
 
-  // تنظيف الاتصال عند الخروج الفعلي من المكون
   useEffect(() => {
     return () => {
       if (zpRef.current) {
@@ -134,15 +135,17 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
 
   const slideLeft = () => {
     if (canInteract) {
-      setCurrentSlot(prev => Math.max(0, prev - 1));
-      broadcastState(Math.max(0, currentSlot - 1), slots, viewMode);
+      const newSlot = Math.max(0, currentSlot - 1);
+      setCurrentSlot(newSlot);
+      broadcastState(newSlot, slots, viewMode);
     }
   };
   
   const slideRight = () => {
     if (canInteract) {
-      setCurrentSlot(prev => Math.min(2, prev + 1));
-      broadcastState(Math.min(2, currentSlot + 1), slots, viewMode);
+      const newSlot = Math.min(2, currentSlot + 1);
+      setCurrentSlot(newSlot);
+      broadcastState(newSlot, slots, viewMode);
     }
   };
 
@@ -300,7 +303,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
   return (
     <div className="fixed inset-0 z-50 bg-[#0A0E14] flex flex-col overflow-hidden font-sans" dir={dir}>
       
-      {/* 💡 الحاوية المخفية: تم تصحيح أبعادها ومكانها لتجنب حظر المتصفح للصوت */}
       <div ref={initHiddenAudio} className="fixed top-[-9999px] left-[-9999px] w-[100px] h-[100px] opacity-0 pointer-events-none z-[-1]" />
 
       {/* Top Header */}
@@ -390,18 +392,24 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
             </div>
           </div>
           
-          <div className="h-[90px] w-full bg-[#1e293b]/60 border-t border-slate-700/50 backdrop-blur-md flex items-center px-6 relative z-30">
-              <div className="flex items-center h-full gap-4 relative z-10 w-full pt-1">
-                  <div className="flex flex-col items-center">
-                    <div className="w-[60px] h-[60px] rounded-[18px] bg-[#0f172a] border-[1.5px] border-[#00b4d8] shadow-[0_0_15px_rgba(0,180,216,0.5)] flex items-end justify-center pb-2 flex-shrink-0">
-                        <span className="text-[#00b4d8] font-bold text-[10px] tracking-widest leading-none">YOU</span>
+          <div className="h-[100px] w-full bg-[#1e293b]/60 border-t border-slate-700/50 backdrop-blur-md flex items-center px-6 relative z-30">
+              <div className="flex items-center h-full gap-5 relative z-10 w-full">
+                  {/* 💡 التحديث الجديد: عرض اسم وحرف المستخدم الحالي بدلاً من YOU الصامتة */}
+                  <div className="flex flex-col items-center gap-1.5 translate-y-[10px]">
+                    <div className="w-[60px] h-[60px] rounded-[18px] bg-[#0f172a] border-[1.5px] border-[#00b4d8] shadow-[0_0_15px_rgba(0,180,216,0.5)] flex items-center justify-center flex-shrink-0 relative">
+                        <span className="text-[#00b4d8] font-bold text-2xl uppercase leading-none">{myInitial}</span>
+                        <div className="absolute -bottom-1 -right-0.5 w-3.5 h-3.5 bg-[#3b82f6] rounded-full border-2 border-[#1e293b]" />
                     </div>
+                    <span className="text-[#00b4d8] text-[11px] font-bold tracking-wide truncate max-w-[70px] text-center">
+                      {myName}
+                    </span>
                   </div>
                   
+                  {/* Remote Participants */}
                   {participants.map(p => (
-                     <div key={p.id} className="flex flex-col items-center gap-1.5 translate-y-[9px] animate-in zoom-in duration-300">
+                     <div key={p.id} className="flex flex-col items-center gap-1.5 translate-y-[10px] animate-in zoom-in duration-300">
                        <div className="w-[60px] h-[60px] rounded-[18px] bg-[#00b4d8] flex items-center justify-center flex-shrink-0 relative shadow-md">
-                          <span className="text-white font-bold text-2xl uppercase leading-none">{p.name.charAt(0)}</span>
+                          <span className="text-white font-bold text-2xl uppercase leading-none">{p.name.charAt(0).toUpperCase()}</span>
                           <div className="absolute -bottom-1 -right-0.5 w-3.5 h-3.5 bg-[#00e676] rounded-full border-2 border-[#1e293b]" />
                        </div>
                        <span className="text-white text-[11px] font-medium tracking-wide truncate max-w-[70px] text-center">{p.name}</span>
