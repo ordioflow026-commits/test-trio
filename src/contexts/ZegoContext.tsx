@@ -13,7 +13,7 @@ export const useZego = () => useContext(ZegoContext);
 
 export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useUser();
-  const [zpInstance, setZpInstance] = useState<any>(null); // CRITICAL: Use State, not Ref!
+  const [zpInstance, setZpInstance] = useState<any>(null);
 
   useEffect(() => {
     if (!user || !user.id) {
@@ -37,10 +37,10 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
       zp.addPlugins({ ZIM });
 
       zp.setCallInvitationConfig({
-        // 🔔 التحديث الجديد: إضافة الرنين الرسمي والموثوق من ZegoCloud
+        // 🔔 التحديث الجديد: استخدام روابط CDN سريعة وعالمية لضمان عمل الرنين
         ringtoneConfig: {
-          incomingCallUrl: 'https://zego-public.oss-cn-shanghai.aliyuncs.com/zego_zrtc_server/ZegoUIKitPrebuiltCallInvitation/incomingCall.mp3',
-          outgoingCallUrl: 'https://zego-public.oss-cn-shanghai.aliyuncs.com/zego_zrtc_server/ZegoUIKitPrebuiltCallInvitation/outgoingCall.mp3'
+          incomingCallUrl: 'https://cdn.freesound.org/previews/411/411088_5121236-lq.mp3',
+          outgoingCallUrl: 'https://cdn.freesound.org/previews/256/256565_3263906-lq.mp3'
         },
         
         onIncomingCallReceived: (callID: string, caller: any, callType: number) => {
@@ -48,13 +48,11 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
             const elements = document.querySelectorAll('div, span, p');
             elements.forEach(el => {
               if (el.textContent === 'Incoming call...') {
-                // 1 = Video, 0 = Audio
                 el.textContent = callType === 1 ? 'مكالمة فيديو... 📹' : 'مكالمة صوتية... 📞';
               }
             });
           };
           
-          // تشغيل الدالة فوراً وبشكل متتالي لضمان التقاط الشاشة فور بنائها
           updateTextSafely();
           setTimeout(updateTextSafely, 50);
           setTimeout(updateTextSafely, 200);
