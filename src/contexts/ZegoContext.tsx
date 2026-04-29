@@ -16,6 +16,20 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
   const [zpInstance, setZpInstance] = useState<any>(null);
 
   useEffect(() => {
+    // 🛡️ ميزة "فك قفل الصوت" لضمان عمل الرنين في المتصفح
+    const unlockAudio = () => {
+      const audio = new Audio();
+      audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAP8A/wD/';
+      audio.play().then(() => {
+        console.log("Audio Unlocked Success");
+        window.removeEventListener('click', unlockAudio);
+        window.removeEventListener('touchstart', unlockAudio);
+      }).catch(() => {});
+    };
+
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+
     if (!user || !user.id) {
       if (zpInstance) {
           zpInstance.destroy();
@@ -37,10 +51,10 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
       zp.addPlugins({ ZIM });
 
       zp.setCallInvitationConfig({
-        // 🔔 التحديث الجديد: استخدام روابط CDN سريعة وعالمية لضمان عمل الرنين
+        // 🔔 روابط الرنين العالمية الرسمية والموثوقة
         ringtoneConfig: {
-          incomingCallUrl: 'https://cdn.freesound.org/previews/411/411088_5121236-lq.mp3',
-          outgoingCallUrl: 'https://cdn.freesound.org/previews/256/256565_3263906-lq.mp3'
+          incomingCallUrl: 'https://storage.zego.im/demo/20220622/incomingCall.mp3',
+          outgoingCallUrl: 'https://storage.zego.im/demo/20220622/outgoingCall.mp3'
         },
         
         onIncomingCallReceived: (callID: string, caller: any, callType: number) => {
@@ -52,7 +66,6 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
               }
             });
           };
-          
           updateTextSafely();
           setTimeout(updateTextSafely, 50);
           setTimeout(updateTextSafely, 200);
@@ -77,6 +90,8 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => {
         isMounted = false;
+        window.removeEventListener('click', unlockAudio);
+        window.removeEventListener('touchstart', unlockAudio);
     };
   }, [user]);
 
@@ -86,3 +101,4 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
     </ZegoContext.Provider>
   );
 };
+
