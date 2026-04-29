@@ -16,12 +16,10 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
   const [zpInstance, setZpInstance] = useState<any>(null);
 
   useEffect(() => {
-    // 🛡️ ميزة "فك قفل الصوت" لضمان عمل الرنين في المتصفح
     const unlockAudio = () => {
       const audio = new Audio();
       audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAP8A/wD/';
       audio.play().then(() => {
-        console.log("Audio Unlocked Success");
         window.removeEventListener('click', unlockAudio);
         window.removeEventListener('touchstart', unlockAudio);
       }).catch(() => {});
@@ -51,7 +49,6 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
       zp.addPlugins({ ZIM });
 
       zp.setCallInvitationConfig({
-        // 🔔 روابط الرنين العالمية الرسمية والموثوقة
         ringtoneConfig: {
           incomingCallUrl: 'https://storage.zego.im/demo/20220622/incomingCall.mp3',
           outgoingCallUrl: 'https://storage.zego.im/demo/20220622/outgoingCall.mp3'
@@ -62,7 +59,18 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
             const elements = document.querySelectorAll('div, span, p');
             elements.forEach(el => {
               if (el.textContent === 'Incoming call...') {
-                el.textContent = callType === 1 ? 'مكالمة فيديو... 📹' : 'مكالمة صوتية... 📞';
+                const icon = callType === 1 ? '📹' : '📞';
+                const text = callType === 1 ? 'مكالمة فيديو...' : 'مكالمة صوتية...';
+                
+                // 💡 التحديث الجديد: تصميم الدائرة الزرقاء وتنسيق النص باحترافية
+                el.innerHTML = `
+                  <div dir="rtl" style="display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 16px; font-weight: 500; color: #f8fafc; margin-top: 6px;">
+                    <span>${text}</span>
+                    <span style="background-color: #3b82f6; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
+                      ${icon}
+                    </span>
+                  </div>
+                `;
               }
             });
           };
@@ -101,4 +109,3 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
     </ZegoContext.Provider>
   );
 };
-
