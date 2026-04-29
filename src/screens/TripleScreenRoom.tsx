@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, LogOut, Loader2, Lock, Unlock, SquareArrowRight, Video } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
 import { supabase } from '../lib/supabase';
 
@@ -20,17 +21,18 @@ interface Props {
 
 export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Props) {
   const { t, dir } = useLanguage();
+  const { user } = useUser(); // 💡 جلب بيانات المستخدم الحالي
   const [currentSlot, setCurrentSlot] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('sync');
-  // Add a placeholder guest when in visitor mode just for visual match (in a real app, this would be dynamic via presence)
-  const [participants, setParticipants] = useState<{ id: string, name: string }[]>(isHost ? [] : [{ id: 'mock-1', name: 'Guest 8b3c' }]);
+  
+  // 💡 التحديث: إزالة الزائر الوهمي، والبدء بقائمة فارغة ستمتلئ برمجياً
+  const [participants, setParticipants] = useState<{ id: string, name: string }[]>([]);
   
   const [slots, setSlots] = useState<SlotData[]>([
     { type: 'empty' },
     { type: 'empty' },
     { type: 'empty' }
   ]);
-  const [loading, setLoading] = useState(false);
 
   const canInteract = isHost || viewMode === 'free';
 
@@ -63,27 +65,56 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
   };
 
   useEffect(() => {
-    if (roomId) {
-      const channel = supabase.channel(`room_${roomId}`)
+    if (roomId && user) {
+      // 💡 التحديث: تفعيل ميزة التتبع (Presence) داخل قناة الغرفة
+      const channel = supabase.channel(`room_${roomId}`, {
+        config: {
+          presence: {
+            key: user.id,
+          },
+        },
+      });
+
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          const presenceState = channel.presenceState();
+          const activeUsers: { id: string, name: string }[] = [];
+          
+          // جلب كل الموجودين في الغرفة باستثناء المستخدم نفسه (لأن له مكان خاص "YOU")
+          Object.keys(presenceState).forEach((key) => {
+            if (key !== user.id) {
+              const userData = presenceState[key][0] as any;
+              activeUsers.push({ id: key, name: userData.name || 'Guest' });
+            }
+          });
+          
+          setParticipants(activeUsers);
+        })
         .on('broadcast', { event: 'room_state' }, (payload) => {
           if (!isHost || viewMode === 'free') {
              if (payload.payload.slots) setSlots(payload.payload.slots);
              if (payload.payload.viewMode) setViewMode(payload.payload.viewMode);
              
-             // If in sync mode, force the slot to match the host
              if (payload.payload.viewMode === 'sync' && payload.payload.currentSlot !== undefined) {
                setCurrentSlot(payload.payload.currentSlot);
              }
-             // If free mode, optionally let users stay on their current slot, but we'll sync it anyway for simplicity if it changed via a broadcast.
           }
         })
-        .subscribe();
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            // 💡 إخبار الغرفة بدخول هذا المستخدم واسمه
+            await channel.track({
+              name: user.fullName || (user.email ? user.email.split('@')[0] : 'User'),
+              id: user.id
+            });
+          }
+        });
 
       return () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [roomId, isHost, viewMode]);
+  }, [roomId, isHost, viewMode, user]);
 
   const updateSlot = async (index: number, data: SlotData) => {
     if (!canInteract) return;
@@ -230,7 +261,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
       {/* Top Header */}
       <div className="absolute top-0 left-0 right-0 h-16 bg-transparent z-20 flex items-center justify-between px-6">
         
-        {/* Left: Room ID */}
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full bg-red-500" />
           <span className="text-white font-mono font-bold tracking-widest text-[15px] opacity-90 uppercase">
@@ -238,7 +268,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
           </span>
         </div>
         
-        {/* Center: Sync/Free Toggle (Only visible and usable by Host) */}
         <div className="flex-1 flex justify-center">
              <button 
                 onClick={toggleViewMode}
@@ -263,7 +292,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
               </button>
         </div>
 
-        {/* Right: Exit Room */}
         <button 
           onClick={onExit}
           className="flex items-center gap-2 px-4 py-2 bg-transparent text-white hover:text-slate-300 transition-colors"
@@ -273,9 +301,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
         </button>
       </div>
 
-      {/* Main Display Area */}
       <div className="flex-1 w-full flex flex-col">
-          {/* Main Visual Carousel / Active Screen */}
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
             {canInteract && (
               <>
@@ -305,7 +331,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
               </>
             )}
 
-            {/* Slider track */}
             <div 
               className="absolute top-0 left-0 h-full flex transition-transform duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]"
               style={{ width: '300%', transform: `translateX(-${currentSlot * 33.333}%)` }}
@@ -320,30 +345,25 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
             </div>
           </div>
           
-          {/* Bottom Participant Bar */}
           <div className="h-[90px] w-full bg-[#1e293b]/60 border-t border-slate-700/50 backdrop-blur-md flex items-center px-6 relative z-30">
-              
               <div className="flex items-center h-full gap-4 relative z-10 w-full pt-1">
-                  {/* Local User (YOU) */}
                   <div className="flex flex-col items-center">
                     <div className="w-[60px] h-[60px] rounded-[18px] bg-[#0f172a] border-[1.5px] border-[#00b4d8] shadow-[0_0_15px_rgba(0,180,216,0.5)] flex items-end justify-center pb-2 flex-shrink-0">
                         <span className="text-[#00b4d8] font-bold text-[10px] tracking-widest leading-none">YOU</span>
                     </div>
                   </div>
                   
-                  {/* Remote Participants */}
                   {participants.map(p => (
-                     <div key={p.id} className="flex flex-col items-center gap-1.5 translate-y-[9px]">
+                     <div key={p.id} className="flex flex-col items-center gap-1.5 translate-y-[9px] animate-in zoom-in duration-300">
                        <div className="w-[60px] h-[60px] rounded-[18px] bg-[#00b4d8] flex items-center justify-center flex-shrink-0 relative shadow-md">
                           <span className="text-white font-bold text-2xl uppercase leading-none">{p.name.charAt(0)}</span>
                           <div className="absolute -bottom-1 -right-0.5 w-3.5 h-3.5 bg-[#00e676] rounded-full border-2 border-[#1e293b]" />
                        </div>
-                       <span className="text-white text-[11px] font-medium tracking-wide">{p.name}</span>
+                       <span className="text-white text-[11px] font-medium tracking-wide truncate max-w-[70px] text-center">{p.name}</span>
                      </div>
                   ))}
               </div>
               
-              {/* Centered Status Message */}
               {participants.length === 0 && isHost && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <span className="text-[#00b4d8] font-mono tracking-widest text-[13px] opacity-80">Waiting for someone to join...</span>
