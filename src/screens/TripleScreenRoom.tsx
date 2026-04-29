@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, LogOut, Loader2, Lock, Unlock, SquareArrowRight, Video } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
@@ -9,16 +9,8 @@ import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'media';
 type ViewMode = 'sync' | 'free';
 
-interface SlotData {
-  type: ContentType;
-  url?: string;
-}
-
-interface Props {
-  onExit: () => void;
-  isHost?: boolean;
-  roomId?: string;
-}
+interface SlotData { type: ContentType; url?: string; }
+interface Props { onExit: () => void; isHost?: boolean; roomId?: string; }
 
 export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Props) {
   const { t, dir } = useLanguage();
@@ -26,60 +18,44 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
   const [currentSlot, setCurrentSlot] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('sync');
   const [participants, setParticipants] = useState<{ id: string, name: string }[]>([]);
-  
-  const [slots, setSlots] = useState<SlotData[]>([
-    { type: 'empty' },
-    { type: 'empty' },
-    { type: 'empty' }
-  ]);
+  const [slots, setSlots] = useState<SlotData[]>([{ type: 'empty' }, { type: 'empty' }, { type: 'empty' }]);
 
   const zpRef = useRef<any>(null);
   const zegoJoined = useRef(false);
-
   const canInteract = isHost || viewMode === 'free';
-
-  // تحديد اسم المستخدم الحالي وحرفه الأول للعرض
   const myName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'User');
   const myInitial = myName.charAt(0).toUpperCase();
 
+  const handleShare = async () => {
+    const roomUrl = `https://app.com/room/${roomId}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: `انضم لغرفتي`, text: `أنا في غرفتي الخاصة الآن، انضم إلي!`, url: roomUrl }); } catch (err) {}
+    } else {
+      navigator.clipboard.writeText(roomUrl);
+      alert('تم نسخ الرابط بنجاح!');
+    }
+  };
+
   useEffect(() => {
     if (roomId && user) {
-      const channel = supabase.channel(`room_${roomId}`, {
-        config: { presence: { key: user.id } },
-      });
-
-      channel
-        .on('presence', { event: 'sync' }, () => {
+      const channel = supabase.channel(`room_${roomId}`, { config: { presence: { key: user.id } } });
+      channel.on('presence', { event: 'sync' }, () => {
           const presenceState = channel.presenceState();
           const activeUsers: { id: string, name: string }[] = [];
-          
           Object.keys(presenceState).forEach((key) => {
             if (key !== user.id) {
               const userData = presenceState[key][0] as any;
               activeUsers.push({ id: key, name: userData.name || 'Guest' });
             }
           });
-          
           setParticipants(activeUsers);
-        })
-        .on('broadcast', { event: 'room_state' }, (payload) => {
+        }).on('broadcast', { event: 'room_state' }, (payload) => {
           if (!isHost || viewMode === 'free') {
              if (payload.payload.slots) setSlots(payload.payload.slots);
              if (payload.payload.viewMode) setViewMode(payload.payload.viewMode);
-             if (payload.payload.viewMode === 'sync' && payload.payload.currentSlot !== undefined) {
-               setCurrentSlot(payload.payload.currentSlot);
-             }
+             if (payload.payload.viewMode === 'sync' && payload.payload.currentSlot !== undefined) setCurrentSlot(payload.payload.currentSlot);
           }
-        })
-        .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            await channel.track({
-              name: myName,
-              id: user.id
-            });
-          }
-        });
-
+        }).subscribe(async (status) => { if (status === 'SUBSCRIBED') await channel.track({ name: myName, id: user.id }); });
       return () => { supabase.removeChannel(channel); };
     }
   }, [roomId, isHost, viewMode, user, myName]);
@@ -87,341 +63,80 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
   const initHiddenAudio = async (element: HTMLDivElement | null) => {
     if (!element || !roomId || !user || zegoJoined.current) return;
     zegoJoined.current = true;
-
     try {
       const appID = 21954096;
       const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
-      const safeUserId = user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-      const userName = myName;
-
-      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, roomId, safeUserId, userName);
+      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, roomId, user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16), myName);
       const zp = ZegoUIKitPrebuilt.create(kitToken);
       zpRef.current = zp;
-
       zp.joinRoom({
-        container: element,
-        scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
-        turnOnMicrophoneWhenJoining: true,
-        turnOnCameraWhenJoining: false,
-        showPreJoinView: false,
-        showMyCameraToggleButton: false,
-        showMyMicrophoneToggleButton: false,
-        showAudioVideoSettingsButton: false,
-        showScreenSharingButton: false,
-        showTextChat: false,
-        showUserList: false,
-        showRoomTimer: false,
-        layout: 'Grid',
+        container: element, scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
+        turnOnMicrophoneWhenJoining: true, turnOnCameraWhenJoining: false,
+        showPreJoinView: false, showMyCameraToggleButton: false, showMyMicrophoneToggleButton: false,
+        showAudioVideoSettingsButton: false, layout: 'Grid',
       });
-    } catch (err) {
-      console.error("Zego Background Audio Error:", err);
-    }
+    } catch (err) {}
   };
 
-  useEffect(() => {
-    return () => {
-      if (zpRef.current) {
-        try { zpRef.current.destroy(); } catch (e) {}
-      }
-    };
-  }, []);
-
-  const handleExit = () => {
-    if (zpRef.current) {
-      try { zpRef.current.destroy(); } catch (e) {}
-    }
-    onExit();
-  };
-
-  const slideLeft = () => {
-    if (canInteract) {
-      const newSlot = Math.max(0, currentSlot - 1);
-      setCurrentSlot(newSlot);
-      broadcastState(newSlot, slots, viewMode);
-    }
-  };
-  
-  const slideRight = () => {
-    if (canInteract) {
-      const newSlot = Math.min(2, currentSlot + 1);
-      setCurrentSlot(newSlot);
-      broadcastState(newSlot, slots, viewMode);
-    }
-  };
+  const handleExit = () => { if (zpRef.current) { try { zpRef.current.destroy(); } catch (e) {} } onExit(); };
 
   const broadcastState = async (slotIndex: number, newSlots: SlotData[], mode: ViewMode) => {
-    if (roomId && canInteract) {
-      try {
-        await supabase.channel(`room_${roomId}`).send({
-          type: 'broadcast',
-          event: 'room_state',
-          payload: { slots: newSlots, currentSlot: slotIndex, viewMode: mode }
-        });
-      } catch (err) {}
-    }
+    if (roomId && canInteract) { try { await supabase.channel(`room_${roomId}`).send({ type: 'broadcast', event: 'room_state', payload: { slots: newSlots, currentSlot: slotIndex, viewMode: mode } }); } catch (err) {} }
   };
 
   const updateSlot = async (index: number, data: SlotData) => {
     if (!canInteract) return;
-    const newSlots = [...slots];
-    newSlots[index] = data;
-    setSlots(newSlots);
+    const newSlots = [...slots]; newSlots[index] = data; setSlots(newSlots);
     broadcastState(currentSlot, newSlots, viewMode);
-  };
-
-  const toggleViewMode = () => {
-    if (!isHost) return;
-    const newMode = viewMode === 'sync' ? 'free' : 'sync';
-    setViewMode(newMode);
-    broadcastState(currentSlot, slots, newMode);
-  };
-
-  const renderSlotContent = (slot: SlotData, index: number) => {
-    if (slot.type === 'empty') {
-      return (
-        <div className="flex flex-col items-center justify-center h-full">
-          {canInteract ? (
-            <>
-              <button
-                onClick={() => updateSlot(index, { type: 'menu' })}
-                className="w-28 h-28 rounded-full bg-transparent border-2 border-[#00b4d8] flex items-center justify-center hover:bg-[#00b4d8]/10 hover:scale-105 transition-all duration-300 group shadow-[0_0_20px_rgba(0,180,216,0.3)]"
-              >
-                <Plus className="w-12 h-12 text-[#00b4d8] transition-colors" strokeWidth={1.5} />
-              </button>
-              <p className="mt-6 text-[#00b4d8] font-mono tracking-widest uppercase text-[15px] font-semibold">{t('addContent') || 'ADD CONTENT'}</p>
-            </>
-          ) : (
-            <>
-              <Video className="w-14 h-14 text-[#00b4d8] mb-5" strokeWidth={1.5} />
-              <p className="text-[#00b4d8] font-mono tracking-[0.2em] uppercase text-[13px] font-semibold">WAITING FOR HOST...</p>
-            </>
-          )}
-        </div>
-      );
-    }
-
-    if (slot.type === 'menu') {
-      return (
-        <div className="flex flex-col items-center justify-center h-full w-full max-w-lg mx-auto p-6">
-          <div className="flex justify-between items-center w-full mb-8">
-            <h3 className="text-xl font-bold text-white font-mono uppercase tracking-wider">{t('addContent') || 'ADD CONTENT'}</h3>
-            <button onClick={() => updateSlot(index, { type: 'empty' })} className="p-2 bg-slate-800/50 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-4 w-full">
-            {[
-              { id: 'web', icon: Globe, label: t('webPage'), color: 'from-cyan-500 to-blue-500' },
-              { id: 'youtube', icon: Youtube, label: t('youtubeVideo'), color: 'from-red-500 to-orange-500' },
-              { id: 'whiteboard', icon: PenTool, label: t('whiteboard'), color: 'from-purple-500 to-pink-500' },
-              { id: 'media', icon: ImageIcon, label: t('mediaGallery'), color: 'from-green-500 to-emerald-500' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  if (item.id === 'youtube') {
-                    const url = prompt('Enter YouTube Video URL:');
-                    if (url) {
-                      const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]+)/);
-                      const videoId = match ? match[1] : null;
-                      if (videoId) {
-                        updateSlot(index, { type: 'youtube', url: videoId });
-                      } else {
-                        alert('Invalid YouTube URL');
-                      }
-                    }
-                  } else {
-                    updateSlot(index, { type: item.id as ContentType });
-                  }
-                }}
-                className="flex flex-col items-center justify-center p-6 bg-slate-800/40 border border-slate-700/50 rounded-2xl hover:bg-slate-800 transition-all duration-300 hover:scale-105 group relative overflow-hidden"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
-                <item.icon className="w-10 h-10 text-slate-300 group-hover:text-white mb-4 transition-colors relative z-10" />
-                <span className="text-sm font-bold text-slate-400 group-hover:text-white transition-colors relative z-10">{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex flex-col items-center justify-center h-full w-full relative group">
-        {canInteract && (
-          <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/20 border border-red-500/50 rounded-full hover:bg-red-500/40 text-red-400 hover:text-red-200 transition-colors backdrop-blur-md">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-        )}
-        
-        {slot.type === 'web' && (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80 rounded-none p-8">
-            <Globe className="w-20 h-20 text-cyan-500/50 mb-6" />
-            <h2 className="text-2xl font-bold text-white mb-2">{t('webPage')}</h2>
-            <p className="text-slate-400 text-center max-w-sm">Web browser placeholder.</p>
-          </div>
-        )}
-        {slot.type === 'youtube' && (
-          <div className="w-full h-full bg-black flex items-center justify-center">
-            {slot.url ? (
-              <iframe
-                width="100%"
-                height="100%"
-                src={`https://www.youtube.com/embed/${slot.url}?autoplay=1`}
-                title="YouTube video player"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="w-full h-full"
-              ></iframe>
-            ) : (
-              <div className="flex flex-col items-center justify-center">
-                <Youtube className="w-20 h-20 text-red-500/50 mb-6" />
-                <p className="text-slate-400 text-center">No video selected</p>
-              </div>
-            )}
-          </div>
-        )}
-        {slot.type === 'whiteboard' && (
-          <div className="w-full h-full p-4 pt-4 pb-4">
-            <Whiteboard />
-          </div>
-        )}
-        {slot.type === 'media' && (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80 rounded-none p-8">
-            <ImageIcon className="w-20 h-20 text-green-500/50 mb-6" />
-            <h2 className="text-2xl font-bold text-white mb-2">{t('mediaGallery')}</h2>
-            <p className="text-slate-400 text-center max-w-sm">Media gallery grid placeholder.</p>
-          </div>
-        )}
-      </div>
-    );
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-[#0A0E14] flex flex-col overflow-hidden font-sans" dir={dir}>
+      <div ref={initHiddenAudio} className="fixed top-[-9999px] left-[-9999px] w-[100px] h-[100px] opacity-0 z-[-1]" />
       
-      <div ref={initHiddenAudio} className="fixed top-[-9999px] left-[-9999px] w-[100px] h-[100px] opacity-0 pointer-events-none z-[-1]" />
-
-      {/* Top Header */}
-      <div className="absolute top-0 left-0 right-0 h-16 bg-transparent z-20 flex items-center justify-between px-6">
+      {/* 💡 الشريط العلوي المحسن: يضمن ظهور كل الأزرار على جميع الشاشات */}
+      <div className="absolute top-0 left-0 right-0 h-16 z-[100] flex items-center justify-between px-4 bg-gradient-to-b from-black/80 to-transparent">
         
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-red-500" />
-          <span className="text-white font-mono font-bold tracking-widest text-[15px] opacity-90 uppercase">
-            ROOM: {roomId || '8N4HS8HL'}
-          </span>
-        </div>
-        
-        <div className="flex-1 flex justify-center">
-             <button 
-                onClick={toggleViewMode}
-                disabled={!isHost}
-                className={`flex items-center gap-2 px-5 py-1.5 rounded-full border transition-all duration-300 focus:outline-none disabled:cursor-default ${
-                  viewMode === 'sync' 
-                    ? 'bg-transparent border-red-500/50 text-red-400' 
-                    : 'bg-transparent border-emerald-500/50 text-emerald-400'
-                }`}
-              >
-                {viewMode === 'sync' ? (
-                   <>
-                     <Lock className="w-4 h-4" />
-                     <span className="text-[13px] font-semibold tracking-wide">Sync View</span>
-                   </>
-                ) : (
-                   <>
-                     <Unlock className="w-4 h-4" />
-                     <span className="text-[13px] font-semibold tracking-wide">Free View</span>
-                   </>
-                )}
-              </button>
-        </div>
-
-        <button 
-          onClick={handleExit}
-          className="flex items-center gap-2 px-4 py-2 bg-transparent text-white hover:text-slate-300 transition-colors"
-        >
-          <SquareArrowRight className="w-5 h-5" />
-          <span className="text-[15px] font-bold">Exit Room</span>
+        {/* زر الخروج - يسار */}
+        <button onClick={handleExit} className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500/40 rounded-full transition-all backdrop-blur-sm">
+          <LogOut className="w-5 h-5" />
         </button>
+
+        {/* وضع المزامنة - وسط */}
+        <div className="flex justify-center">
+             <button onClick={() => isHost && setViewMode(viewMode === 'sync' ? 'free' : 'sync')} disabled={!isHost} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border backdrop-blur-sm ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>{viewMode === 'sync' ? <><Lock className="w-3.5 h-3.5" /><span className="text-[11px] font-bold">Sync</span></> : <><Unlock className="w-3.5 h-3.5" /><span className="text-[11px] font-bold">Free</span></>}</button>
+        </div>
+
+        {/* زر المشاركة ورقم الغرفة - يمين */}
+        <div className="flex items-center gap-2">
+          <span className="text-white font-mono font-bold tracking-widest text-[11px] opacity-80 uppercase hidden sm:inline-block">ID: {roomId}</span>
+          <button 
+            onClick={handleShare} 
+            className="flex items-center justify-center p-2.5 bg-blue-600 text-white rounded-full shadow-[0_0_15px_rgba(37,99,235,0.6)] animate-pulse hover:bg-blue-500 active:scale-95 transition-all"
+          >
+            <Share2 className="w-5 h-5" />
+          </button>
+        </div>
+
       </div>
 
       <div className="flex-1 w-full flex flex-col">
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
-            {canInteract && (
-              <>
-                <button 
-                  onClick={slideLeft}
-                  disabled={currentSlot === 0}
-                  className={`absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md transition-all duration-300 ${
-                    currentSlot === 0 
-                      ? 'opacity-0 pointer-events-none' 
-                      : 'text-white/50 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <ChevronLeft className="w-8 h-8" />
-                </button>
-
-                <button 
-                  onClick={slideRight}
-                  disabled={currentSlot === 2}
-                  className={`absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md transition-all duration-300 ${
-                    currentSlot === 2 
-                      ? 'opacity-0 pointer-events-none' 
-                      : 'text-white/50 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <ChevronRight className="w-8 h-8" />
-                </button>
-              </>
-            )}
-
-            <div 
-              className="absolute top-0 left-0 h-full flex transition-transform duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]"
-              style={{ width: '300%', transform: `translateX(-${currentSlot * 33.333}%)` }}
-            >
-              {slots.map((slot, index) => (
-                <div key={index} className="w-1/3 h-full">
-                  <div className="w-full h-full pt-16"> 
-                    {renderSlotContent(slot, index)}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <div className="absolute top-0 left-0 h-full flex transition-transform duration-500" style={{ width: '300%', transform: `translateX(-${currentSlot * 33.333}%)` }}>{slots.map((slot, index) => (<div key={index} className="w-1/3 h-full pt-16">{index === 0 && slot.type==='empty' ? <div className="flex flex-col items-center justify-center h-full"><button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-[#00b4d8] flex items-center justify-center hover:bg-[#00b4d8]/20 transition-all"><Plus className="w-10 h-10 text-[#00b4d8]" /></button><p className="mt-4 text-[#00b4d8] font-mono tracking-widest text-sm font-bold">ADD CONTENT</p></div> : <div className="w-full h-full flex items-center justify-center text-white/20">Empty</div>}</div>))}</div>
           </div>
-          
-          <div className="h-[100px] w-full bg-[#1e293b]/60 border-t border-slate-700/50 backdrop-blur-md flex items-center px-6 relative z-30">
-              <div className="flex items-center h-full gap-5 relative z-10 w-full">
-                  {/* 💡 التحديث الجديد: عرض اسم وحرف المستخدم الحالي بدلاً من YOU الصامتة */}
-                  <div className="flex flex-col items-center gap-1.5 translate-y-[10px]">
-                    <div className="w-[60px] h-[60px] rounded-[18px] bg-[#0f172a] border-[1.5px] border-[#00b4d8] shadow-[0_0_15px_rgba(0,180,216,0.5)] flex items-center justify-center flex-shrink-0 relative">
-                        <span className="text-[#00b4d8] font-bold text-2xl uppercase leading-none">{myInitial}</span>
-                        <div className="absolute -bottom-1 -right-0.5 w-3.5 h-3.5 bg-[#3b82f6] rounded-full border-2 border-[#1e293b]" />
-                    </div>
-                    <span className="text-[#00b4d8] text-[11px] font-bold tracking-wide truncate max-w-[70px] text-center">
-                      {myName}
-                    </span>
+          <div className="h-[90px] w-full bg-[#1e293b]/80 backdrop-blur-md border-t border-slate-700/50 flex items-center px-6 relative z-30">
+              <div className="flex items-center h-full gap-4 w-full">
+                  <div className="flex flex-col items-center gap-1 translate-y-[5px]">
+                    <div className="w-[50px] h-[50px] rounded-[16px] bg-[#0f172a] border-[1.5px] border-[#00b4d8] shadow-[0_0_10px_rgba(0,180,216,0.3)] flex items-center justify-center relative"><span className="text-[#00b4d8] font-bold text-xl uppercase">{myInitial}</span><div className="absolute -bottom-1 -right-0.5 w-3 h-3 bg-[#3b82f6] rounded-full border-2 border-[#1e293b]" /></div>
+                    <span className="text-[#00b4d8] text-[10px] font-bold truncate max-w-[60px] text-center">{myName}</span>
                   </div>
-                  
-                  {/* Remote Participants */}
                   {participants.map(p => (
-                     <div key={p.id} className="flex flex-col items-center gap-1.5 translate-y-[10px] animate-in zoom-in duration-300">
-                       <div className="w-[60px] h-[60px] rounded-[18px] bg-[#00b4d8] flex items-center justify-center flex-shrink-0 relative shadow-md">
-                          <span className="text-white font-bold text-2xl uppercase leading-none">{p.name.charAt(0).toUpperCase()}</span>
-                          <div className="absolute -bottom-1 -right-0.5 w-3.5 h-3.5 bg-[#00e676] rounded-full border-2 border-[#1e293b]" />
-                       </div>
-                       <span className="text-white text-[11px] font-medium tracking-wide truncate max-w-[70px] text-center">{p.name}</span>
+                     <div key={p.id} className="flex flex-col items-center gap-1 translate-y-[5px] animate-in zoom-in">
+                       <div className="w-[50px] h-[50px] rounded-[16px] bg-[#00b4d8] flex items-center justify-center relative shadow-md"><span className="text-white font-bold text-xl uppercase">{p.name.charAt(0).toUpperCase()}</span><div className="absolute -bottom-1 -right-0.5 w-3 h-3 bg-[#00e676] rounded-full border-2 border-[#1e293b]" /></div>
+                       <span className="text-white text-[10px] font-medium truncate max-w-[60px] text-center">{p.name}</span>
                      </div>
                   ))}
               </div>
-              
-              {participants.length === 0 && isHost && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span className="text-[#00b4d8] font-mono tracking-widest text-[13px] opacity-80">Waiting for someone to join...</span>
-                </div>
-              )}
           </div>
       </div>
     </div>
