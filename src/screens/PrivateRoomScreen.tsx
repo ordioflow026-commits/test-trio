@@ -10,7 +10,7 @@ interface RoomHistory { id: string; name: string; type: 'created' | 'joined'; li
 export default function PrivateRoomScreen() {
   const { t, dir } = useLanguage();
   const { user } = useUser();
-  const [view, setView] = useState<'menu' | 'create' | 'share' | 'join' | 'room' | 'myRooms' | 'visitorRooms' | 'recover'>('menu');
+  const [view, setView] = useState<'menu' | 'create' | 'share' | 'join' | 'room' | 'myRooms' | 'visitorRooms'>('menu');
   const [roomName, setRoomName] = useState('');
   const [roomPin, setRoomPin] = useState('');
   const [showPin, setShowPin] = useState(false);
@@ -56,22 +56,6 @@ export default function PrivateRoomScreen() {
       saveToLocal([{ id: roomId, name: roomName.trim(), type: 'created', link }, ...recentRooms]);
       setIsHost(true); setCurrentRoomId(roomId); setView('share');
     } catch { setError('حدث خطأ أثناء الإنشاء. قد تكون هناك مشكلة في الاتصال.'); } finally { setLoading(false); }
-  };
-
-  const handleRecover = async (e: React.FormEvent) => {
-    e.preventDefault(); 
-    if (!validateInputs()) return;
-    setLoading(true); setError('');
-    try {
-      const { data, error: fetchErr } = await supabase.from('private_rooms').select('*').eq('name', roomName.trim()).eq('pin', roomPin.trim()).maybeSingle();
-      if (!data || fetchErr) { setError('الغرفة غير موجودة. (ملاحظة: إذا قام المالك بحذفها، فلا يمكن استرجاعها).'); } 
-      else {
-        const type = data.host_id === user?.id ? 'created' : 'joined';
-        const link = `https://app.com/room/${data.id}`;
-        saveToLocal([{ id: data.id, name: data.name, type, link }, ...recentRooms.filter(r => r.id !== data.id)]);
-        alert('✨ تم استرجاع الغرفة بنجاح!'); setView('menu');
-      }
-    } catch { setError('خطأ في الاتصال بالخادم.'); } finally { setLoading(false); }
   };
 
   const handleJoin = async (e: React.FormEvent) => {
@@ -138,17 +122,16 @@ export default function PrivateRoomScreen() {
     );
   }
 
-  if (view === 'create' || view === 'recover') {
-    const isRecover = view === 'recover';
+  if (view === 'create') {
     return (
       <div className="flex-1 flex flex-col p-6 items-center animate-in fade-in duration-300">
          <button onClick={() => setView('menu')} className="self-start p-2 text-slate-400 mb-6 hover:bg-slate-800 rounded-full transition-all"><ArrowLeft className={dir === 'rtl' ? 'rotate-180' : ''} /></button>
          <div className="w-full max-w-sm bg-slate-800/40 border border-blue-500/30 p-6 rounded-[32px] shadow-2xl relative">
             <div className="flex flex-col items-center mb-6">
                <div className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center mb-4 border border-blue-500/50 rotate-3"><Search className="text-blue-400 w-8 h-8" /></div>
-               <h2 className="text-2xl font-black text-white text-center">{isRecover ? 'استرجاع الغرفة' : 'إنشاء غرفة جديدة'}</h2>
+               <h2 className="text-2xl font-black text-white text-center">إنشاء غرفة جديدة</h2>
             </div>
-            <form onSubmit={isRecover ? handleRecover : handleCreate} className="space-y-4">
+            <form onSubmit={handleCreate} className="space-y-4">
                {error && <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl text-xs flex items-center gap-2"><AlertCircle className="w-5 h-5 shrink-0" />{error}</div>}
                <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 ml-1">اسم الغرفة (حروف و4 رموز الأقل)</label>
@@ -161,7 +144,7 @@ export default function PrivateRoomScreen() {
                     <button type="button" onClick={()=>setShowPin(!showPin)} className="absolute right-4 top-3.5 text-slate-500">{showPin ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}</button>
                   </div>
                </div>
-               <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl mt-2 flex items-center justify-center gap-2">{loading ? <Loader2 className="animate-spin"/> : (isRecover ? 'استعادة الآن' : 'إنشاء الغرفة')}</button>
+               <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl mt-2 flex items-center justify-center gap-2">{loading ? <Loader2 className="animate-spin"/> : 'إنشاء الغرفة'}</button>
             </form>
          </div>
       </div>
@@ -208,7 +191,6 @@ export default function PrivateRoomScreen() {
           <button onClick={() => setView('create')} className="bg-blue-600 text-white py-5 rounded-[24px] font-black text-lg flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all"><Plus /> أنشئ غرفة</button>
           <button onClick={() => setView('join')} className="bg-slate-800 text-white py-5 rounded-[24px] font-black text-lg flex items-center justify-center gap-3 border border-slate-700/50 active:scale-95 transition-all"><LogIn /> انضم لرابط</button>
           <div className="grid grid-cols-2 gap-4"><button onClick={() => setView('myRooms')} className="bg-slate-800 text-white p-5 rounded-[24px] flex flex-col items-center font-bold border border-slate-700/50"><Key className="mb-2 text-blue-400" /> غرفي</button><button onClick={() => setView('visitorRooms')} className="bg-slate-800 text-white p-5 rounded-[24px] flex flex-col items-center font-bold border border-slate-700/50"><User className="mb-2 text-emerald-400" /> الزوار</button></div>
-          <button onClick={() => { setRoomName(''); setRoomPin(''); setView('recover'); }} className="text-blue-400/70 text-[13px] font-bold hover:text-blue-300 transition-all mt-4 flex items-center justify-center gap-2"><Search className="w-3.5 h-3.5"/> فقدت غرفتك؟ استعدها هنا</button>
        </div>
     </div>
   );
