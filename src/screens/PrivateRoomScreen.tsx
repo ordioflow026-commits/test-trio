@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Plus, LogIn, Copy, ArrowLeft, Check, Link as LinkIcon, History, ChevronRight, Key, User, Loader2, AlertCircle } from 'lucide-react';
+import { Lock, Plus, LogIn, Copy, ArrowLeft, Check, Link as LinkIcon, Key, User, Loader2, AlertCircle, Share2, Eye, EyeOff } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
@@ -17,6 +17,7 @@ export default function PrivateRoomScreen() {
   const [view, setView] = useState<'menu' | 'create' | 'share' | 'join' | 'room' | 'myRooms' | 'visitorRooms'>('menu');
   const [roomName, setRoomName] = useState('');
   const [roomPin, setRoomPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [joinLink, setJoinLink] = useState('');
   const [generatedLink, setGeneratedLink] = useState('');
   const [copied, setCopied] = useState(false);
@@ -28,7 +29,6 @@ export default function PrivateRoomScreen() {
   const [currentRoomId, setCurrentRoomId] = useState<string | undefined>();
 
   useEffect(() => {
-    // Load joined rooms from local storage
     const savedRooms = localStorage.getItem('joined_rooms');
     if (savedRooms) {
       setRecentRooms(JSON.parse(savedRooms));
@@ -40,18 +40,17 @@ export default function PrivateRoomScreen() {
     localStorage.setItem('joined_rooms', JSON.stringify(rooms));
   };
 
-  const handleCreate = async () => {
+  const handleCreate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault(); // يمنع إعادة تحميل الصفحة عند ضغط OK في الكيبورد
     if (!roomName || !roomPin) return;
     
     setLoading(true);
     setError('');
 
     try {
-      // Generate a unique random string (Room ID)
       const roomId = Math.random().toString(36).substring(2, 10);
       const link = `https://app.com/room/${roomId}`;
       
-      // Try to save to Supabase
       const { error: insertError } = await supabase
         .from('private_rooms')
         .insert([{ 
@@ -63,12 +62,10 @@ export default function PrivateRoomScreen() {
 
       if (insertError) {
         console.warn('Supabase insert failed, falling back to local state:', insertError);
-        // We continue anyway for the preview environment if table doesn't exist
       }
 
       setGeneratedLink(link);
       
-      // Add to history
       const newRooms = [{
         id: roomId,
         name: roomName,
@@ -94,7 +91,24 @@ export default function PrivateRoomScreen() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleJoin = async () => {
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: t('privateRoom'),
+          text: `انضم إلى غرفتي الخاصة "${roomName}" على TrioSync!`,
+          url: generatedLink,
+        });
+      } catch (err) {
+        console.log('Share canceled or failed', err);
+      }
+    } else {
+      handleCopy(); // بديل في حال المتصفح لا يدعم المشاركة
+    }
+  };
+
+  const handleJoin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!joinLink) return;
     
     setLoading(true);
@@ -103,7 +117,6 @@ export default function PrivateRoomScreen() {
     try {
       const roomCode = joinLink.split('/').pop() || 'Unknown';
       
-      // Verify against database
       const { data: roomData, error: fetchError } = await supabase
         .from('private_rooms')
         .select('*')
@@ -114,16 +127,14 @@ export default function PrivateRoomScreen() {
         console.warn('Supabase fetch failed, falling back to local state:', fetchError);
       }
 
-      // If we have DB data, use it. Otherwise, fallback to a generic name for the preview.
       const roomName = roomData?.name || `Room ${roomCode}`;
 
-      // Add to history
       const newRooms = [{
         id: roomCode,
         name: roomName,
         type: 'joined' as const,
         link: joinLink
-      }, ...recentRooms];
+      }, ...recentRooms.filter(r => r.id !== roomCode)]; // لمنع التكرار
       
       saveRoomsToLocal(newRooms);
 
@@ -190,7 +201,7 @@ export default function PrivateRoomScreen() {
                       <span className="text-xs text-slate-500">{isMyRooms ? t('myRooms') : t('visitor')}</span>
                     </div>
                   </div>
-                  <ChevronRight className={`w-5 h-5 text-slate-500 group-hover:text-blue-400 transition-colors ${dir === 'rtl' ? 'rotate-180' : ''}`} />
+                  <LogIn className={`w-5 h-5 text-slate-500 group-hover:text-blue-400 transition-colors ${dir === 'rtl' ? 'rotate-180' : ''}`} />
                 </button>
               ))}
             </div>
@@ -217,7 +228,8 @@ export default function PrivateRoomScreen() {
           <h2 className="text-2xl font-bold text-white">{t('createPrivateRoom')}</h2>
         </div>
 
-        <div className="space-y-4 w-full max-w-sm mx-auto relative">
+        {/* 💡 تحويل الواجهة لـ Form لربط زر الهاتف */}
+        <form onSubmit={handleCreate} className="space-y-4 w-full max-w-sm mx-auto relative">
           {error && (
             <div className="absolute -top-12 left-0 right-0 bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-2 rounded-xl text-sm flex items-center gap-2">
               <AlertCircle className="w-4 h-4" />
@@ -230,30 +242,39 @@ export default function PrivateRoomScreen() {
               type="text" 
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
+              enterKeyHint="next"
               className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
               placeholder={t('groupName')}
             />
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-slate-400 mb-1.5 px-1">{t('privateNumber')}</label>
             <input 
-              type="password" 
+              type={showPin ? "text" : "password"} 
               value={roomPin}
               onChange={(e) => setRoomPin(e.target.value)}
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-              placeholder="****"
-              maxLength={8}
+              enterKeyHint="go"
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-xl pl-4 pr-12 py-3.5 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+              placeholder="رمز أو رقم سري"
             />
+            {/* زر إظهار وإخفاء الرقم */}
+            <button 
+              type="button"
+              onClick={() => setShowPin(!showPin)}
+              className="absolute right-3 top-9 p-1 text-slate-400 hover:text-white transition-colors"
+            >
+              {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
           </div>
           
           <button 
-            onClick={handleCreate}
+            type="submit"
             disabled={!roomName || !roomPin || loading}
             className="w-full mt-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : t('create')}
           </button>
-        </div>
+        </form>
       </div>
     );
   }
@@ -266,27 +287,38 @@ export default function PrivateRoomScreen() {
             <Check className="w-10 h-10 text-green-400" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-2 text-center">{roomName}</h2>
-          <p className="text-slate-400 text-center mb-8">Room created successfully. Share this link with your friends.</p>
+          <p className="text-slate-400 text-center mb-8">تم إنشاء الغرفة! شارك الرابط مع من تريد.</p>
 
-          <div className="w-full bg-slate-800/80 border border-slate-700 rounded-2xl p-4 mb-6">
+          <div className="w-full bg-slate-800/80 border border-slate-700 rounded-2xl p-4 mb-6 shadow-xl">
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('roomLink')}</label>
-            <div className="flex items-center gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-              <LinkIcon className="w-5 h-5 text-slate-400 flex-shrink-0" />
-              <span className="text-blue-400 font-mono text-sm truncate flex-1" dir="ltr">{generatedLink}</span>
+            <div className="flex items-center gap-3 bg-slate-900/80 p-3 rounded-xl border border-slate-700/50">
+              <LinkIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />
+              <span className="text-blue-100 font-mono text-sm truncate flex-1" dir="ltr">{generatedLink}</span>
             </div>
           </div>
 
-          <button 
-            onClick={handleCopy}
-            className={`w-full flex items-center justify-center gap-2 font-bold py-4 rounded-xl transition-all active:scale-95 ${
-              copied 
-                ? 'bg-green-600 text-white shadow-[0_0_20px_rgba(22,163,74,0.4)]' 
-                : 'bg-slate-700 text-white hover:bg-slate-600'
-            }`}
-          >
-            {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-            {copied ? t('linkCopied') : t('copyLink')}
-          </button>
+          <div className="grid grid-cols-2 gap-3 w-full mb-6">
+            <button 
+              onClick={handleCopy}
+              className={`flex items-center justify-center gap-2 font-bold py-3.5 rounded-xl transition-all active:scale-95 ${
+                copied 
+                  ? 'bg-green-600/20 border border-green-500 text-green-400' 
+                  : 'bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? t('linkCopied') : t('copyLink')}
+            </button>
+
+            {/* 💡 ميزة المشاركة في تطبيقات الهاتف (واتساب، ماسنجر...) */}
+            <button 
+              onClick={handleShare}
+              className="flex items-center justify-center gap-2 font-bold py-3.5 rounded-xl bg-blue-600/20 border border-blue-500 text-blue-400 hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+            >
+              <Share2 className="w-4 h-4" />
+              مشاركة عبر...
+            </button>
+          </div>
           
           <button 
             onClick={() => {
@@ -294,7 +326,7 @@ export default function PrivateRoomScreen() {
               setRoomName('');
               setRoomPin('');
             }}
-            className="w-full mt-4 bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-500 transition-colors shadow-lg shadow-blue-500/20"
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl hover:brightness-110 transition-all shadow-lg shadow-blue-500/20 active:scale-95"
           >
             {t('enterRoom')}
           </button>
@@ -305,7 +337,7 @@ export default function PrivateRoomScreen() {
               setRoomName('');
               setRoomPin('');
             }}
-            className="w-full mt-4 text-slate-400 font-bold py-4 rounded-xl hover:bg-slate-800 transition-colors"
+            className="w-full mt-3 text-slate-400 font-bold py-4 rounded-xl hover:bg-slate-800 transition-colors"
           >
             {t('back')}
           </button>
@@ -331,7 +363,8 @@ export default function PrivateRoomScreen() {
           <h2 className="text-2xl font-bold text-white">{t('joinPrivateRoom')}</h2>
         </div>
 
-        <div className="space-y-4 w-full max-w-sm mx-auto relative">
+        {/* 💡 تحويل الواجهة لـ Form لربط زر الهاتف */}
+        <form onSubmit={handleJoin} className="space-y-4 w-full max-w-sm mx-auto relative">
           {error && (
             <div className="absolute -top-12 left-0 right-0 bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-2 rounded-xl text-sm flex items-center gap-2">
               <AlertCircle className="w-4 h-4" />
@@ -344,6 +377,7 @@ export default function PrivateRoomScreen() {
               type="text" 
               value={joinLink}
               onChange={(e) => setJoinLink(e.target.value)}
+              enterKeyHint="go"
               className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
               placeholder="https://app.com/room/..."
               dir="ltr"
@@ -351,13 +385,13 @@ export default function PrivateRoomScreen() {
           </div>
           
           <button 
-            onClick={handleJoin}
+            type="submit"
             disabled={!joinLink || loading}
             className="w-full mt-6 bg-slate-700 text-white font-bold py-4 rounded-xl hover:bg-slate-600 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : t('join')}
           </button>
-        </div>
+        </form>
       </div>
     );
   }
