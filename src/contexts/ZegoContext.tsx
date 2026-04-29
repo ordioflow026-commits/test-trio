@@ -37,6 +37,24 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
       zp.addPlugins({ ZIM });
 
       zp.setCallInvitationConfig({
+        // 💡 التحديث الجديد: تغيير النص برمجياً للتمييز بين الفيديو والصوت بلمسة جمالية
+        onIncomingCallReceived: (callID: string, caller: any, callType: number) => {
+          const updateTextSafely = () => {
+            const elements = document.querySelectorAll('div, span, p');
+            elements.forEach(el => {
+              if (el.textContent === 'Incoming call...') {
+                // 1 = Video, 0 = Audio
+                el.textContent = callType === 1 ? 'مكالمة فيديو... 📹' : 'مكالمة صوتية... 📞';
+              }
+            });
+          };
+          
+          // تشغيل الدالة فوراً وبشكل متتالي لضمان التقاط الشاشة فور بنائها
+          updateTextSafely();
+          setTimeout(updateTextSafely, 50);
+          setTimeout(updateTextSafely, 200);
+          setTimeout(updateTextSafely, 500);
+        },
         onSetRoomConfigBeforeJoining: (callType: number) => {
           const isVideo = callType === 1; 
           return {
