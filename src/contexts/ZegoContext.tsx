@@ -37,7 +37,12 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
       zp.addPlugins({ ZIM });
 
       zp.setCallInvitationConfig({
-        // 💡 التحديث الجديد: تغيير النص برمجياً للتمييز بين الفيديو والصوت بلمسة جمالية
+        // 🔔 التحديث الجديد: إضافة الرنين الرسمي والموثوق من ZegoCloud
+        ringtoneConfig: {
+          incomingCallUrl: 'https://zego-public.oss-cn-shanghai.aliyuncs.com/zego_zrtc_server/ZegoUIKitPrebuiltCallInvitation/incomingCall.mp3',
+          outgoingCallUrl: 'https://zego-public.oss-cn-shanghai.aliyuncs.com/zego_zrtc_server/ZegoUIKitPrebuiltCallInvitation/outgoingCall.mp3'
+        },
+        
         onIncomingCallReceived: (callID: string, caller: any, callType: number) => {
           const updateTextSafely = () => {
             const elements = document.querySelectorAll('div, span, p');
