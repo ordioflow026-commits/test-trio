@@ -55,7 +55,7 @@ export default function PrivateRoomScreen() {
       setGeneratedLink(link);
       saveToLocal([{ id: roomId, name: roomName.trim(), type: 'created', link }, ...recentRooms]);
       setIsHost(true); setCurrentRoomId(roomId); setView('share');
-    } catch { setError('حدث خطأ أثناء الإنشاء'); } finally { setLoading(false); }
+    } catch { setError('حدث خطأ أثناء الإنشاء. قد تكون هناك مشكلة في الاتصال.'); } finally { setLoading(false); }
   };
 
   const handleRecover = async (e: React.FormEvent) => {
@@ -64,12 +64,12 @@ export default function PrivateRoomScreen() {
     setLoading(true); setError('');
     try {
       const { data, error: fetchErr } = await supabase.from('private_rooms').select('*').eq('name', roomName.trim()).eq('pin', roomPin.trim()).maybeSingle();
-      if (!data || fetchErr) { setError('الغرفة غير موجودة. (ملاحظة: إذا قام صاحب الغرفة بحذفها، يتم تدميرها نهائياً ولا يمكن استرجاعها).'); } 
+      if (!data || fetchErr) { setError('الغرفة غير موجودة. (ملاحظة: إذا قام المالك بحذفها، فلا يمكن استرجاعها).'); } 
       else {
         const type = data.host_id === user?.id ? 'created' : 'joined';
         const link = `https://app.com/room/${data.id}`;
         saveToLocal([{ id: data.id, name: data.name, type, link }, ...recentRooms.filter(r => r.id !== data.id)]);
-        alert('✨ تم استرجاع الغرفة وإضافتها لسجلك بنجاح!'); setView('menu');
+        alert('✨ تم استرجاع الغرفة بنجاح!'); setView('menu');
       }
     } catch { setError('خطأ في الاتصال بالخادم.'); } finally { setLoading(false); }
   };
@@ -81,9 +81,11 @@ export default function PrivateRoomScreen() {
     try {
       const roomCode = joinLink.includes('/') ? joinLink.split('/').pop()?.trim() : joinLink.trim();
       if (!roomCode) throw new Error('الرابط غير صالح');
-      const { data: roomData, error: dbErr } = await supabase.from('private_rooms').select('*').eq('id', roomCode).maybeSingle();
-      if (!roomData || dbErr) { setError('الغرفة غير موجودة أو تم حذفها من قبل المالك.'); return; }
-      const name = roomData.name || `Room ${roomCode}`;
+      
+      // 💡 تحديث الزائر: نحاول جلب الاسم، وإذا فشل بسبب RLS نسمح له بالدخول بالكود مباشرة
+      const { data: roomData } = await supabase.from('private_rooms').select('name').eq('id', roomCode).maybeSingle();
+      const name = roomData?.name || `Room ${roomCode}`;
+      
       saveToLocal([{ id: roomCode, name, type: 'joined', link: joinLink }, ...recentRooms.filter(r => r.id !== roomCode)]);
       setIsHost(false); setCurrentRoomId(roomCode); setView('room');
     } catch (err: any) { setError(err.message || 'فشل الانضمام للغرفة'); } finally { setLoading(false); }
@@ -92,7 +94,7 @@ export default function PrivateRoomScreen() {
   const handleDeleteRoom = async (e: React.MouseEvent, room: RoomHistory) => {
     e.stopPropagation();
     if (room.type === 'created') {
-      const confirmDelete = window.confirm("⚠️ تحذير: أنت مالك الغرفة. حذفها سيؤدي إلى تدميرها نهائياً وطرد جميع الزوار، ولن يمكن استرجاعها. هل توافق؟");
+      const confirmDelete = window.confirm("⚠️ تحذير: أنت مالك الغرفة. حذفها سيؤدي إلى تدميرها نهائياً. هل توافق؟");
       if (!confirmDelete) return;
       try { await supabase.from('private_rooms').delete().eq('id', room.id); } catch (err) {}
     } else {
@@ -122,9 +124,9 @@ export default function PrivateRoomScreen() {
               <div key={room.id} onClick={() => { setIsHost(room.type==='created'); setCurrentRoomId(room.id); setView('room'); }} className="flex items-center justify-between p-4 bg-slate-800/40 border border-slate-700/50 rounded-2xl cursor-pointer hover:border-blue-500 transition-all group">
                 <div className="flex items-center gap-3">
                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isMyRooms ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{isMyRooms ? <Key className="w-5 h-5" /> : <User className="w-5 h-5" />}</div>
-                   <span className="font-bold text-slate-200">{room.name}</span>
+                   <span className="font-bold text-slate-200 line-clamp-1 text-left">{room.name}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                    <button onClick={(e) => handleDeleteRoom(e, room)} className="p-2 text-slate-500 hover:text-red-400 transition-colors"><Trash2 className="w-5 h-5" /></button>
                    <LogIn className="w-5 h-5 text-slate-500 group-hover:text-blue-400" />
                 </div>
@@ -144,12 +146,21 @@ export default function PrivateRoomScreen() {
          <div className="w-full max-w-sm bg-slate-800/40 border border-blue-500/30 p-6 rounded-[32px] shadow-2xl relative">
             <div className="flex flex-col items-center mb-6">
                <div className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center mb-4 border border-blue-500/50 rotate-3"><Search className="text-blue-400 w-8 h-8" /></div>
-               <h2 className="text-2xl font-black text-white">{isRecover ? 'استرجاع الغرفة' : 'إنشاء غرفة جديدة'}</h2>
+               <h2 className="text-2xl font-black text-white text-center">{isRecover ? 'استرجاع الغرفة' : 'إنشاء غرفة جديدة'}</h2>
             </div>
             <form onSubmit={isRecover ? handleRecover : handleCreate} className="space-y-4">
                {error && <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl text-xs flex items-center gap-2"><AlertCircle className="w-5 h-5 shrink-0" />{error}</div>}
-               <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 ml-1">اسم الغرفة (4 أحرف على الأقل)</label><input type="text" value={roomName} onChange={e => setRoomName(e.target.value)} className="w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl px-4 py-3.5 text-white focus:border-blue-500 outline-none" required /></div>
-               <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 ml-1">الرقم السري (8 رموز على الأقل)</label><div className="relative"><input type={showPin ? "text" : "password"} value={roomPin} onChange={e => setRoomPin(e.target.value)} className="w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl px-4 py-3.5 text-white focus:border-blue-500 outline-none" required /><button type="button" onClick={()=>setShowPin(!showPin)} className="absolute right-4 top-3.5 text-slate-500">{showPin ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}</button></div></div>
+               <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">اسم الغرفة (حروف و4 رموز الأقل)</label>
+                  <input type="text" value={roomName} onChange={e => setRoomName(e.target.value)} className="w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl px-4 py-3.5 text-white focus:border-blue-500 outline-none" required />
+               </div>
+               <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 ml-1">الرقم السري (8 رموز على الأقل)</label>
+                  <div className="relative">
+                    <input type={showPin ? "text" : "password"} value={roomPin} onChange={e => setRoomPin(e.target.value)} className="w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl px-4 py-3.5 text-white focus:border-blue-500 outline-none" required />
+                    <button type="button" onClick={()=>setShowPin(!showPin)} className="absolute right-4 top-3.5 text-slate-500">{showPin ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}</button>
+                  </div>
+               </div>
                <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl mt-2 flex items-center justify-center gap-2">{loading ? <Loader2 className="animate-spin"/> : (isRecover ? 'استعادة الآن' : 'إنشاء الغرفة')}</button>
             </form>
          </div>
