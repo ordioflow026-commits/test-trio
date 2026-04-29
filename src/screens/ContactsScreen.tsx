@@ -20,7 +20,7 @@ interface Contact {
 export default function ContactsScreen() {
   const { t } = useLanguage();
   const { user } = useUser();
-  const { zp } = useZego(); // 💡 التحديث: استيراد مشغل الاتصال
+  const { zp } = useZego();
   const { isSelectionMode, selectedContactIds, selectedContacts, toggleSelection } = useSelection();
   const [contacts, setContacts] = useState<Contact[]>(() => {
     const saved = localStorage.getItem('triosync_device_contacts');
@@ -43,60 +43,39 @@ export default function ContactsScreen() {
 
   useEffect(() => {
     let isMounted = true;
-
     const handleFetch = () => triggerContactFetch();
     window.addEventListener('fetch-contacts', handleFetch);
 
     let channel: any = null;
     const fetchChats = async () => {
       if (!user || !isMounted) return;
-      
       const { data: profiles } = await supabase.from('profiles').select('id, phone');
       if (!profiles || !isMounted) return;
-      
       const profileToPhone = new Map<string, string>();
       const newSummaries: Record<string, { lastMessage: string, lastTime: string, unreadCount: number }> = {};
-      
       profiles.forEach(p => {
         if (p.phone) {
-          const cleanPhone = p.phone.replace(/\\D/g, '').slice(-9);
+          const cleanPhone = p.phone.replace(/\D/g, '').slice(-9);
           profileToPhone.set(p.id, cleanPhone);
           newSummaries[cleanPhone] = { lastMessage: '', lastTime: '', unreadCount: 0 };
         }
       });
-
-      const { data: messages } = await supabase
-        .from('messages')
-        .select('*')
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-        .order('created_at', { ascending: true });
-
+      const { data: messages } = await supabase.from('messages').select('*').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: true });
       if (!messages || !isMounted) return;
-
       messages.forEach(msg => {
         const otherId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
         const otherPhone = profileToPhone.get(otherId);
         if (!otherPhone) return;
-
         newSummaries[otherPhone].lastMessage = msg.content;
         newSummaries[otherPhone].lastTime = msg.created_at;
-
         if (msg.receiver_id === user.id && msg.status !== 'read') {
           newSummaries[otherPhone].unreadCount += 1;
         }
       });
-
       setChatSummaries(newSummaries);
     };
-
     fetchChats();
-
-    channel = supabase.channel('contacts_messages')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
-        fetchChats();
-      })
-      .subscribe();
-
+    channel = supabase.channel('contacts_messages').on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => fetchChats()).subscribe();
     return () => {
       isMounted = false;
       window.removeEventListener('fetch-contacts', handleFetch);
@@ -107,345 +86,126 @@ export default function ContactsScreen() {
   const handleManualAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newContactName.trim() || !newContactPhone.trim()) return;
-
-    const newContact: Contact = {
-      id: Date.now(),
-      name: newContactName.trim(),
-      phone: newContactPhone.trim(),
-      initials: newContactName.trim().substring(0, 2).toUpperCase()
-    };
-
+    const newContact: Contact = { id: Date.now(), name: newContactName.trim(), phone: newContactPhone.trim(), initials: newContactName.trim().substring(0, 2).toUpperCase() };
     setContacts(prev => {
       const map = new Map();
       prev.forEach(c => map.set(c.phone, c));
       map.set(newContact.phone, newContact);
       return Array.from(map.values());
     });
-
-    setNewContactName('');
-    setNewContactPhone('');
-    setShowAddForm(false);
+    setNewContactName(''); setNewContactPhone(''); setShowAddForm(false);
   };
 
   const handleDeleteContact = (e: React.MouseEvent, contact: Contact) => {
     e.stopPropagation();
     setContacts(prev => prev.filter(c => c.phone !== contact.phone));
-    if (selectedContactIds.includes(contact.phone)) {
-      toggleSelection({ id: contact.phone, name: contact.name }, false);
-    }
+    if (selectedContactIds.includes(contact.phone)) toggleSelection({ id: contact.phone, name: contact.name }, false);
   };
 
   const triggerContactFetch = async () => {
-    setIsLoadingContacts(true);
-    setErrorMessage(null);
-
+    setIsLoadingContacts(true); setErrorMessage(null);
     try {
       if (Capacitor.isNativePlatform()) {
         const perm = await Contacts.requestPermissions();
         if (perm.contacts === 'granted') {
           const result = await Contacts.getContacts({ projection: { name: true, phones: true } });
           if (result.contacts && result.contacts.length > 0) {
-            const mappedContacts = result.contacts.map((c, i) => ({
-              id: i,
-              name: c.name?.display || 'Unknown',
-              phone: c.phones?.[0]?.number || 'No phone',
-              initials: (c.name?.display || 'U').substring(0, 2).toUpperCase()
-            }));
-            
-            setContacts(prev => {
-               const map = new Map();
-               prev.forEach(c => map.set(c.phone, c));
-               mappedContacts.forEach(c => map.set(c.phone, c));
-               return Array.from(map.values());
-            });
-          } else {
-            setErrorMessage('No native contacts found.');
-          }
-        } else {
-          setErrorMessage('Permission denied for native device contacts.');
-        }
+            const mappedContacts = result.contacts.map((c, i) => ({ id: i, name: c.name?.display || 'Unknown', phone: c.phones?.[0]?.number || 'No phone', initials: (c.name?.display || 'U').substring(0, 2).toUpperCase() }));
+            setContacts(prev => { const map = new Map(); prev.forEach(c => map.set(c.phone, c)); mappedContacts.forEach(c => map.set(c.phone, c)); return Array.from(map.values()); });
+          } else setErrorMessage('No native contacts found.');
+        } else setErrorMessage('Permission denied for native device contacts.');
       } else {
         if ('contacts' in navigator && 'ContactsManager' in window) {
           const webContacts = await (navigator as any).contacts.select(['name', 'tel'], { multiple: true });
-          
           if (webContacts && webContacts.length > 0) {
-            const mappedContacts = webContacts.map((c: any, i: number) => {
-              const name = c.name?.[0] || 'Unknown';
-              const phone = c.tel?.[0] || 'No phone';
-              return { id: i, name, phone, initials: name.substring(0, 2).toUpperCase() };
-            });
-            
-            setContacts(prev => {
-               const map = new Map();
-               prev.forEach(c => map.set(c.phone, c));
-               mappedContacts.forEach(c => map.set(c.phone, c));
-               return Array.from(map.values());
-            });
-          } else {
-            setErrorMessage('No valid web contacts selected.');
-          }
-        } else {
-          setErrorMessage('Browser Contacts API unsupported on this device. Please add contacts manually.');
-        }
+            const mappedContacts = webContacts.map((c: any, i: number) => { const name = c.name?.[0] || 'Unknown'; const phone = c.tel?.[0] || 'No phone'; return { id: i, name, phone, initials: name.substring(0, 2).toUpperCase() }; });
+            setContacts(prev => { const map = new Map(); prev.forEach(c => map.set(c.phone, c)); mappedContacts.forEach(c => map.set(c.phone, c)); return Array.from(map.values()); });
+          } else setErrorMessage('No valid web contacts selected.');
+        } else setErrorMessage('Browser Contacts API unsupported on this device.');
       }
-    } catch (err: any) {
-      console.error('Contact fetch failed:', err);
-      if (err.name === 'SecurityError' || err.message?.includes('user activation')) {
-        setErrorMessage('Browser requires a tap to load contacts. Click the button below.');
-      } else {
-        setErrorMessage('Failed to load device contacts.');
-      }
-    } finally {
-      setIsLoadingContacts(false);
-    }
+    } catch (err) { setErrorMessage('Failed to load device contacts.'); }
+    finally { setIsLoadingContacts(false); }
   };
 
-  const handleTouchStart = (contact: Contact) => {
-    longPressTimer.current = setTimeout(() => {
-      if (!isSelectionMode) {
-        toggleSelection({ id: contact.phone, name: contact.name }, true);
-        setExpandedContactId(null);
-      }
-    }, 500); 
-  };
+  const handleTouchStart = (contact: Contact) => { longPressTimer.current = setTimeout(() => { if (!isSelectionMode) { toggleSelection({ id: contact.phone, name: contact.name }, true); setExpandedContactId(null); } }, 500); };
+  const handleTouchEnd = () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); };
+  const handleTap = (contact: Contact) => { if (isSelectionMode) toggleSelection({ id: contact.phone, name: contact.name }); else navigate('/chat', { state: { contact } }); };
 
-  const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-    }
-  };
-
-  const handleTap = (contact: Contact) => {
-    if (isSelectionMode) {
-      toggleSelection({ id: contact.phone, name: contact.name });
-    } else {
-      navigate('/chat', { state: { contact } });
-    }
-  };
-
-  // 💡 التحديث الجديد: برمجة زر الاتصال الجماعي بأمان باستخدام Zego Invite
+  // 💡 التحديث: تسجيل المكالمة الجماعية في دردشة كل شخص
   const startGroupCall = async (isVideo: boolean = true) => {
     if (!zp || selectedContactIds.length === 0) return;
-
     try {
-      // 1. جلب بيانات المستخدمين المسجلين في التطبيق للبحث عن المحددين
       const { data: profiles } = await supabase.from('profiles').select('id, phone');
       if (!profiles) return;
-
       const callees: any[] = [];
-      
-      // 2. مطابقة الأرقام المحددة مع الأرقام المسجلة في قاعدة البيانات
-      selectedContactIds.forEach(phone => {
-        const cleanPhone = phone.replace(/\\D/g, '').slice(-9);
-        const profile = profiles.find(p => p.phone && p.phone.replace(/\\D/g, '').slice(-9) === cleanPhone);
-        
+      const content = isVideo ? '📹 مكالمة فيديو جماعية' : '📞 مكالمة صوتية جماعية';
+
+      for (const phone of selectedContactIds) {
+        const cleanPhone = phone.replace(/\D/g, '').slice(-9);
+        const profile = profiles.find(p => p.phone && p.phone.replace(/\D/g, '').slice(-9) === cleanPhone);
         if (profile) {
           const targetZegoId = profile.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
           const contactObj = contacts.find(c => c.phone === phone);
           callees.push({ userID: targetZegoId, userName: contactObj?.name || 'User' });
+          // تسجيل المكالمة في قاعدة البيانات
+          await supabase.from('messages').insert({ sender_id: user?.id, receiver_id: profile.id, content, status: 'sent' });
         }
-      });
-
-      // 3. إرسال دعوة جماعية في حال وجود أرقام صالحة
-      if (callees.length > 0) {
-        zp.sendCallInvitation({
-          callees: callees,
-          callType: isVideo ? 1 : 0,
-          timeout: 60
-        }).catch(console.error);
-
-        // 4. إلغاء التحديد بشكل أنيق بعد إرسال المكالمة
-        const currentSelected = [...selectedContactIds];
-        currentSelected.forEach(id => toggleSelection({ id, name: '' }));
-      } else {
-        alert('لا يوجد أي شخص مسجل في التطبيق من بين جهات الاتصال المحددة.'); 
       }
-    } catch (err) {
-      console.error("Error starting group call:", err);
-    }
+
+      if (callees.length > 0) {
+        zp.sendCallInvitation({ callees, callType: isVideo ? 1 : 0, timeout: 60 }).catch(console.error);
+        selectedContactIds.forEach(id => toggleSelection({ id, name: '' }));
+      } else alert('لم يتم العثور على مستخدمين مسجلين.');
+    } catch (err) { console.error(err); }
   };
 
   const lastSelectedContactPhone = selectedContactIds.length > 0 ? selectedContactIds[selectedContactIds.length - 1] : null;
 
   return (
     <div className="flex flex-col h-full bg-slate-900 relative">
-      
       <div className="px-4 py-3 flex justify-between items-center border-b border-slate-800/60 bg-slate-900 z-10 shadow-sm">
-        <button 
-          onClick={() => triggerContactFetch()} 
-          className="flex items-center gap-2 text-[13px] font-semibold text-blue-400 hover:text-blue-300 transition-colors"
-        >
-          <Users className="w-4 h-4" /> Load Device Contacts
-        </button>
-        <button 
-          onClick={() => setShowAddForm(!showAddForm)} 
-          className="flex items-center gap-2 text-[13px] font-semibold text-blue-400 hover:text-blue-300 transition-colors"
-        >
-          <UserPlus className="w-4 h-4" /> Add Manual
-        </button>
+        <button onClick={() => triggerContactFetch()} className="flex items-center gap-2 text-[13px] font-semibold text-blue-400"><Users className="w-4 h-4" /> Load Device Contacts</button>
+        <button onClick={() => setShowAddForm(!showAddForm)} className="flex items-center gap-2 text-[13px] font-semibold text-blue-400"><UserPlus className="w-4 h-4" /> Add Manual</button>
       </div>
-
       <AnimatePresence>
         {showAddForm && (
-          <motion.form
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden bg-slate-800/50 border-b border-slate-800/60"
-            onSubmit={handleManualAdd}
-          >
+          <motion.form initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden bg-slate-800/50 border-b border-slate-800/60" onSubmit={handleManualAdd}>
             <div className="p-4 flex flex-col gap-3">
-              <input 
-                type="text" 
-                placeholder="Name" 
-                value={newContactName}
-                onChange={e => setNewContactName(e.target.value)}
-                className="w-full bg-slate-900/80 border border-slate-700/50 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500 transition-colors"
-                required
-              />
-              <input 
-                type="tel" 
-                placeholder="Phone (e.g. +123...)" 
-                value={newContactPhone}
-                onChange={e => setNewContactPhone(e.target.value)}
-                className="w-full bg-slate-900/80 border border-slate-700/50 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500 transition-colors"
-                required
-              />
+              <input type="text" placeholder="Name" value={newContactName} onChange={e => setNewContactName(e.target.value)} className="w-full bg-slate-900/80 border border-slate-700/50 rounded-xl px-4 py-3 text-white text-sm outline-none" required />
+              <input type="tel" placeholder="Phone" value={newContactPhone} onChange={e => setNewContactPhone(e.target.value)} className="w-full bg-slate-900/80 border border-slate-700/50 rounded-xl px-4 py-3 text-white text-sm outline-none" required />
               <div className="flex justify-end gap-2 mt-1">
-                <button 
-                  type="button" 
-                  onClick={() => setShowAddForm(false)}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-400 hover:bg-slate-700/50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-500 transition-colors shadow-lg shadow-blue-500/20"
-                >
-                  Save Contact
-                </button>
+                <button type="button" onClick={() => setShowAddForm(false)} className="px-4 py-2 text-slate-400 text-sm">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold">Save Contact</button>
               </div>
             </div>
           </motion.form>
         )}
       </AnimatePresence>
-
       <div className="flex-1 overflow-y-auto pt-2 pb-20">
-        
-        {isLoadingContacts && (
-          <div className="flex flex-col items-center justify-center p-6 text-slate-400">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-2" />
-            <span className="text-sm font-medium">Loading contacts...</span>
-          </div>
-        )}
-
-        {!isLoadingContacts && (!contacts || contacts.length === 0 || errorMessage) && (
-          <div className="flex flex-col items-center justify-center p-6 mt-10 text-center">
-            <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-700 shadow-lg">
-               <Users className="w-8 h-8 text-slate-400" />
-            </div>
-            <p className="text-slate-300 mb-6 text-sm">
-              {errorMessage || 'No contacts currently loaded.'}
-            </p>
-            <button 
-              onClick={() => triggerContactFetch()}
-              className="w-full max-w-xs bg-blue-600 hover:bg-blue-500 text-white py-3 px-4 rounded-xl font-semibold shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all active:scale-95 text-sm"
-            >
-              Load Device Contacts
-            </button>
-          </div>
-        )}
-
+        {isLoadingContacts && <div className="flex flex-col items-center p-6 text-slate-400"><Loader2 className="w-8 h-8 animate-spin mb-2" /><span>Loading...</span></div>}
         {contacts.map((contact) => {
             const isSelected = selectedContactIds.includes(contact.phone);
-            const cleanPhone = contact.phone.replace(/\\D/g, '').slice(-9);
-            const chatInfo = chatSummaries[cleanPhone];
-            
+            const chatInfo = chatSummaries[contact.phone.replace(/\D/g, '').slice(-9)];
             return (
             <div key={`${contact.id}-${contact.phone}`} className="relative">
-              <div
-                onMouseDown={() => handleTouchStart(contact)}
-                onMouseUp={handleTouchEnd}
-                onMouseLeave={handleTouchEnd}
-                onTouchStart={() => handleTouchStart(contact)}
-                onTouchEnd={handleTouchEnd}
-                onClick={() => handleTap(contact)}
-                className={`flex items-center px-4 py-3 cursor-pointer transition-colors select-none ${
-                  isSelected ? 'bg-[#0070a8]' : 'hover:bg-slate-800/50'
-                }`}
-              >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold mr-4 transition-all duration-300 shrink-0 ${
-                  isSelected ? 'bg-[#00b4d8] text-white shadow-md' : 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30'
-                }`}>
-                  {isSelected ? <Check className="w-6 h-6" /> : contact.initials}
-                </div>
-                <div className="flex-1 border-b border-slate-800/60 pb-3 pt-1 flex justify-between items-center pr-2 min-w-0">
+              <div onMouseDown={() => handleTouchStart(contact)} onMouseUp={handleTouchEnd} onTouchStart={() => handleTouchStart(contact)} onTouchEnd={handleTouchEnd} onClick={() => handleTap(contact)} className={`flex items-center px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-[#0070a8]' : 'hover:bg-slate-800/50'}`}>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold mr-4 shrink-0 ${isSelected ? 'bg-[#00b4d8] text-white' : 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30'}`}>{isSelected ? <Check className="w-6 h-6" /> : contact.initials}</div>
+                <div className="flex-1 border-b border-slate-800/60 pb-3 flex justify-between items-center pr-2 min-w-0">
                   <div className="flex-1 min-w-0 pr-3">
                     <div className="flex justify-between items-baseline mb-0.5 min-w-0 gap-2">
-                      <h3 className={`font-semibold transition-colors text-[17px] truncate flex-1 min-w-0 ${isSelected ? 'text-white' : 'text-slate-200'}`}>
-                        {contact.name}
-                      </h3>
-                      {chatInfo?.lastTime && (
-                         <span className={`text-[11px] shrink-0 ml-2 ${chatInfo.unreadCount > 0 ? 'text-blue-400 font-semibold' : 'text-slate-500'}`}>
-                           {new Date(chatInfo.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                         </span>
-                      )}
+                      <h3 className={`font-semibold text-[17px] truncate flex-1 ${isSelected ? 'text-white' : 'text-slate-200'}`}>{contact.name}</h3>
+                      {chatInfo?.lastTime && <span className="text-[11px] text-slate-500">{new Date(chatInfo.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
                     </div>
-                    
-                    <div className="flex items-center gap-2 min-w-0">
-                       <p className={`text-[14px] truncate flex-1 min-w-0 ${isSelected || (chatInfo?.unreadCount && chatInfo.unreadCount > 0) ? 'text-blue-100 font-medium' : 'text-slate-400'}`}>
-                         {chatInfo?.lastMessage 
-                            ? (chatInfo.lastMessage.startsWith('File: ') ? '📎 Attachment' : chatInfo.lastMessage)
-                            : (
-                               <span className="text-[13px]" dir="ltr">{contact.phone}</span>
-                            )
-                         }
-                       </p>
-                    </div>
+                    <p className="text-[14px] truncate text-slate-400">{chatInfo?.lastMessage ? (chatInfo.lastMessage.startsWith('File: ') ? '📎 Attachment' : chatInfo.lastMessage) : contact.phone}</p>
                   </div>
-                  
-                  <div className="flex items-center gap-3 shrink-0">
-                    {chatInfo && chatInfo.unreadCount > 0 && !isSelectionMode && (
-                      <div className="bg-blue-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full min-w-[20px] flex items-center justify-center">
-                        {chatInfo.unreadCount}
-                      </div>
-                    )}
-                    
-                    {!isSelectionMode && (!chatInfo || chatInfo.lastMessage === '') && (
-                      <button
-                        onClick={(e) => handleDeleteContact(e, contact)}
-                        className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-full transition-colors active:scale-95"
-                      >
-                        <Trash2 className="w-[18px] h-[18px]" />
-                      </button>
-                    )}
-                  </div>
+                  {chatInfo && chatInfo.unreadCount > 0 && !isSelectionMode && <div className="bg-blue-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">{chatInfo.unreadCount}</div>}
                 </div>
               </div>
-              
               <AnimatePresence>
                 {isSelectionMode && contact.phone === lastSelectedContactPhone && (
-                  <motion.div
-                    layoutId="dynamic-fab"
-                    className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-30"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  >
-                    <button
-                        onClick={(e) => { e.stopPropagation(); startGroupCall(false); }}
-                        className="w-[48px] h-[48px] rounded-full bg-[#00b4d8] text-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,180,216,0.5)] hover:brightness-110 active:scale-95 transition-all outline-none"
-                    >
-                         <Phone fill="currentColor" stroke="none" className="w-[20px] h-[20px]" />
-                    </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); startGroupCall(true); }}
-                        className="w-[48px] h-[48px] rounded-full bg-[#00e676] text-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,230,118,0.5)] hover:brightness-110 active:scale-95 transition-all outline-none"
-                    >
-                         <Video fill="currentColor" stroke="none" className="w-[20px] h-[20px]" />
-                    </button>
+                  <motion.div layoutId="dynamic-fab" className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-30" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}>
+                    <button onClick={(e) => { e.stopPropagation(); startGroupCall(false); }} className="w-[48px] h-[48px] rounded-full bg-[#00b4d8] text-white flex items-center justify-center shadow-lg"><Phone className="w-5 h-5" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); startGroupCall(true); }} className="w-[48px] h-[48px] rounded-full bg-[#00e676] text-white flex items-center justify-center shadow-lg"><Video className="w-5 h-5" /></button>
                   </motion.div>
                 )}
               </AnimatePresence>
