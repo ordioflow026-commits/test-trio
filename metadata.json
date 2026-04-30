@@ -1,9 +1,9 @@
 {
-  "name": "TRIOsync",
-  "description": "Core Architecture & Authentication for communication app",
+  "name": "CommApp",
+  "description": "Communication application with video calling and chat",
   "requestFramePermissions": [
     "camera",
-    "microphone"
-  ],
-  "majorCapabilities": []
+    "microphone",
+    "contacts"
+  ]
 }

@@ -5,9 +5,18 @@ body {
   color: white;
 }
 
-/* Safe area for mobile bottom nav */
+/* Safe area for mobile */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
+}
+.pl-safe {
+  padding-left: env(safe-area-inset-left);
+}
+.pr-safe {
+  padding-right: env(safe-area-inset-right);
 }
 
 /* React Phone Number Input Customization - Dark Theme */

@@ -1,11 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Subtle Grain Filter for the Background -->
-    <filter id="grain">
-      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/>
-      <feColorMatrix type="matrix" values="1 0 0 0 0, 0 1 0 0 0, 0 0 1 0 0, 0 0 0 0.05 0" />
-    </filter>
-
     <!-- Neon Cyan to Electric Blue Gradient -->
     <linearGradient id="trioGradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#00FFFF" />
@@ -13,37 +7,21 @@
     </linearGradient>
   </defs>
 
-  <!-- Deep Navy Blue Background -->
-  <rect width="512" height="512" fill="#0A0E14" rx="112" />
-  
-  <!-- Grain Overlay -->
-  <rect width="512" height="512" fill="none" filter="url(#grain)" rx="112" />
+  <!-- Thin background ring -->
+  <circle cx="256" cy="256" r="120" stroke="url(#trioGradient)" stroke-width="12" fill="none" />
 
   <!-- Orbital Symbol Group -->
   <!-- The stroke-width and fill="none" create the clean, overlapping tech aesthetic -->
-  <g stroke="url(#trioGradient)" stroke-width="24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <g stroke="url(#trioGradient)" stroke-width="20" fill="none" stroke-linecap="round" stroke-linejoin="round">
     
-    <!-- Top Rectangle -->
-    <rect x="216" y="80" width="80" height="180" rx="40" />
+    <!-- Top Shape -->
+    <path d="M 216 256 L 216 146 C 216 124 234 106 256 106 C 278 106 296 124 296 146 L 296 256" />
     
-    <!-- Bottom Right Rectangle (Rotated 120 degrees around center 256, 220) -->
-    <rect x="216" y="80" width="80" height="180" rx="40" transform="rotate(120 256 220)" />
+    <!-- Bottom Right Shape -->
+    <path d="M 216 256 L 216 146 C 216 124 234 106 256 106 C 278 106 296 124 296 146 L 296 256" transform="rotate(120 256 256)" />
     
-    <!-- Bottom Left Rectangle (Rotated 240 degrees around center 256, 220) -->
-    <rect x="216" y="80" width="80" height="180" rx="40" transform="rotate(240 256 220)" />
+    <!-- Bottom Left Shape -->
+    <path d="M 216 256 L 216 146 C 216 124 234 106 256 106 C 278 106 296 124 296 146 L 296 256" transform="rotate(240 256 256)" />
     
   </g>
-
-  <!-- Typography -->
-  <text 
-    x="256" 
-    y="440" 
-    font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
-    font-size="44" 
-    font-weight="800" 
-    fill="#FFFFFF" 
-    text-anchor="middle" 
-    letter-spacing="4">
-    TrioSync
-  </text>
 </svg>

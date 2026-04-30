@@ -17,26 +17,6 @@ export default function LoginScreen() {
   const { t, toggleLanguage, language, dir } = useLanguage();
   const { setUser } = useUser();
 
-  // Initial Check: in LoginScreen, check for an existing session as soon as the app starts.
-  useEffect(() => {
-    const checkExistingSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-         const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-         if (profile) {
-           setUser({ id: profile.id, fullName: profile.name, phone: profile.phone });
-           navigate('/main', { replace: true });
-         }
-      }
-    };
-    checkExistingSession();
-  }, [navigate, setUser]);
-
   useEffect(() => {
     if (error) {
       setShowSnackbar(true);
@@ -45,7 +25,7 @@ export default function LoginScreen() {
     }
   }, [error]);
 
-  const handleStart = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -62,63 +42,75 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // 1. Clean Start
-      await supabase.auth.signOut(); // This clears the session from storage automatically
+      const parsedPhone = parsePhoneNumber(phone);
+      const countryCode = parsedPhone?.country || 'Unknown';
+      const cleanPhone = phone.replace(/\D/g, '');
+      
+      // 1. Create a real Supabase Auth session using a deterministic dummy email
+      const dummyEmail = `${cleanPhone}@triosync.local`;
+      const dummyPassword = `TrioSync_${cleanPhone}_Secure!`;
 
-      // 2. Smart Auth
-      const numericPhone = phone.replace(/\D/g, '');
-      const email = `${numericPhone}@test.com`;
-      const password = 'password123456';
-
-      let { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
+      let authUserId;
+      let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: dummyEmail,
+        password: dummyPassword,
       });
 
-      if (authError && (authError.message.includes('already registered') || authError.message.includes('already exists'))) {
-        const signInRes = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        authData = signInRes.data;
-        authError = signInRes.error;
-      }
-
       if (authError) {
-        alert('Auth Error: ' + authError.message);
-        setLoading(false);
-        return;
-      }
-
-      const userId = authData?.user?.id;
-      if (!userId) {
-        alert('Auth Error: Could not get User ID');
-        setLoading(false);
-        return;
-      }
-
-      // 3. Exact Database Upsert
-      const { error: dbError } = await supabase
-        .from('profiles')
-        .upsert({ 
-          id: userId, 
-          name: fullName, 
-          phone: phone 
+        // If sign in fails, try to sign up
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: dummyEmail,
+          password: dummyPassword,
         });
-
-      if (dbError) {
-        alert('Profile Error: ' + dbError.message);
-        setLoading(false);
-        return;
+        
+        if (signUpError) {
+          // Fallback if sign up fails (e.g. user exists but different error)
+          throw signUpError;
+        }
+        authUserId = signUpData.user?.id;
+      } else {
+        authUserId = authData.user?.id;
       }
 
-      // 4. Success
-      setUser({ id: userId, fullName: fullName, phone: phone });
-      navigate('/main', { replace: true });
+      // 2. Handle the custom profiles table
+      const { data: existingUser, error: fetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('phone', phone)
+        .maybeSingle();
 
+      if (fetchError) throw fetchError;
+
+      let profileId = existingUser?.id;
+
+      if (!existingUser) {
+        // Register new user profile
+        const { data: newUser, error: insertError } = await supabase
+          .from('profiles')
+          .insert([{ name: fullName, phone, country_code: countryCode }])
+          .select()
+          .single();
+        
+        if (insertError) throw insertError;
+        profileId = newUser.id;
+      } else {
+        // Update existing user name
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ name: fullName, country_code: countryCode })
+          .eq('id', profileId);
+          
+        if (updateError) throw updateError;
+      }
+
+      // Save session globally in context
+      setUser({ id: profileId, fullName, phone });
+      
+      // Navigate on success
+      navigate('/main');
     } catch (err: any) {
-      alert('Unexpected Error: ' + err.message);
-      setError(err.message || 'Error during registration');
+      console.error('Supabase Error:', err);
+      setError(err.message || 'An error occurred during login. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -135,9 +127,12 @@ export default function LoginScreen() {
       </div>
       {/* Header */}
       <div className="p-6 flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <img src="/trio_sync_logo.svg" alt="TrioSync Logo" className="w-10 h-10 rounded-xl shadow-lg shadow-blue-500/20" />
-          <span className="text-xl font-bold text-white tracking-wide">TrioSync</span>
+        <div className="flex flex-col items-center justify-center">
+          <img src="/trio_sync_logo_v3.svg" alt="Trio Sync Logo" className="h-10 w-auto object-contain mb-1" />
+          <div className="flex items-baseline tracking-[0.5px]">
+            <span className="text-sm font-extrabold uppercase text-white font-sans">TRIO</span>
+            <span className="text-sm font-light lowercase text-[#00D1FF] font-sans">sync</span>
+          </div>
         </div>
         <button
           onClick={toggleLanguage}
@@ -159,7 +154,7 @@ export default function LoginScreen() {
             <p className="text-slate-400 text-sm">Secure Communication Platform</p>
           </div>
 
-          <form onSubmit={handleStart} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 {t('fullName')}
@@ -200,7 +195,7 @@ export default function LoginScreen() {
                   {t('loading')}
                 </>
               ) : (
-                'Start'
+                t('login')
               )}
             </button>
           </form>
