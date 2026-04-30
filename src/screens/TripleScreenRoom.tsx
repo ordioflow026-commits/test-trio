@@ -16,15 +16,12 @@ interface Props { onExit: () => void; isHost?: boolean; roomId?: string; roomNam
 export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomName, onNameSync }: Props) {
   const { t, dir, language } = useLanguage();
   const { user } = useUser();
-  
-  // 💡 التعديل 1: البدء بالشاشة الوسطى (Index 1) بدلاً من الأولى (0)
   const [currentSlot, setCurrentSlot] = useState(1);
-  
   const [viewMode, setViewMode] = useState<ViewMode>('sync');
   const [participants, setParticipants] = useState<{ id: string, name: string }[]>([]);
   const [slots, setSlots] = useState<SlotData[]>([
     { type: 'empty', lock: 'none' }, 
-    { type: 'empty', lock: 'green' }, // الشاشة الوسطى مقفلة أخضر كبداية
+    { type: 'empty', lock: 'green' }, 
     { type: 'empty', lock: 'none' }
   ]);
   const [displayRoomName, setDisplayRoomName] = useState<string>(roomName || roomId || ''); 
@@ -202,12 +199,12 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       'red': 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
     };
 
-    // 💡 التعديل 2: تصغير الأيقونة وإخفاؤها لتظهر عند التمرير فقط
+    // 💡 Visibility bound to isIdle state, identical to navigation arrows
     const LockIndicator = () => {
        if (viewMode === 'sync') return null;
 
        return (
-         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-300 opacity-0 group-hover:opacity-100`}>
+         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle ? 'opacity-0' : 'opacity-100'}`}>
            {isHost ? (
               <button onClick={() => toggleLock(index)} className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 ${lockColors[lockState]}`}>
                 {lockState === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
@@ -223,7 +220,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
     if (slot.type === 'empty') {
       return (
-        <div className="flex flex-col items-center justify-center h-full relative group">
+        <div className="flex flex-col items-center justify-center h-full relative">
           <LockIndicator />
           {editable ? (
             <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-28 h-28 rounded-full border border-[#00b4d8]/50 bg-[#00b4d8]/10 flex items-center justify-center hover:bg-[#00b4d8]/20 transition-all shadow-xl"><Plus className="w-12 h-12 text-[#00b4d8]" /></button>
@@ -236,7 +233,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     
     if (slot.type === 'menu') {
       return (
-        <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative group" dir={dir}>
+        <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative" dir={dir}>
           <LockIndicator />
           <div className="flex justify-center items-center w-full mb-8 pt-10">
             <h3 className="text-3xl font-extrabold text-white">{isAr ? 'إضافة محتوى' : 'Add Content'}</h3>
@@ -280,7 +277,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       <div className="flex flex-col items-center justify-center h-full w-full relative group">
         {!editable && <div className="absolute inset-0 z-[60] bg-transparent" />}
         <LockIndicator />
-        {editable && <div className={`absolute top-4 ${dir === 'rtl' ? 'left-4' : 'right-4'} md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} z-[70] opacity-0 group-hover:opacity-100 transition-opacity`}><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 shadow-lg"><X className="w-6 h-6" /></button></div>}
+        {editable && <div className={`absolute top-4 ${dir === 'rtl' ? 'left-4' : 'right-4'} md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} z-[70] transition-all duration-500 ${isIdle ? 'opacity-0' : 'opacity-100'}`}><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 shadow-lg"><X className="w-6 h-6" /></button></div>}
         {slot.type === 'web' && <div className="w-full h-full bg-slate-900/80 flex flex-col items-center justify-center"><Globe className="w-20 h-20 text-cyan-500/50 mb-6" /><h2 className="text-2xl text-white font-bold">Web Browser</h2></div>}
         {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center">{slot.url ? <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${slot.url}?autoplay=1`} allowFullScreen className={`w-full h-full border-0 ${editable ? 'pointer-events-auto' : 'pointer-events-none'}`}></iframe> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
         {slot.type === 'whiteboard' && <div className={`w-full h-full p-4 ${editable ? 'pointer-events-auto' : 'pointer-events-none'}`}><Whiteboard roomId={roomId} canInteract={editable} /></div>}
