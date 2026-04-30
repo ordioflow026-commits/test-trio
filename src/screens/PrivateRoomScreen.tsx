@@ -110,7 +110,6 @@ export default function PrivateRoomScreen() {
       let roomCode = '';
       let extractedName = '';
       
-      // 💡 الاستخراج الذكي: البحث عن الرابط حتى لو كان وسط نص طويل
       const urlMatch = joinLink.match(/https?:\/\/[^\s]+/);
       const processedLink = urlMatch ? urlMatch[0] : joinLink.trim();
       
@@ -127,7 +126,7 @@ export default function PrivateRoomScreen() {
       }
 
       if (!roomCode || roomCode.length < 4) {
-        throw new Error('لم يتم العثور على رمز غرفة صحيح في النص المدخل.');
+        throw new Error('لم يتم العثور على رمز غرفة صحيح.');
       }
       
       const { data: roomData } = await supabase.from('private_rooms').select('name, host_id').eq('id', roomCode).maybeSingle();
@@ -164,19 +163,26 @@ export default function PrivateRoomScreen() {
   };
 
   const handleShareClick = async () => {
-    // 💡 تنسيق المشاركة المفصول
     const shareText = `مرحباً! انضم إلى غرفتي الخاصة "${currentRoomName}" 🚀\n\nاضغط على الرابط أدناه للدخول:\n${generatedLink}`;
     if(navigator.share) {
-      try {
-        await navigator.share({ title: currentRoomName, text: shareText });
-      } catch(err) {}
+      try { await navigator.share({ title: currentRoomName, text: shareText }); } catch(err) {}
     } else {
       navigator.clipboard.writeText(shareText);
       setCopied(true); setTimeout(()=>setCopied(false),2000);
     }
   };
 
-  if (view === 'room') return <TripleScreenRoom onExit={() => setView('menu')} isHost={isHost} roomId={currentRoomId} roomName={currentRoomName} />;
+  // 💡 المزامنة السحرية: تحديث وتصحيح اسم الغرفة للزائر وحفظه نهائياً
+  const handleRoomNameSync = (id: string, realName: string) => {
+    setCurrentRoomName(realName);
+    setRecentRooms(prev => {
+      const updated = prev.map(r => r.id === id ? { ...r, name: realName, link: `https://app.com/room/${id}?name=${encodeURIComponent(realName)}` } : r);
+      localStorage.setItem('trio_rooms_history', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  if (view === 'room') return <TripleScreenRoom onExit={() => setView('menu')} isHost={isHost} roomId={currentRoomId} roomName={currentRoomName} onNameSync={handleRoomNameSync} />;
 
   if (view === 'myRooms' || view === 'visitorRooms') {
     const isMyRooms = view === 'myRooms';

@@ -10,9 +10,9 @@ type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'media'
 type ViewMode = 'sync' | 'free';
 
 interface SlotData { type: ContentType; url?: string; }
-interface Props { onExit: () => void; isHost?: boolean; roomId?: string; roomName?: string; } // Add roomName
+interface Props { onExit: () => void; isHost?: boolean; roomId?: string; roomName?: string; onNameSync?: (id: string, name: string) => void; }
 
-export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomName }: Props) {
+export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomName, onNameSync }: Props) {
   const { t, dir } = useLanguage();
   const { user } = useUser();
   const [currentSlot, setCurrentSlot] = useState(0);
@@ -28,13 +28,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const myName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'User');
   const myInitial = myName.charAt(0).toUpperCase();
 
+  const [displayRoomName, setDisplayRoomName] = useState(roomName || `Room ${roomId}`);
+
   const handleShare = async () => {
-    const defaultName = roomName || `Room ${roomId}`;
-    const roomUrl = `https://app.com/room/${roomId}?name=${encodeURIComponent(defaultName)}`;
-    const shareText = `مرحباً! انضم إلى غرفتي الخاصة "${defaultName}" 🚀\n\nاضغط على الرابط أدناه للدخول:\n${roomUrl}`;
+    const roomUrl = `https://app.com/room/${roomId}?name=${encodeURIComponent(displayRoomName)}`;
+    const shareText = `مرحباً! انضم إلى غرفتي الخاصة "${displayRoomName}" 🚀\n\nاضغط على الرابط أدناه للدخول:\n${roomUrl}`;
     
     if (navigator.share) {
-      try { await navigator.share({ title: defaultName, text: shareText }); } catch (err) {}
+      try { await navigator.share({ title: displayRoomName, text: shareText }); } catch (err) {}
     } else {
       navigator.clipboard.writeText(shareText);
       alert('تم نسخ تفاصيل الغرفة بنجاح!');
@@ -49,12 +50,22 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       channel.on('presence', { event: 'sync' }, () => {
           const presenceState = channel.presenceState();
           const activeUsers: { id: string, name: string }[] = [];
+          let discoveredName = displayRoomName;
           Object.keys(presenceState).forEach((key) => {
             if (key !== user.id) {
               const userData = presenceState[key][0] as any;
               activeUsers.push({ id: key, name: userData.name || 'Guest' });
+              if (userData.isHost && userData.hostRoomName) {
+                discoveredName = userData.hostRoomName;
+              }
             }
           });
+          
+          if (!isHost && discoveredName !== displayRoomName) {
+            setDisplayRoomName(discoveredName);
+            if (onNameSync && roomId) onNameSync(roomId, discoveredName);
+          }
+          
           setParticipants(activeUsers);
         }).on('broadcast', { event: 'room_state' }, (payload) => {
           if (!isHost) {
@@ -62,7 +73,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
              if (payload.payload.viewMode) setViewMode(payload.payload.viewMode);
              if (payload.payload.viewMode === 'sync' && payload.payload.currentSlot !== undefined) setCurrentSlot(payload.payload.currentSlot);
           }
-        }).subscribe(async (status) => { if (status === 'SUBSCRIBED') await channel.track({ name: myName, id: user.id }); });
+        }).subscribe(async (status) => { if (status === 'SUBSCRIBED') await channel.track({ name: myName, id: user.id, isHost, hostRoomName: isHost ? displayRoomName : undefined }); });
       
       return () => { 
         supabase.removeChannel(channel); 
@@ -185,7 +196,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
         {/* زر المشاركة ورقم الغرفة - يمين */}
         <div className="flex items-center gap-2">
-          <span className="text-white font-mono font-bold tracking-widest text-[11px] opacity-80 uppercase hidden sm:inline-block hover:opacity-100 transition-opacity truncate max-w-[120px]">{roomName || roomId}</span>
+          <span className="text-white font-mono font-bold tracking-widest text-[11px] opacity-80 uppercase hidden sm:inline-block hover:opacity-100 transition-opacity truncate max-w-[120px]">{displayRoomName}</span>
           <button 
             onClick={handleShare} 
             className="flex items-center justify-center p-2.5 bg-blue-600 text-white rounded-full shadow-[0_0_15px_rgba(37,99,235,0.6)] animate-pulse hover:bg-blue-500 active:scale-95 transition-all"
