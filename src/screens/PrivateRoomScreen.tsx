@@ -29,28 +29,41 @@ export default function PrivateRoomScreen() {
       const saved = localStorage.getItem('joined_rooms');
       let localRooms: RoomHistory[] = saved ? JSON.parse(saved) : [];
 
-      // 💡 جلب غرف المضيف من السيرفر لضمان عدم اختفائها أبداً
+      // 💡 الدمج الذكي: نحتفظ بالغرف المحلية ولا نسمح للسيرفر بمسحها إذا فشل الجلب
+      const visitorRooms = localRooms.filter(r => r.type === 'joined');
+      const localCreatedRooms = localRooms.filter(r => r.type === 'created');
+      const createdRoomsMap = new Map<string, RoomHistory>();
+      
+      // نضع الغرف المحلية أولاً
+      localCreatedRooms.forEach(r => createdRoomsMap.set(r.id, r));
+
       if (user?.id) {
         try {
-          const { data } = await supabase.from('private_rooms').select('*').eq('host_id', user.id);
-          if (data) {
-            const hostRooms: RoomHistory[] = data.map(r => ({
-              id: r.id, name: r.name, type: 'created', link: `https://app.com/room/${r.id}?name=${encodeURIComponent(r.name)}`
-            }));
-            const visitorRooms = localRooms.filter(r => r.type === 'joined');
-            const combined = [...hostRooms, ...visitorRooms];
-            setRecentRooms(combined);
-            localStorage.setItem('joined_rooms', JSON.stringify(combined));
-            return;
+          const { data, error } = await supabase.from('private_rooms').select('id, name').eq('host_id', user.id);
+          if (!error && data && data.length > 0) {
+            // نضيف/نحدث غرف السيرفر
+            data.forEach(r => {
+              createdRoomsMap.set(r.id, {
+                id: r.id, name: r.name, type: 'created', link: `https://app.com/room/${r.id}?name=${encodeURIComponent(r.name)}`
+              });
+            });
           }
         } catch (err) {}
       }
-      setRecentRooms(localRooms);
+      
+      // تجميع القائمة النهائية وحفظها
+      const combined = [...Array.from(createdRoomsMap.values()), ...visitorRooms];
+      setRecentRooms(combined);
+      localStorage.setItem('joined_rooms', JSON.stringify(combined));
     };
+    
     syncRooms();
   }, [user]);
 
-  const saveToLocal = (rooms: RoomHistory[]) => { setRecentRooms(rooms); localStorage.setItem('joined_rooms', JSON.stringify(rooms)); };
+  const saveToLocal = (rooms: RoomHistory[]) => { 
+    setRecentRooms(rooms); 
+    localStorage.setItem('joined_rooms', JSON.stringify(rooms)); 
+  };
 
   const validateInputs = () => {
     const name = roomName.trim();
@@ -72,9 +85,11 @@ export default function PrivateRoomScreen() {
     setLoading(true); setError('');
     try {
       const roomId = Math.random().toString(36).substring(2, 10);
-      // 💡 تضمين الاسم في الرابط
       const link = `https://app.com/room/${roomId}?name=${encodeURIComponent(roomName.trim())}`;
-      await supabase.from('private_rooms').insert([{ id: roomId, host_id: user?.id, name: roomName.trim(), pin: roomPin.trim() }]);
+      
+      const hostId = user?.id || 'anonymous';
+      await supabase.from('private_rooms').insert([{ id: roomId, host_id: hostId, name: roomName.trim(), pin: roomPin.trim() }]);
+      
       setGeneratedLink(link);
       saveToLocal([{ id: roomId, name: roomName.trim(), type: 'created', link }, ...recentRooms.filter(r => r.id !== roomId)]);
       setIsHost(true); setCurrentRoomId(roomId); setCurrentRoomName(roomName.trim()); setView('share');
@@ -89,7 +104,6 @@ export default function PrivateRoomScreen() {
       let roomCode = '';
       let extractedName = '';
       
-      // 💡 استخراج الرمز والاسم من الرابط
       try {
         if (joinLink.includes('http')) {
           const url = new URL(joinLink);
@@ -103,7 +117,6 @@ export default function PrivateRoomScreen() {
       if (!roomCode) throw new Error('الرابط غير صالح');
       
       const { data: roomData } = await supabase.from('private_rooms').select('name').eq('id', roomCode).maybeSingle();
-      // 💡 الأولوية للاسم المستخرج من السيرفر، ثم الرابط، ثم الافتراضي
       const name = roomData?.name || extractedName || `Room ${roomCode}`;
       
       saveToLocal([{ id: roomCode, name, type: 'joined', link: joinLink }, ...recentRooms.filter(r => r.id !== roomCode)]);
