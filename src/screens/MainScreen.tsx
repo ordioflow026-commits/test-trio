@@ -10,7 +10,9 @@ export default function MainScreen() {
   const [activeSubTab, setActiveSubTab] = useState('contacts');
   const { t, dir, language, toggleLanguage } = useLanguage();
   const [userData, setUserData] = useState({ fullName: 'Guest', phone: '' });
-  const [hasNotifications, setHasNotifications] = useState(true); // Mock state for red dot
+  const [hasNotifications, setHasNotifications] = useState(true);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [isFirstLogin, setIsFirstLogin] = useState(true);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -25,24 +27,39 @@ export default function MainScreen() {
         console.error('Failed to parse user data', e);
       }
     }
+    
+    const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome');
+    if (hasSeenWelcome) {
+      setIsFirstLogin(false);
+      setHasNotifications(false);
+    }
   }, []);
+
+  const handleBellClick = () => {
+    if (isFirstLogin) {
+      setShowWelcomeModal(!showWelcomeModal);
+      setIsFirstLogin(false);
+      setHasNotifications(false);
+      sessionStorage.setItem('hasSeenWelcome', 'true');
+    } else {
+      setActiveMainTab('notifications');
+      setShowWelcomeModal(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0B1120] flex flex-col font-sans" dir={dir}>
       {/* Top Navigation Bar */}
       <header className="bg-[#0F172A]/90 backdrop-blur-xl border-b border-slate-800/80 sticky top-0 z-20 shadow-lg shadow-black/20">
-        <div className="flex justify-between items-center h-20 px-4">
+        <div className="flex items-center justify-between h-20 px-4 w-full">
           {/* Left: Logo */}
-          <div className="w-24 flex flex-col items-center justify-center flex-shrink-0">
-            <img src="/trio_sync_logo_v3.svg" alt="Trio Sync Logo" className="h-8 w-auto object-contain mb-1" />
-            <div className="flex items-baseline tracking-[0.5px]">
-              <span style={{ fontWeight: 800, textTransform: 'uppercase' }} className="text-[11px] text-white font-sans">TRIO</span>
-              <span style={{ fontWeight: 300, textTransform: 'lowercase', color: '#00D1FF' }} className="text-[11px] font-sans">sync</span>
-            </div>
+          <div className="w-24 sm:w-32 flex items-center gap-2">
+            <img src="/trio_sync_logo.svg" alt="TrioSync Logo" className="w-8 h-8 rounded-lg shadow-md shadow-blue-500/20" />
+            <span className="text-sm font-bold text-white tracking-wide hidden sm:block">TrioSync</span>
           </div>
 
           {/* Center Frame for Main Icons */}
-          <div className="flex items-center bg-slate-800/80 rounded-full p-1.5 border border-blue-900/50 shadow-inner gap-1">
+          <div className="flex items-center justify-center bg-slate-800/80 rounded-full p-1.5 border border-blue-900/50 shadow-inner gap-1 sm:gap-2">
             <button
               onClick={() => setActiveMainTab('home')}
               className={`p-3 rounded-full transition-all duration-300 border ${
@@ -54,22 +71,40 @@ export default function MainScreen() {
               <Home className="w-6 h-6" />
             </button>
             
-            <button
-              onClick={() => {
-                setActiveMainTab('notifications');
-                setHasNotifications(false);
-              }}
-              className={`relative p-3 rounded-full transition-all duration-300 border ${
-                activeMainTab === 'notifications'
-                  ? 'bg-blue-700 border-blue-500 text-white shadow-[0_0_15px_rgba(29,78,216,0.5)]'
-                  : 'border-blue-500/50 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20'
-              }`}
-            >
-              <Bell className="w-6 h-6" />
-              {hasNotifications && (
-                <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-[#0F172A] rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+            <div className="relative">
+              <button
+                onClick={handleBellClick}
+                className={`relative p-3 rounded-full transition-all duration-300 border ${
+                  activeMainTab === 'notifications'
+                    ? 'bg-blue-700 border-blue-500 text-white shadow-[0_0_15px_rgba(29,78,216,0.5)]'
+                    : 'border-blue-500/50 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20'
+                }`}
+              >
+                <Bell className="w-6 h-6" />
+                {hasNotifications && (
+                  <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-[#0F172A] rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                )}
+              </button>
+              
+              {/* Welcome Notification Dropdown */}
+              {showWelcomeModal && (
+                <div className="absolute top-16 left-1/2 transform -translate-x-1/2 mt-2 w-64 bg-slate-800 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.6)] border border-slate-700/50 p-4 z-50 animate-in fade-in slide-in-from-top-4">
+                  <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-slate-800 border-l border-t border-slate-700/50 rotate-45"></div>
+                  <div className="flex items-center gap-3 mb-2 relative z-10">
+                    <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center border border-blue-500/30">
+                      <span className="text-xl">👋</span>
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white tracking-tight">Notification</h3>
+                      <p className="text-[10px] text-slate-400">Just now</p>
+                    </div>
+                  </div>
+                  <p className="text-sm border-t border-slate-700/50 pt-3 text-slate-200 mt-2 font-medium relative z-10">
+                    Welcome back, <span className="text-blue-400">{userData.fullName}</span>!
+                  </p>
+                </div>
               )}
-            </button>
+            </div>
             
             <button
               onClick={() => setActiveMainTab('profile')}
@@ -84,13 +119,13 @@ export default function MainScreen() {
           </div>
 
           {/* Right: Language Toggle */}
-          <div className="w-24 flex justify-end">
+          <div className="w-24 sm:w-32 flex justify-end">
             <button
               onClick={toggleLanguage}
-              className="flex flex-col items-center justify-center text-slate-400 hover:text-blue-500 transition-colors bg-slate-800/50 p-2 rounded-2xl border border-blue-900/50 hover:border-blue-600"
+              className="flex flex-col items-center justify-center text-slate-400 hover:text-blue-500 transition-colors bg-slate-800/50 py-1.5 px-3 sm:p-2 rounded-2xl border border-blue-900/50 hover:border-blue-600"
             >
-              <Globe className="w-5 h-5 mb-1" />
-              <span className="text-[10px] font-bold tracking-wider">{language === 'en' ? 'AR' : 'EN'}</span>
+              <Globe className="w-4 h-4 sm:w-5 sm:h-5 mb-0.5 sm:mb-1" />
+              <span className="text-[9px] sm:text-[10px] font-bold tracking-wider">{language === 'en' ? 'AR' : 'EN'}</span>
             </button>
           </div>
         </div>
@@ -108,7 +143,12 @@ export default function MainScreen() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveSubTab(tab.id)}
+                  onClick={() => {
+                    setActiveSubTab(tab.id);
+                    if (tab.id === 'contacts') {
+                      window.dispatchEvent(new CustomEvent('fetch-contacts'));
+                    }
+                  }}
                   className={`flex-1 flex flex-col items-center justify-center py-3 px-1 rounded-2xl transition-all duration-300 border ${
                     isActive
                       ? 'bg-blue-700 text-white shadow-[0_8px_16px_rgba(29,78,216,0.4)] scale-105 border-blue-500'

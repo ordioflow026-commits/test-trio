@@ -1,130 +1,92 @@
-import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Contacts } from '@capacitor-community/contacts';
-import { Capacitor } from '@capacitor/core';
-import { WifiOff, Phone, Video, MoreVertical, Globe } from 'lucide-react';
-import { supabase } from './lib/supabase';
-import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { LanguageProvider } from './contexts/LanguageContext';
 import { UserProvider, useUser } from './contexts/UserContext';
-
-// Safe Component Imports
 import LoginScreen from './screens/LoginScreen';
 import MainScreen from './screens/MainScreen';
-import ChatScreen from './screens/ChatScreen';
 import DummyCallScreen from './screens/DummyCallScreen';
+import ChatDetailScreen from './screens/ChatDetailScreen';
+import { supabase } from './lib/supabase';
+import { Loader2 } from 'lucide-react';
 
-function AppNavigator() {
-  const { user, setUser } = useUser();
-  const { language, setLanguage } = useLanguage();
-  
-  // No isInitializing blocker! App renders immediately.
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  // Contacts intentionally left out of this render level or forced to default, we just pass down
-  const [contacts, setContacts] = useState<any[]>([]);
+function SessionChecker({ children }: { children: React.ReactNode }) {
+  const { setUser } = useUser();
+  const [isChecking, setIsChecking] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Basic online/offline listeners
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    let isMounted = true;
 
-    // SILENT BOOT - Massive Try/Catch prevents EVERYTHING from crashing the app
-    const silentBoot = async () => {
-      try {
-        // Safe Supabase check
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (!error && session?.user && !user) {
-          const phoneStr = session.user.email?.split('@')[0];
-          if (phoneStr) {
-            const { data: profile } = await supabase.from('profiles').select('*').eq('phone', `+${phoneStr}`).maybeSingle();
-            if (profile) setUser({ id: profile.id, fullName: profile.name, phone: profile.phone });
-          }
+    const loadUser = async (session: any) => {
+      if (!session?.user) {
+        if (isMounted) {
+          setUser(null);
+          setIsChecking(false);
         }
+        return;
+      }
+      
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .maybeSingle();
 
-        // Safe Native Capacitor API calls
-        if (Capacitor.isNativePlatform()) {
-          const perm = await Contacts.checkPermissions();
-          if (perm.contacts !== 'granted') await Contacts.requestPermissions();
-          const raw = await Contacts.getContacts({ projection: { name: true, phones: true } });
-          setContacts(raw.contacts || []);
+        if (isMounted) {
+          if (profile) {
+            setUser({ id: profile.id, fullName: profile.name, phone: profile.phone });
+            if (window.location.pathname === '/') {
+              navigate('/main', { replace: true });
+            }
+          } else {
+             // User exists in auth but no profile - maybe mid-signup, keep logged out until signup finish
+             setUser(null);
+          }
+          setIsChecking(false);
         }
       } catch (err) {
-        // DO NOTHING to the UI, just log securely.
-        console.error("SILENT BOOT CAUGHT A FATAL ERROR (Render Proceeds unharmed):", err);
+        if (isMounted) setIsChecking(false);
       }
     };
 
-    silentBoot();
+    // 1. Initial Check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        if (isMounted) setIsChecking(false);
+      } else {
+        loadUser(session);
+      }
+    });
 
-    // Safe Subscription binding
-    let authListener: any = null;
-    try {
-      const { data } = supabase.auth.onAuthStateChange((_, newSession) => {
-         if (!newSession && user) setUser(null);
-      });
-      authListener = data.subscription;
-    } catch (e) {
-       console.error("Auth Listener Error:", e);
-    }
+    // 2. Listen for auth changes to persist session automatically
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        loadUser(session);
+      } else if (event === 'SIGNED_OUT') {
+        if (isMounted) {
+          setUser(null);
+          setIsChecking(false);
+          navigate('/', { replace: true });
+        }
+      }
+    });
 
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      if (authListener) authListener.unsubscribe();
+    return () => { 
+      isMounted = false; 
+      subscription.unsubscribe();
     };
-  }, []); // Run safely once
+  }, [navigate, setUser]);
 
-  const cycleLanguage = () => {
-    if (language === 'EN') setLanguage('FR');
-    else if (language === 'FR') setLanguage('DZ');
-    else setLanguage('EN');
-  };
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      </div>
+    );
+  }
 
-  // IMMEDIATE UI RENDER (Zero Loading Spinners that can deadlock)
-  return (
-    <div className="max-w-md mx-auto bg-[#0b141a] text-[#e9edef] font-sans h-screen flex flex-col relative sm:border-x sm:border-[#202c33]">
-      {!isOnline && (
-        <div className="bg-[#202c33] text-[#8696a0] text-xs py-1.5 flex justify-center items-center gap-2 z-50">
-          <WifiOff className="w-3 h-3" />
-          <span>Connecting...</span>
-        </div>
-      )}
-
-      {user && (
-        <header className="bg-[#202c33] pt-4 px-4 shadow-sm z-10">
-           <div className="flex justify-between items-center mb-4">
-             <h1 className="text-[#8696a0] text-xl font-medium tracking-wide">TrioSync</h1>
-             <div className="flex items-center gap-5 text-[#8696a0]">
-               <button onClick={cycleLanguage} className="flex items-center gap-1 hover:text-[#e9edef] transition-colors">
-                  <Globe className="w-4 h-4"/> <span className="text-xs font-bold">{language}</span>
-               </button>
-               <Video className="w-5 h-5 cursor-pointer hover:text-[#e9edef] transition-colors" />
-               <Phone className="w-5 h-5 cursor-pointer hover:text-[#e9edef] transition-colors" />
-               <MoreVertical className="w-5 h-5 cursor-pointer hover:text-[#e9edef] transition-colors" />
-             </div>
-           </div>
-           
-           <div className="flex font-semibold text-sm uppercase text-[#8696a0]">
-             <button className="flex-1 pb-3 border-b-2 border-[#00a884] text-[#00a884]">Chats</button>
-             <button className="flex-1 pb-3 border-b-2 border-transparent">Status</button>
-             <button className="flex-1 pb-3 border-b-2 border-transparent">Calls</button>
-           </div>
-        </header>
-      )}
-
-      <main className="flex-1 overflow-y-auto w-full relative bg-[#0b141a]">
-        <Routes>
-          <Route path="/" element={user ? <Navigate to="/main" replace /> : <LoginScreen />} />
-          <Route path="/main" element={user ? <MainScreen /> : <Navigate to="/" replace />} />
-          <Route path="/call" element={user ? <DummyCallScreen /> : <Navigate to="/" replace />} />
-          <Route path="/chat" element={user ? <ChatScreen /> : <Navigate to="/" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
-    </div>
-  );
+  return <>{children}</>;
 }
 
 export default function App() {
@@ -132,7 +94,17 @@ export default function App() {
     <LanguageProvider>
       <UserProvider>
         <BrowserRouter>
-          <AppNavigator />
+          <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl overflow-hidden relative">
+            <SessionChecker>
+              <Routes>
+                <Route path="/" element={<LoginScreen />} />
+                <Route path="/main" element={<MainScreen />} />
+                <Route path="/call" element={<DummyCallScreen />} />
+                <Route path="/chat" element={<ChatDetailScreen />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </SessionChecker>
+          </div>
         </BrowserRouter>
       </UserProvider>
     </LanguageProvider>
