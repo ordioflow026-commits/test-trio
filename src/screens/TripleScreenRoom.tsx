@@ -19,7 +19,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [currentSlot, setCurrentSlot] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('sync');
   const [participants, setParticipants] = useState<{ id: string, name: string }[]>([]);
-  const [slots, setSlots] = useState<SlotData[]>([{ type: 'empty' }, { type: 'empty' }, { type: 'empty' }]);
+  
+  // 💡 الشاشة الوسطى مثبتة افتراضياً بقفل أخضر
+  const [slots, setSlots] = useState<SlotData[]>([
+    { type: 'empty', lock: 'none' }, 
+    { type: 'empty', lock: 'green' }, 
+    { type: 'empty', lock: 'none' }
+  ]);
+  
   const [displayRoomName, setDisplayRoomName] = useState<string>(roomName || roomId || ''); 
   
   const isAr = language === 'ar';
@@ -170,7 +177,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
     setCurrentSlot(targetSlot);
     if (targetLock === 'yellow') {
-       // Local navigation, do not broadcast
+       // Local navigation
     } else {
        // Global navigation
        broadcastState(targetSlot, slots, viewMode);
@@ -187,26 +194,36 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     const editable = canEditSlot(index);
     const lockState = slot.lock || 'none';
     
+    // 💡 ألوان شفافة وأنيقة للأقفال
     const lockColors = {
-      'none': 'border-white/10 text-white/30 hover:border-white/30',
-      'green': 'bg-green-500/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.4)]',
-      'yellow': 'bg-yellow-500/20 border-yellow-500 text-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.4)]',
-      'red': 'bg-red-500/20 border-red-500 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.4)]'
+      'none': 'border-white/20 text-white/50 hover:bg-white/10 hover:text-white hover:border-white/40',
+      'green': 'bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.3)]',
+      'yellow': 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.3)]',
+      'red': 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
     };
 
-    const LockIndicator = () => (
-       <div className={`absolute top-4 left-4 md:top-8 md:left-8 z-[80]`}>
-         {isHost ? (
-            <button onClick={() => toggleLock(index)} className={`w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center backdrop-blur-md transition-all ${lockColors[lockState]}`}>
-              <Lock className="w-5 h-5 md:w-6 md:h-6" />
-            </button>
-         ) : lockState !== 'none' ? (
-            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center backdrop-blur-md ${lockColors[lockState]}`}>
-              <Lock className="w-5 h-5 md:w-6 md:h-6" />
-            </div>
-         ) : null}
-       </div>
-    );
+    const LockIndicator = () => {
+       // لا حاجة لعرض الأقفال في الوضع المغلق
+       if (viewMode === 'sync') return null;
+
+       const isLocked = lockState !== 'none';
+       // تأثير الاختفاء إذا لم يكن مقفلاً (يظهر عند التمرير فقط)
+       const visibilityClass = isLocked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
+
+       return (
+         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${visibilityClass}`}>
+           {isHost ? (
+              <button onClick={() => toggleLock(index)} className={`w-8 h-8 md:w-10 md:h-10 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 ${lockColors[lockState]}`}>
+                {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4 md:w-5 md:h-5" />}
+              </button>
+           ) : isLocked ? (
+              <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full border flex items-center justify-center backdrop-blur-md ${lockColors[lockState]}`}>
+                <Lock className="w-4 h-4 md:w-5 md:h-5" />
+              </div>
+           ) : null}
+         </div>
+       );
+    };
 
     if (slot.type === 'empty') {
       return (
@@ -285,7 +302,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       <div className="absolute top-0 left-0 right-0 h-16 z-[100] flex items-center justify-between px-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
         <button onClick={handleExitClick} className="p-2 bg-red-500/20 text-red-400 rounded-full transition-all shadow-lg"><LogOut className="w-5 h-5" /></button>
         <div className="flex justify-center"><button onClick={() => { if (!isHost) return; const m = viewMode === 'sync' ? 'free' : 'sync'; setViewMode(m); broadcastState(currentSlot, slots, m); }} disabled={!isHost} className={`flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm transition-all ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>{viewMode === 'sync' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}<span className="text-xs font-bold uppercase">{viewMode}</span></button></div>
-        <div className="flex items-center gap-3"><button onClick={async () => { if (navigator.share) { try { await navigator.share({ title: `انضم لغرفتي`, text: `Join my room "${displayRoomName}"\nhttps://app.com/room/${roomId}?name=${encodeURIComponent(displayRoomName)}` }); } catch(e){} } else { alert('Copied!'); } }} className="p-2.5 bg-blue-600 text-white rounded-full shadow-lg"><Share2 className="w-5 h-5" /></button></div>
+        <div className="flex items-center gap-3"><span className="text-white font-mono font-bold tracking-widest text-xs truncate max-w-[120px] uppercase opacity-70">{displayRoomName}</span><button onClick={async () => { if (navigator.share) { try { await navigator.share({ title: `انضم لغرفتي`, text: `Join my room "${displayRoomName}"\nhttps://app.com/room/${roomId}?name=${encodeURIComponent(displayRoomName)}` }); } catch(e){} } else { alert('Copied!'); } }} className="p-2.5 bg-blue-600 text-white rounded-full shadow-lg"><Share2 className="w-5 h-5" /></button></div>
       </div>
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
