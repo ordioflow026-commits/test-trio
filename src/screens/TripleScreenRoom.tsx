@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, FileText, MonitorUp } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
-type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'media';
+type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'media' | 'camera' | 'screen_share' | 'document' | 'mic';
 type ViewMode = 'sync' | 'free';
 
 interface SlotData { type: ContentType; url?: string; }
 interface Props { onExit: () => void; isHost?: boolean; roomId?: string; roomName?: string; onNameSync?: (id: string, name: string) => void; }
 
 export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomName, onNameSync }: Props) {
-  const { t, dir } = useLanguage();
+  const { t, dir, language } = useLanguage();
   const { user } = useUser();
   const [currentSlot, setCurrentSlot] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('sync');
@@ -21,7 +21,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [slots, setSlots] = useState<SlotData[]>([{ type: 'empty' }, { type: 'empty' }, { type: 'empty' }]);
   const [displayRoomName, setDisplayRoomName] = useState<string>(roomName || roomId || ''); 
   
-  // 💡 إضافة الذاكرة المرجعية (Ref) لضمان حصول الزوار الجدد على أحدث حالة
+  const isAr = language === 'ar';
+
   const stateRef = useRef({ slots, currentSlot, viewMode });
   useEffect(() => {
     stateRef.current = { slots, currentSlot, viewMode };
@@ -90,7 +91,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           });
           setParticipants(activeUsers);
 
-          // 💡 المزامنة الذكية للزوار الجدد: عندما يكتشف المضيف دخول زائر، يرسل له الحالة فوراً!
           if (isHost) {
              channelRef.current?.send({ 
                 type: 'broadcast', 
@@ -182,7 +182,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         <div className="flex flex-col items-center justify-center h-full">
           {canInteract ? (
             <>
-              <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-[#00b4d8] flex items-center justify-center hover:bg-[#00b4d8]/20 transition-all md:hover:scale-105"><Plus className="w-10 h-10 text-[#00b4d8]" /></button>
+              <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-[#00b4d8] flex items-center justify-center hover:bg-[#00b4d8]/20 transition-all md:hover:scale-105 shadow-[0_0_20px_rgba(0,180,216,0.3)] hover:shadow-[0_0_30px_rgba(0,180,216,0.5)]"><Plus className="w-10 h-10 text-[#00b4d8]" /></button>
               <p className="mt-4 text-[#00b4d8] font-mono tracking-widest text-sm font-bold">{t('addContent') || 'ADD CONTENT'}</p>
             </>
           ) : (
@@ -191,27 +191,113 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         </div>
       );
     }
+    
+    // 💡 التحديث الأساسي: تصميم مربعات مجمعة ومتناسقة (4 صناديق × 2 خيارات)
     if (slot.type === 'menu') {
       return (
-        <div className="flex flex-col items-center justify-center h-full w-full max-w-lg md:max-w-3xl mx-auto p-6 transition-all duration-300">
-          <div className="flex justify-between items-center w-full mb-8"><h3 className="text-xl font-bold text-white uppercase tracking-wider">{t('addContent') || 'ADD CONTENT'}</h3><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-2 bg-slate-800/50 rounded-full text-slate-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button></div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 w-full">
-            {[ { id: 'web', icon: Globe, label: t('webPage'), color: 'from-cyan-500' }, { id: 'youtube', icon: Youtube, label: t('youtubeVideo'), color: 'from-red-500' }, { id: 'whiteboard', icon: PenTool, label: t('whiteboard'), color: 'from-purple-500' }, { id: 'media', icon: ImageIcon, label: t('mediaGallery'), color: 'from-green-500' } ].map((item) => (
-              <button key={item.id} onClick={() => { if (item.id === 'youtube') { const url = prompt('Enter YouTube URL:'); if (url) { const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]+)/); if (match) updateSlot(index, { type: 'youtube', url: match[1] }); } } else updateSlot(index, { type: item.id as ContentType }); }} className="flex flex-col items-center justify-center p-6 md:p-8 bg-slate-800/40 border border-slate-700/50 rounded-2xl relative overflow-hidden group hover:border-slate-500 transition-all md:hover:scale-105 shadow-lg">
-                <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-0 group-hover:opacity-10 transition-opacity`} /><item.icon className="w-10 h-10 md:w-12 md:h-12 text-slate-300 group-hover:text-white mb-4 relative z-10 transition-colors" /><span className="text-sm md:text-base font-bold text-slate-400 group-hover:text-white relative z-10 transition-colors">{item.label}</span>
-              </button>
-            ))}
+        <div className="flex flex-col items-center justify-start h-full w-full max-w-4xl mx-auto p-4 sm:p-6 transition-all duration-300 overflow-y-auto" style={{ scrollbarWidth: 'none' }} dir={dir}>
+          
+          <div className="flex justify-between items-center w-full mb-6 shrink-0 mt-4">
+            <h3 className="text-2xl font-bold text-white tracking-wide flex items-center gap-3">
+              <Layers className="text-blue-400 w-8 h-8" />
+              {isAr ? 'إضافة محتوى' : 'Add Content'}
+            </h3>
+            <button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/10 border border-red-500/20 rounded-full text-red-400 hover:bg-red-500 hover:text-white transition-colors shadow-lg"><X className="w-6 h-6" /></button>
           </div>
+
+          {/* Grid for the 4 Category Boxes */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 w-full pb-20">
+            
+            {/* 1. مجموعة الإنترنت */}
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-5 shadow-lg backdrop-blur-md flex flex-col h-full">
+               <h4 className="flex items-center gap-2 text-cyan-400 font-bold mb-4 border-b border-slate-700/50 pb-3 text-sm sm:text-base shrink-0">
+                 <Globe className="w-5 h-5" /> {isAr ? 'الإنترنت والمشاهدة' : 'Internet & Media'}
+               </h4>
+               <div className="grid grid-cols-2 gap-4 flex-1">
+                  <button onClick={() => updateSlot(index, { type: 'web' })} className="flex flex-col items-center justify-center p-4 bg-slate-900/50 border border-slate-700 hover:border-cyan-500/50 hover:bg-slate-800 rounded-2xl transition-all active:scale-95 group">
+                     <div className="w-12 h-12 rounded-full bg-cyan-500/10 flex items-center justify-center mb-3 group-hover:bg-cyan-500/20 transition-colors shadow-inner"><Globe className="w-6 h-6 text-cyan-400" /></div>
+                     <span className="text-sm font-bold text-slate-300 group-hover:text-white text-center">{t('webPage') || 'Web Browser'}</span>
+                  </button>
+                  <button onClick={() => { const url = prompt(isAr ? 'أدخل رابط يوتيوب:' : 'Enter YouTube URL:'); if (url) { const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]+)/); if (match) updateSlot(index, { type: 'youtube', url: match[1] }); } }} className="flex flex-col items-center justify-center p-4 bg-slate-900/50 border border-slate-700 hover:border-red-500/50 hover:bg-slate-800 rounded-2xl transition-all active:scale-95 group">
+                     <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-3 group-hover:bg-red-500/20 transition-colors shadow-inner"><Youtube className="w-6 h-6 text-red-400" /></div>
+                     <span className="text-sm font-bold text-slate-300 group-hover:text-white text-center">{t('youtubeVideo') || 'YouTube'}</span>
+                  </button>
+               </div>
+            </div>
+
+            {/* 2. مجموعة الشرح */}
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-5 shadow-lg backdrop-blur-md flex flex-col h-full">
+               <h4 className="flex items-center gap-2 text-purple-400 font-bold mb-4 border-b border-slate-700/50 pb-3 text-sm sm:text-base shrink-0">
+                 <BookOpen className="w-5 h-5" /> {isAr ? 'الشرح والتعليم' : 'Education & Tools'}
+               </h4>
+               <div className="grid grid-cols-2 gap-4 flex-1">
+                  <button onClick={() => updateSlot(index, { type: 'whiteboard' })} className="flex flex-col items-center justify-center p-4 bg-slate-900/50 border border-slate-700 hover:border-purple-500/50 hover:bg-slate-800 rounded-2xl transition-all active:scale-95 group">
+                     <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center mb-3 group-hover:bg-purple-500/20 transition-colors shadow-inner"><PenTool className="w-6 h-6 text-purple-400" /></div>
+                     <span className="text-sm font-bold text-slate-300 group-hover:text-white text-center">{t('whiteboard') || 'Whiteboard'}</span>
+                  </button>
+                  <button onClick={() => updateSlot(index, { type: 'screen_share' })} className="flex flex-col items-center justify-center p-4 bg-slate-900/50 border border-slate-700 hover:border-indigo-500/50 hover:bg-slate-800 rounded-2xl transition-all active:scale-95 group">
+                     <div className="w-12 h-12 rounded-full bg-indigo-500/10 flex items-center justify-center mb-3 group-hover:bg-indigo-500/20 transition-colors shadow-inner"><MonitorUp className="w-6 h-6 text-indigo-400" /></div>
+                     <span className="text-sm font-bold text-slate-300 group-hover:text-white text-center">{isAr ? 'مشاركة الشاشة' : 'Screen Share'}</span>
+                  </button>
+               </div>
+            </div>
+
+            {/* 3. مجموعة الملفات */}
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-5 shadow-lg backdrop-blur-md flex flex-col h-full">
+               <h4 className="flex items-center gap-2 text-green-400 font-bold mb-4 border-b border-slate-700/50 pb-3 text-sm sm:text-base shrink-0">
+                 <FolderOpen className="w-5 h-5" /> {isAr ? 'الملفات والعرض' : 'Files & Gallery'}
+               </h4>
+               <div className="grid grid-cols-2 gap-4 flex-1">
+                  <button onClick={() => updateSlot(index, { type: 'media' })} className="flex flex-col items-center justify-center p-4 bg-slate-900/50 border border-slate-700 hover:border-green-500/50 hover:bg-slate-800 rounded-2xl transition-all active:scale-95 group">
+                     <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mb-3 group-hover:bg-green-500/20 transition-colors shadow-inner"><ImageIcon className="w-6 h-6 text-green-400" /></div>
+                     <span className="text-sm font-bold text-slate-300 group-hover:text-white text-center">{t('mediaGallery') || 'Media Gallery'}</span>
+                  </button>
+                  <button onClick={() => updateSlot(index, { type: 'document' })} className="flex flex-col items-center justify-center p-4 bg-slate-900/50 border border-slate-700 hover:border-emerald-500/50 hover:bg-slate-800 rounded-2xl transition-all active:scale-95 group">
+                     <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-3 group-hover:bg-emerald-500/20 transition-colors shadow-inner"><FileText className="w-6 h-6 text-emerald-400" /></div>
+                     <span className="text-sm font-bold text-slate-300 group-hover:text-white text-center">{isAr ? 'المستندات' : 'Documents'}</span>
+                  </button>
+               </div>
+            </div>
+
+            {/* 4. مجموعة التواصل الحي */}
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-5 shadow-lg backdrop-blur-md flex flex-col h-full">
+               <h4 className="flex items-center gap-2 text-amber-400 font-bold mb-4 border-b border-slate-700/50 pb-3 text-sm sm:text-base shrink-0">
+                 <Video className="w-5 h-5" /> {isAr ? 'التواصل الحي' : 'Live Communication'}
+               </h4>
+               <div className="grid grid-cols-2 gap-4 flex-1">
+                  <button onClick={() => updateSlot(index, { type: 'camera' })} className="flex flex-col items-center justify-center p-4 bg-slate-900/50 border border-slate-700 hover:border-amber-500/50 hover:bg-slate-800 rounded-2xl transition-all active:scale-95 group">
+                     <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mb-3 group-hover:bg-amber-500/20 transition-colors shadow-inner"><Camera className="w-6 h-6 text-amber-400" /></div>
+                     <span className="text-sm font-bold text-slate-300 group-hover:text-white text-center">{t('camera') || 'Camera'}</span>
+                  </button>
+                  <button onClick={() => updateSlot(index, { type: 'mic' })} className="flex flex-col items-center justify-center p-4 bg-slate-900/50 border border-slate-700 hover:border-orange-500/50 hover:bg-slate-800 rounded-2xl transition-all active:scale-95 group">
+                     <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center mb-3 group-hover:bg-orange-500/20 transition-colors shadow-inner"><Mic className="w-6 h-6 text-orange-400" /></div>
+                     <span className="text-sm font-bold text-slate-300 group-hover:text-white text-center">{isAr ? 'الميكروفون' : 'Audio Stream'}</span>
+                  </button>
+               </div>
+            </div>
+
+          </div>
+          
+          <style dangerouslySetInnerHTML={{__html: `::-webkit-scrollbar { display: none; }`}} />
         </div>
       );
     }
+    
+    // 💡 تصيير محتوى الشاشات للخيارات الجديدة
     return (
       <div className="flex flex-col items-center justify-center h-full w-full relative group">
-        {canInteract && <div className="absolute top-4 right-4 md:top-8 md:right-8 z-10 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 md:p-4 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 hover:bg-red-500/40 hover:text-white transition-all"><X className="w-6 h-6 md:w-8 md:h-8" /></button></div>}
+        {canInteract && <div className="absolute top-4 right-4 md:top-8 md:right-8 z-10 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 md:p-4 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 hover:bg-red-500/40 hover:text-white transition-all shadow-lg"><X className="w-6 h-6 md:w-8 md:h-8" /></button></div>}
+        
         {slot.type === 'web' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80"><Globe className="w-20 h-20 text-cyan-500/50 mb-6" /><h2 className="text-2xl font-bold text-white mb-2">{t('webPage') || 'Web Page'}</h2></div>}
         {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center">{slot.url ? <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${slot.url}?autoplay=1`} allowFullScreen className="w-full h-full border-0"></iframe> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
         {slot.type === 'whiteboard' && <div className="w-full h-full p-4 md:p-8"><Whiteboard /></div>}
-        {slot.type === 'media' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80"><ImageIcon className="w-20 h-20 text-green-500/50 mb-6" /><h2 className="text-2xl font-bold text-white mb-2">{t('mediaGallery') || 'Media'}</h2></div>}
+        {slot.type === 'media' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80"><ImageIcon className="w-20 h-20 text-green-500/50 mb-6" /><h2 className="text-2xl font-bold text-white mb-2">{t('mediaGallery') || 'Media Gallery'}</h2></div>}
+        
+        {/* المحتويات المضافة حديثاً */}
+        {slot.type === 'camera' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/90"><div className="w-24 h-24 rounded-full bg-amber-500/10 flex items-center justify-center mb-6 animate-pulse border border-amber-500/30 shadow-[0_0_30px_rgba(245,158,11,0.2)]"><Camera className="w-12 h-12 text-amber-500" /></div><h2 className="text-2xl font-bold text-white mb-2">{isAr ? 'بث الكاميرا نشط' : 'Camera Stream Active'}</h2><p className="text-slate-400 text-sm">{isAr ? 'جاري العرض...' : 'Broadcasting...'}</p></div>}
+        {slot.type === 'screen_share' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/90"><div className="w-24 h-24 rounded-full bg-indigo-500/10 flex items-center justify-center mb-6 animate-pulse border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.2)]"><MonitorUp className="w-12 h-12 text-indigo-500" /></div><h2 className="text-2xl font-bold text-white mb-2">{isAr ? 'مشاركة الشاشة' : 'Screen Sharing'}</h2><p className="text-slate-400 text-sm">{isAr ? 'الشاشة معروضة للمستخدمين' : 'Screen is visible to users'}</p></div>}
+        {slot.type === 'document' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80"><div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center mb-6 border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.2)]"><FileText className="w-12 h-12 text-emerald-500" /></div><h2 className="text-2xl font-bold text-white mb-2">{isAr ? 'مستعرض المستندات' : 'Document Viewer'}</h2><p className="text-slate-400 text-sm">{isAr ? 'اختر ملفاً لعرضه' : 'Select a file to display'}</p></div>}
+        {slot.type === 'mic' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/90"><div className="w-24 h-24 rounded-full bg-orange-500/10 flex items-center justify-center mb-6 animate-bounce border border-orange-500/30 shadow-[0_0_30px_rgba(249,115,22,0.2)]"><Mic className="w-12 h-12 text-orange-500" /></div><h2 className="text-2xl font-bold text-white mb-2">{isAr ? 'البث الصوتي نشط' : 'Audio Stream Active'}</h2><p className="text-slate-400 text-sm">{isAr ? 'الميكروفون يعمل...' : 'Microphone is live...'}</p></div>}
       </div>
     );
   };
@@ -260,7 +346,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
               </>
             )}
             
-            {/* 💡 تصحيح دقيق لمعادلة اتجاه الحركة (TranslateX) لتعمل بكفاءة في اليمين واليسار */}
             <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out" style={{ width: '300%', transform: `translateX(${dir === 'rtl' ? currentSlot * 33.333 : -currentSlot * 33.333}%)` }}>
               {slots.map((slot, index) => (<div key={index} className="w-1/3 h-full pt-16 md:pt-20">{renderSlotContent(slot, index)}</div>))}
             </div>
@@ -280,7 +365,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
               </div>
           </div>
       </div>
-      <style dangerouslySetInnerHTML={{__html: `::-webkit-scrollbar { display: none; }`}} />
     </div>
   );
 }
