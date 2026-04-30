@@ -95,18 +95,30 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
              channelRef.current?.send({ 
                 type: 'broadcast', 
                 event: 'room_state', 
-                payload: stateRef.current 
+                payload: { ...stateRef.current, senderId: user.id }
              });
           }
-        }).on('broadcast', { event: 'room_state' }, (payload) => {
+        })
+        // 💡 مزامنة متبادلة (الكل يتلقى تحديثات الكل لتشغيل الغرفة المفتوحة بالكامل)
+        .on('broadcast', { event: 'room_state' }, (payload) => {
+          const { slots: newSlots, currentSlot: newSlot, viewMode: newMode, senderId } = payload.payload;
+          
+          // تجاهل الإشارة إذا كنت أنت من أرسلها (لمنع التكرار اللانهائي)
+          if (senderId === user.id) return; 
+
+          if (newSlots) setSlots(newSlots);
+          if (newMode) setViewMode(newMode);
+          if (newSlot !== undefined) setCurrentSlot(newSlot);
+          
+        })
+        // 💡 استقبال إشارة طرد للزوار في حال خروج المضيف
+        .on('broadcast', { event: 'room_closed' }, () => {
           if (!isHost) {
-             if (payload.payload.slots) setSlots(payload.payload.slots);
-             if (payload.payload.viewMode) setViewMode(payload.payload.viewMode);
-             if (payload.payload.viewMode === 'sync' && payload.payload.currentSlot !== undefined) {
-                 setCurrentSlot(payload.payload.currentSlot);
-             }
+             alert(isAr ? 'أنهى المضيف الجلسة وتم إغلاق الغرفة.' : 'The host has ended the session and closed the room.');
+             handleExit();
           }
-        }).subscribe(async (status) => { 
+        })
+        .subscribe(async (status) => { 
             if (status === 'SUBSCRIBED') {
                 await channel.track({ name: myName, id: user.id, isHost, hostRoomName: isHost ? roomName : undefined });
             } 
@@ -137,11 +149,30 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     } catch (err) {}
   };
 
-  const handleExit = () => { if (zpRef.current) { try { zpRef.current.destroy(); } catch (e) {} } onExit(); };
+  // 💡 وظائف الخروج ونهاية الجلسة مجمعة ومحسنة
+  const handleExit = () => { 
+    if (zpRef.current) { try { zpRef.current.destroy(); } catch (e) {} } 
+    onExit(); 
+  };
 
+  const handleExitClick = () => {
+    // إذا كان المضيف هو من خرج، أرسل إشارة لإنهاء الجلسة للجميع
+    if (isHost && channelRef.current) {
+        channelRef.current.send({ type: 'broadcast', event: 'room_closed' });
+    }
+    handleExit();
+  };
+
+  // 💡 إرفاق هوية المرسل لضمان قبول التحديثات من أي شخص تفاعل
   const broadcastState = async (slotIndex: number, newSlots: SlotData[], mode: ViewMode) => {
     if (channelRef.current && canInteract) { 
-      try { await channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots: newSlots, currentSlot: slotIndex, viewMode: mode } }); } catch (err) {} 
+      try { 
+        await channelRef.current.send({ 
+          type: 'broadcast', 
+          event: 'room_state', 
+          payload: { slots: newSlots, currentSlot: slotIndex, viewMode: mode, senderId: user?.id } 
+        }); 
+      } catch (err) {} 
     }
   };
 
@@ -341,7 +372,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       
       <div className="absolute top-0 left-0 right-0 h-16 md:h-20 z-[100] flex items-center justify-between px-4 md:px-8 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
         
-        <button onClick={handleExit} className="p-2 md:p-2.5 bg-red-500/20 text-red-400 hover:bg-red-500/40 rounded-full transition-all backdrop-blur-sm shadow-lg">
+        <button onClick={handleExitClick} className="p-2 md:p-2.5 bg-red-500/20 text-red-400 hover:bg-red-500/40 rounded-full transition-all backdrop-blur-sm shadow-lg">
           <LogOut className="w-5 h-5 md:w-6 md:h-6" />
         </button>
 
