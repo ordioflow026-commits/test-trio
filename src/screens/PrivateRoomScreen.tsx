@@ -21,13 +21,34 @@ export default function PrivateRoomScreen() {
   const [error, setError] = useState('');
   const [isHost, setIsHost] = useState(false);
   const [currentRoomId, setCurrentRoomId] = useState<string | undefined>();
-  const [currentRoomName, setCurrentRoomName] = useState<string>(''); // 💡 تمرير اسم الغرفة
+  const [currentRoomName, setCurrentRoomName] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('joined_rooms');
-    if (saved) setRecentRooms(JSON.parse(saved));
-  }, []);
+    const syncRooms = async () => {
+      const saved = localStorage.getItem('joined_rooms');
+      let localRooms: RoomHistory[] = saved ? JSON.parse(saved) : [];
+
+      // 💡 جلب غرف المضيف من السيرفر لضمان عدم اختفائها أبداً
+      if (user?.id) {
+        try {
+          const { data } = await supabase.from('private_rooms').select('*').eq('host_id', user.id);
+          if (data) {
+            const hostRooms: RoomHistory[] = data.map(r => ({
+              id: r.id, name: r.name, type: 'created', link: `https://app.com/room/${r.id}?name=${encodeURIComponent(r.name)}`
+            }));
+            const visitorRooms = localRooms.filter(r => r.type === 'joined');
+            const combined = [...hostRooms, ...visitorRooms];
+            setRecentRooms(combined);
+            localStorage.setItem('joined_rooms', JSON.stringify(combined));
+            return;
+          }
+        } catch (err) {}
+      }
+      setRecentRooms(localRooms);
+    };
+    syncRooms();
+  }, [user]);
 
   const saveToLocal = (rooms: RoomHistory[]) => { setRecentRooms(rooms); localStorage.setItem('joined_rooms', JSON.stringify(rooms)); };
 
@@ -51,14 +72,12 @@ export default function PrivateRoomScreen() {
     setLoading(true); setError('');
     try {
       const roomId = Math.random().toString(36).substring(2, 10);
-      const link = `https://app.com/room/${roomId}`;
+      // 💡 تضمين الاسم في الرابط
+      const link = `https://app.com/room/${roomId}?name=${encodeURIComponent(roomName.trim())}`;
       await supabase.from('private_rooms').insert([{ id: roomId, host_id: user?.id, name: roomName.trim(), pin: roomPin.trim() }]);
       setGeneratedLink(link);
-      saveToLocal([{ id: roomId, name: roomName.trim(), type: 'created', link }, ...recentRooms]);
-      setIsHost(true); 
-      setCurrentRoomId(roomId); 
-      setCurrentRoomName(roomName.trim()); 
-      setView('share');
+      saveToLocal([{ id: roomId, name: roomName.trim(), type: 'created', link }, ...recentRooms.filter(r => r.id !== roomId)]);
+      setIsHost(true); setCurrentRoomId(roomId); setCurrentRoomName(roomName.trim()); setView('share');
     } catch { setError('حدث خطأ أثناء الإنشاء. قد تكون هناك مشكلة في الاتصال.'); } finally { setLoading(false); }
   };
 
@@ -67,18 +86,28 @@ export default function PrivateRoomScreen() {
     if (!joinLink.trim()) return;
     setLoading(true); setError('');
     try {
-      const roomCode = joinLink.includes('/') ? joinLink.split('/').pop()?.trim() : joinLink.trim();
+      let roomCode = '';
+      let extractedName = '';
+      
+      // 💡 استخراج الرمز والاسم من الرابط
+      try {
+        if (joinLink.includes('http')) {
+          const url = new URL(joinLink);
+          roomCode = url.pathname.split('/').pop()?.trim() || '';
+          extractedName = url.searchParams.get('name') || '';
+        } else {
+          roomCode = joinLink.trim();
+        }
+      } catch { roomCode = joinLink.trim(); }
+
       if (!roomCode) throw new Error('الرابط غير صالح');
       
       const { data: roomData } = await supabase.from('private_rooms').select('name').eq('id', roomCode).maybeSingle();
-      const name = roomData?.name || `Room ${roomCode}`;
+      // 💡 الأولوية للاسم المستخرج من السيرفر، ثم الرابط، ثم الافتراضي
+      const name = roomData?.name || extractedName || `Room ${roomCode}`;
       
       saveToLocal([{ id: roomCode, name, type: 'joined', link: joinLink }, ...recentRooms.filter(r => r.id !== roomCode)]);
-      setIsHost(false); 
-      setCurrentRoomId(roomCode); 
-      setCurrentRoomName(name);
-      setView('room');
-      setJoinLink('');
+      setIsHost(false); setCurrentRoomId(roomCode); setCurrentRoomName(name); setView('room'); setJoinLink('');
     } catch (err: any) { setError(err.message || 'فشل الانضمام للغرفة'); } finally { setLoading(false); }
   };
 
@@ -114,7 +143,7 @@ export default function PrivateRoomScreen() {
             filteredRooms.map(room => (
               <div key={room.id} onClick={() => { setIsHost(room.type==='created'); setCurrentRoomId(room.id); setCurrentRoomName(room.name); setView('room'); }} className="flex items-center justify-between p-4 bg-slate-800/40 border border-slate-700/50 rounded-2xl cursor-pointer hover:border-blue-500 transition-all group">
                 <div className="flex items-center gap-3">
-                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isMyRooms ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{isMyRooms ? <Key className="w-5 h-5" /> : <User className="w-5 h-5" />}</div>
+                   <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isMyRooms ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{isMyRooms ? <Key className="w-5 h-5" /> : <User className="w-5 h-5" />}</div>
                    <span className="font-bold text-slate-200 line-clamp-1 text-left">{room.name}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -181,11 +210,11 @@ export default function PrivateRoomScreen() {
   if (view === 'share') return (
     <div className="flex-1 flex flex-col p-6 items-center justify-center">
       <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mb-6 border border-green-500/30"><Check className="text-green-400 w-10 h-10" /></div>
-      <h2 className="text-2xl font-bold text-white mb-2">{roomName}</h2>
+      <h2 className="text-2xl font-bold text-white mb-2">{currentRoomName}</h2>
       <div className="w-full bg-slate-800 border border-slate-700 rounded-2xl p-4 mb-6"><span className="text-blue-100 font-mono text-sm truncate block text-center" dir="ltr">{generatedLink}</span></div>
       <div className="grid grid-cols-2 gap-3 w-full mb-6">
         <button onClick={() => { navigator.clipboard.writeText(generatedLink); setCopied(true); setTimeout(()=>setCopied(false),2000); }} className="bg-slate-800 text-slate-300 py-3.5 rounded-xl border border-slate-700 flex items-center justify-center gap-2"><Copy className="w-4 h-4"/> {copied ? 'تم النسخ!' : 'نسخ'}</button>
-        <button onClick={async () => { if(navigator.share) await navigator.share({title: roomName, text: 'انضم لغرفتي الخاصة', url: generatedLink}); }} className="bg-blue-600/20 border border-blue-500 text-blue-400 py-3.5 rounded-xl flex items-center justify-center gap-2"><Share2 className="w-4 h-4"/> مشاركة...</button>
+        <button onClick={async () => { if(navigator.share) await navigator.share({title: currentRoomName, text: 'انضم لغرفتي الخاصة', url: generatedLink}); }} className="bg-blue-600/20 border border-blue-500 text-blue-400 py-3.5 rounded-xl flex items-center justify-center gap-2"><Share2 className="w-4 h-4"/> مشاركة...</button>
       </div>
       <button onClick={() => setView('room')} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold">دخول الغرفة</button>
     </div>
