@@ -199,12 +199,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       'red': 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
     };
 
-    // 💡 Visibility bound to isIdle state, identical to navigation arrows
     const LockIndicator = () => {
        if (viewMode === 'sync') return null;
 
        return (
-         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle ? 'opacity-0' : 'opacity-100'}`}>
+         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
            {isHost ? (
               <button onClick={() => toggleLock(index)} className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 ${lockColors[lockState]}`}>
                 {lockState === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
@@ -277,7 +276,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       <div className="flex flex-col items-center justify-center h-full w-full relative group">
         {!editable && <div className="absolute inset-0 z-[60] bg-transparent" />}
         <LockIndicator />
-        {editable && <div className={`absolute top-4 ${dir === 'rtl' ? 'left-4' : 'right-4'} md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} z-[70] transition-all duration-500 ${isIdle ? 'opacity-0' : 'opacity-100'}`}><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 shadow-lg"><X className="w-6 h-6" /></button></div>}
+        {editable && <div className={`absolute top-4 ${dir === 'rtl' ? 'left-4' : 'right-4'} md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} z-[70] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 shadow-lg"><X className="w-6 h-6" /></button></div>}
         {slot.type === 'web' && <div className="w-full h-full bg-slate-900/80 flex flex-col items-center justify-center"><Globe className="w-20 h-20 text-cyan-500/50 mb-6" /><h2 className="text-2xl text-white font-bold">Web Browser</h2></div>}
         {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center">{slot.url ? <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${slot.url}?autoplay=1`} allowFullScreen className={`w-full h-full border-0 ${editable ? 'pointer-events-auto' : 'pointer-events-none'}`}></iframe> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
         {slot.type === 'whiteboard' && <div className={`w-full h-full p-4 ${editable ? 'pointer-events-auto' : 'pointer-events-none'}`}><Whiteboard roomId={roomId} canInteract={editable} /></div>}
@@ -300,8 +299,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
             <>
-              {canGoLeft && <button onClick={() => handleNavigation(leftTarget)} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 rounded-full transition-all opacity-0 group-hover:opacity-100 ${isIdle ? '!opacity-0' : ''}`}><ChevronLeft className="w-8 h-8" /></button>}
-              {canGoRight && <button onClick={() => handleNavigation(rightTarget)} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 rounded-full transition-all opacity-0 group-hover:opacity-100 ${isIdle ? '!opacity-0' : ''}`}><ChevronRight className="w-8 h-8" /></button>}
+              {canGoLeft && <button onClick={() => handleNavigation(leftTarget)} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>}
+              {canGoRight && <button onClick={() => handleNavigation(rightTarget)} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>}
             </>
             <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out" style={{ width: '300%', transform: `translateX(${dir === 'rtl' ? currentSlot * 33.333 : -currentSlot * 33.333}%)` }}>{slots.map((s, i) => (<div key={i} className="w-1/3 h-full pt-16">{renderSlotContent(s, i)}</div>))}</div>
           </div>
