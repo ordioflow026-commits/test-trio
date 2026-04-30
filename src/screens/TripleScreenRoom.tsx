@@ -10,9 +10,9 @@ type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'media'
 type ViewMode = 'sync' | 'free';
 
 interface SlotData { type: ContentType; url?: string; }
-interface Props { onExit: () => void; isHost?: boolean; roomId?: string; }
+interface Props { onExit: () => void; isHost?: boolean; roomId?: string; roomName?: string; } // Add roomName
 
-export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Props) {
+export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomName }: Props) {
   const { t, dir } = useLanguage();
   const { user } = useUser();
   const [currentSlot, setCurrentSlot] = useState(0);
@@ -81,7 +81,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
         container: element, scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
         turnOnMicrophoneWhenJoining: true, turnOnCameraWhenJoining: false,
         showPreJoinView: false, showMyCameraToggleButton: false, showMyMicrophoneToggleButton: false,
-        showAudioVideoSettingsButton: false, layout: 'Grid',
+        showAudioVideoSettingsButton: false, showLeavingButton: false, layout: 'Grid',
       });
     } catch (err) {}
   };
@@ -182,7 +182,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId }: Pro
 
         {/* زر المشاركة ورقم الغرفة - يمين */}
         <div className="flex items-center gap-2">
-          <span className="text-white font-mono font-bold tracking-widest text-[11px] opacity-80 uppercase hidden sm:inline-block">ID: {roomId}</span>
+          <span className="text-white font-mono font-bold tracking-widest text-[11px] opacity-80 uppercase hidden sm:inline-block hover:opacity-100 transition-opacity truncate max-w-[120px]">{roomName || roomId}</span>
           <button 
             onClick={handleShare} 
             className="flex items-center justify-center p-2.5 bg-blue-600 text-white rounded-full shadow-[0_0_15px_rgba(37,99,235,0.6)] animate-pulse hover:bg-blue-500 active:scale-95 transition-all"

@@ -21,6 +21,7 @@ export default function PrivateRoomScreen() {
   const [error, setError] = useState('');
   const [isHost, setIsHost] = useState(false);
   const [currentRoomId, setCurrentRoomId] = useState<string | undefined>();
+  const [currentRoomName, setCurrentRoomName] = useState<string>(''); // 💡 تمرير اسم الغرفة
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -54,7 +55,10 @@ export default function PrivateRoomScreen() {
       await supabase.from('private_rooms').insert([{ id: roomId, host_id: user?.id, name: roomName.trim(), pin: roomPin.trim() }]);
       setGeneratedLink(link);
       saveToLocal([{ id: roomId, name: roomName.trim(), type: 'created', link }, ...recentRooms]);
-      setIsHost(true); setCurrentRoomId(roomId); setView('share');
+      setIsHost(true); 
+      setCurrentRoomId(roomId); 
+      setCurrentRoomName(roomName.trim()); 
+      setView('share');
     } catch { setError('حدث خطأ أثناء الإنشاء. قد تكون هناك مشكلة في الاتصال.'); } finally { setLoading(false); }
   };
 
@@ -72,6 +76,7 @@ export default function PrivateRoomScreen() {
       saveToLocal([{ id: roomCode, name, type: 'joined', link: joinLink }, ...recentRooms.filter(r => r.id !== roomCode)]);
       setIsHost(false); 
       setCurrentRoomId(roomCode); 
+      setCurrentRoomName(name);
       setView('room');
       setJoinLink('');
     } catch (err: any) { setError(err.message || 'فشل الانضمام للغرفة'); } finally { setLoading(false); }
@@ -90,7 +95,7 @@ export default function PrivateRoomScreen() {
     saveToLocal(recentRooms.filter(r => r.id !== room.id));
   };
 
-  if (view === 'room') return <TripleScreenRoom onExit={() => setView('menu')} isHost={isHost} roomId={currentRoomId} />;
+  if (view === 'room') return <TripleScreenRoom onExit={() => setView('menu')} isHost={isHost} roomId={currentRoomId} roomName={currentRoomName} />;
 
   if (view === 'myRooms' || view === 'visitorRooms') {
     const isMyRooms = view === 'myRooms';
@@ -107,7 +112,7 @@ export default function PrivateRoomScreen() {
             <div className="text-center text-slate-400 p-4 border border-slate-700/50 rounded-2xl bg-slate-800/30">لا توجد غرف مسجلة</div>
           ) : (
             filteredRooms.map(room => (
-              <div key={room.id} onClick={() => { setIsHost(room.type==='created'); setCurrentRoomId(room.id); setView('room'); }} className="flex items-center justify-between p-4 bg-slate-800/40 border border-slate-700/50 rounded-2xl cursor-pointer hover:border-blue-500 transition-all group">
+              <div key={room.id} onClick={() => { setIsHost(room.type==='created'); setCurrentRoomId(room.id); setCurrentRoomName(room.name); setView('room'); }} className="flex items-center justify-between p-4 bg-slate-800/40 border border-slate-700/50 rounded-2xl cursor-pointer hover:border-blue-500 transition-all group">
                 <div className="flex items-center gap-3">
                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isMyRooms ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{isMyRooms ? <Key className="w-5 h-5" /> : <User className="w-5 h-5" />}</div>
                    <span className="font-bold text-slate-200 line-clamp-1 text-left">{room.name}</span>
@@ -190,7 +195,7 @@ export default function PrivateRoomScreen() {
     <div className="flex-1 flex flex-col items-center p-6 bg-slate-900/20 gap-8">
        <div className="flex flex-col items-center mt-10"><div className="w-20 h-20 bg-slate-800/50 rounded-3xl flex items-center justify-center border border-slate-700/50 shadow-2xl mb-4 rotate-6"><Lock className="w-10 h-10 text-slate-400" /></div><p className="text-3xl font-black text-white tracking-tighter">{t('privateRoom')}</p></div>
        <div className="flex flex-col w-full max-w-xs gap-4">
-          <button onClick={() => setView('create')} className="bg-blue-600 text-white py-5 rounded-[24px] font-black text-lg flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all"><Plus /> أنشئ غرفة</button>
+          <button onClick={() => { setRoomName(''); setRoomPin(''); setView('create'); }} className="bg-blue-600 text-white py-5 rounded-[24px] font-black text-lg flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all"><Plus /> أنشئ غرفة</button>
           <button onClick={() => setView('join')} className="bg-slate-800 text-white py-5 rounded-[24px] font-black text-lg flex items-center justify-center gap-3 border border-slate-700/50 active:scale-95 transition-all"><LogIn /> انضم لرابط</button>
           <div className="grid grid-cols-2 gap-4"><button onClick={() => setView('myRooms')} className="bg-slate-800 text-white p-5 rounded-[24px] flex flex-col items-center font-bold border border-slate-700/50"><Key className="mb-2 text-blue-400" /> غرفي</button><button onClick={() => setView('visitorRooms')} className="bg-slate-800 text-white p-5 rounded-[24px] flex flex-col items-center font-bold border border-slate-700/50"><User className="mb-2 text-emerald-400" /> الزوار</button></div>
        </div>
