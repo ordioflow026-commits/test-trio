@@ -21,7 +21,12 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [slots, setSlots] = useState<SlotData[]>([{ type: 'empty' }, { type: 'empty' }, { type: 'empty' }]);
   const [displayRoomName, setDisplayRoomName] = useState<string>(roomName || roomId || ''); 
   
-  // 💡 نظام السكون (Idle Mode) لإخفاء الأسهم
+  // 💡 إضافة الذاكرة المرجعية (Ref) لضمان حصول الزوار الجدد على أحدث حالة
+  const stateRef = useRef({ slots, currentSlot, viewMode });
+  useEffect(() => {
+    stateRef.current = { slots, currentSlot, viewMode };
+  }, [slots, currentSlot, viewMode]);
+
   const [isIdle, setIsIdle] = useState(false);
   const idleTimerRef = useRef<any>(null);
 
@@ -33,17 +38,16 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const myName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'User');
   const myInitial = myName.charAt(0).toUpperCase();
 
-  // 💡 وظيفة تصفير المؤقت عند أي حركة
   const resetIdleTimer = () => {
     setIsIdle(false);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     idleTimerRef.current = setTimeout(() => {
       setIsIdle(true);
-    }, 3000); // تختفي الأسهم بعد 3 ثوانٍ من السكون
+    }, 3000); 
   };
 
   useEffect(() => {
-    resetIdleTimer(); // تشغيل المؤقت عند دخول الغرفة
+    resetIdleTimer(); 
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
@@ -52,13 +56,13 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const handleShare = async () => {
     const encodedName = encodeURIComponent(displayRoomName);
     const roomUrl = `https://app.com/room/${roomId}?name=${encodedName}`;
-    const shareText = `مرحباً! انضم إلى غرفتي الخاصة "${displayRoomName}" 🚀\n\nاضغط على الرابط أدناه للدخول:\n${roomUrl}`;
+    const shareText = `${t('shareGreeting') || 'Join my room'} "${displayRoomName}" 🚀\n\n${t('clickToJoin') || 'Click below to enter:'}\n${roomUrl}`;
     
     if (navigator.share) {
       try { await navigator.share({ title: `انضم لغرفتي`, text: shareText }); } catch (err) {}
     } else {
       navigator.clipboard.writeText(shareText);
-      alert('تم نسخ تفاصيل الغرفة والرابط بنجاح!');
+      alert(t('copiedBtn') || 'Copied!');
     }
   };
 
@@ -85,11 +89,22 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             }
           });
           setParticipants(activeUsers);
+
+          // 💡 المزامنة الذكية للزوار الجدد: عندما يكتشف المضيف دخول زائر، يرسل له الحالة فوراً!
+          if (isHost) {
+             channelRef.current?.send({ 
+                type: 'broadcast', 
+                event: 'room_state', 
+                payload: stateRef.current 
+             });
+          }
         }).on('broadcast', { event: 'room_state' }, (payload) => {
           if (!isHost) {
              if (payload.payload.slots) setSlots(payload.payload.slots);
              if (payload.payload.viewMode) setViewMode(payload.payload.viewMode);
-             if (payload.payload.viewMode === 'sync' && payload.payload.currentSlot !== undefined) setCurrentSlot(payload.payload.currentSlot);
+             if (payload.payload.viewMode === 'sync' && payload.payload.currentSlot !== undefined) {
+                 setCurrentSlot(payload.payload.currentSlot);
+             }
           }
         }).subscribe(async (status) => { 
             if (status === 'SUBSCRIBED') {
@@ -141,7 +156,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       const newSlot = Math.max(0, currentSlot - 1);
       setCurrentSlot(newSlot);
       broadcastState(newSlot, slots, viewMode);
-      resetIdleTimer(); // إبقاء الأسهم ظاهرة عند الضغط
+      resetIdleTimer();
     }
   };
   
@@ -150,7 +165,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       const newSlot = Math.min(2, currentSlot + 1);
       setCurrentSlot(newSlot);
       broadcastState(newSlot, slots, viewMode);
-      resetIdleTimer(); // إبقاء الأسهم ظاهرة عند الضغط
+      resetIdleTimer(); 
     }
   };
 
@@ -168,10 +183,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           {canInteract ? (
             <>
               <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-[#00b4d8] flex items-center justify-center hover:bg-[#00b4d8]/20 transition-all md:hover:scale-105"><Plus className="w-10 h-10 text-[#00b4d8]" /></button>
-              <p className="mt-4 text-[#00b4d8] font-mono tracking-widest text-sm font-bold">ADD CONTENT</p>
+              <p className="mt-4 text-[#00b4d8] font-mono tracking-widest text-sm font-bold">{t('addContent') || 'ADD CONTENT'}</p>
             </>
           ) : (
-            <><Video className="w-14 h-14 text-[#00b4d8] mb-5" /><p className="text-[#00b4d8] font-mono tracking-[0.2em] uppercase text-[13px] font-semibold">WAITING FOR HOST...</p></>
+            <><Video className="w-14 h-14 text-[#00b4d8] mb-5" /><p className="text-[#00b4d8] font-mono tracking-[0.2em] uppercase text-[13px] font-semibold">{t('waitingForHost') || 'WAITING FOR HOST...'}</p></>
           )}
         </div>
       );
@@ -179,7 +194,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (slot.type === 'menu') {
       return (
         <div className="flex flex-col items-center justify-center h-full w-full max-w-lg md:max-w-3xl mx-auto p-6 transition-all duration-300">
-          <div className="flex justify-between items-center w-full mb-8"><h3 className="text-xl font-bold text-white uppercase tracking-wider">ADD CONTENT</h3><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-2 bg-slate-800/50 rounded-full text-slate-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button></div>
+          <div className="flex justify-between items-center w-full mb-8"><h3 className="text-xl font-bold text-white uppercase tracking-wider">{t('addContent') || 'ADD CONTENT'}</h3><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-2 bg-slate-800/50 rounded-full text-slate-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button></div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 w-full">
             {[ { id: 'web', icon: Globe, label: t('webPage'), color: 'from-cyan-500' }, { id: 'youtube', icon: Youtube, label: t('youtubeVideo'), color: 'from-red-500' }, { id: 'whiteboard', icon: PenTool, label: t('whiteboard'), color: 'from-purple-500' }, { id: 'media', icon: ImageIcon, label: t('mediaGallery'), color: 'from-green-500' } ].map((item) => (
               <button key={item.id} onClick={() => { if (item.id === 'youtube') { const url = prompt('Enter YouTube URL:'); if (url) { const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]+)/); if (match) updateSlot(index, { type: 'youtube', url: match[1] }); } } else updateSlot(index, { type: item.id as ContentType }); }} className="flex flex-col items-center justify-center p-6 md:p-8 bg-slate-800/40 border border-slate-700/50 rounded-2xl relative overflow-hidden group hover:border-slate-500 transition-all md:hover:scale-105 shadow-lg">
@@ -193,10 +208,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     return (
       <div className="flex flex-col items-center justify-center h-full w-full relative group">
         {canInteract && <div className="absolute top-4 right-4 md:top-8 md:right-8 z-10 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 md:p-4 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 hover:bg-red-500/40 hover:text-white transition-all"><X className="w-6 h-6 md:w-8 md:h-8" /></button></div>}
-        {slot.type === 'web' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80"><Globe className="w-20 h-20 text-cyan-500/50 mb-6" /><h2 className="text-2xl font-bold text-white mb-2">{t('webPage')}</h2></div>}
+        {slot.type === 'web' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80"><Globe className="w-20 h-20 text-cyan-500/50 mb-6" /><h2 className="text-2xl font-bold text-white mb-2">{t('webPage') || 'Web Page'}</h2></div>}
         {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center">{slot.url ? <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${slot.url}?autoplay=1`} allowFullScreen className="w-full h-full border-0"></iframe> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
         {slot.type === 'whiteboard' && <div className="w-full h-full p-4 md:p-8"><Whiteboard /></div>}
-        {slot.type === 'media' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80"><ImageIcon className="w-20 h-20 text-green-500/50 mb-6" /><h2 className="text-2xl font-bold text-white mb-2">{t('mediaGallery')}</h2></div>}
+        {slot.type === 'media' && <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80"><ImageIcon className="w-20 h-20 text-green-500/50 mb-6" /><h2 className="text-2xl font-bold text-white mb-2">{t('mediaGallery') || 'Media'}</h2></div>}
       </div>
     );
   };
@@ -226,7 +241,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         </div>
       </div>
 
-      {/* 💡 مستشعرات الحركة على الشاشة لتشغيل/إيقاف وضع السكون */}
       <div 
         className="flex-1 w-full flex flex-col relative"
         onMouseMove={resetIdleTimer}
@@ -236,7 +250,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
             {canInteract && (
               <>
-                {/* 💡 تأثير التلاشي السلس عند السكون للأسهم */}
                 {currentSlot > 0 && (
                   <button onClick={slideLeft} className={`absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 hover:text-white hover:bg-black/50 backdrop-blur-md rounded-full shadow-lg hover:shadow-xl transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none scale-90' : 'opacity-100 scale-100'}`}><ChevronLeft className="w-8 h-8 md:w-10 md:h-10" /></button>
                 )}
@@ -246,7 +259,9 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 )}
               </>
             )}
-            <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out" style={{ width: '300%', transform: `translateX(-${currentSlot * 33.333}%)` }}>
+            
+            {/* 💡 تصحيح دقيق لمعادلة اتجاه الحركة (TranslateX) لتعمل بكفاءة في اليمين واليسار */}
+            <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out" style={{ width: '300%', transform: `translateX(${dir === 'rtl' ? currentSlot * 33.333 : -currentSlot * 33.333}%)` }}>
               {slots.map((slot, index) => (<div key={index} className="w-1/3 h-full pt-16 md:pt-20">{renderSlotContent(slot, index)}</div>))}
             </div>
           </div>
