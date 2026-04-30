@@ -13,8 +13,11 @@ export default function Whiteboard({ roomId, canInteract = true }: WhiteboardPro
   const [color, setColor] = useState('#00b4d8');
   const channelRef = useRef<any>(null);
   const lastPos = useRef<{ x: number, y: number } | null>(null);
+  
+  // 💡 إضافة متغيرات التحكم في سرعة الإرسال (Throttling)
+  const lastEmitTime = useRef<number>(0);
+  const THROTTLE_MS = 30; // إرسال التحديثات كل 30 ملي ثانية كحد أقصى
 
-  // 💡 الاتصال بخادم Supabase لمزامنة الرسم في الوقت الفعلي
   useEffect(() => {
     if (!roomId) return;
     const channel = supabase.channel(`whiteboard_${roomId}`);
@@ -35,7 +38,6 @@ export default function Whiteboard({ roomId, canInteract = true }: WhiteboardPro
       ctx.strokeStyle = c;
       ctx.lineWidth = 4;
       ctx.lineCap = 'round';
-      // تحويل النسب المئوية إلى أبعاد حقيقية لتعمل على كل أحجام الشاشات
       ctx.moveTo(x0 * canvas.width, y0 * canvas.height);
       ctx.lineTo(x1 * canvas.width, y1 * canvas.height);
       ctx.stroke();
@@ -74,6 +76,7 @@ export default function Whiteboard({ roomId, canInteract = true }: WhiteboardPro
     const y = clientY - rect.top;
 
     if (lastPos.current) {
+      // 1. الرسم المحلي (يحدث دائماً وبنعومة تامة)
       ctx.beginPath();
       ctx.strokeStyle = color;
       ctx.lineWidth = 4;
@@ -82,19 +85,23 @@ export default function Whiteboard({ roomId, canInteract = true }: WhiteboardPro
       ctx.lineTo(x, y);
       ctx.stroke();
 
-      // 💡 إرسال إحداثيات الرسمة للزوار كنسبة مئوية من حجم الشاشة
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'draw',
-          payload: {
-            x0: lastPos.current.x / canvas.width,
-            y0: lastPos.current.y / canvas.height,
-            x1: x / canvas.width,
-            y1: y / canvas.height,
-            color
-          }
-        });
+      // 2. البث الشبكي (يحدث فقط إذا مرت المدة المحددة لتخفيف الضغط)
+      const now = Date.now();
+      if (now - lastEmitTime.current >= THROTTLE_MS) {
+        if (channelRef.current) {
+          channelRef.current.send({
+            type: 'broadcast',
+            event: 'draw',
+            payload: {
+              x0: lastPos.current.x / canvas.width,
+              y0: lastPos.current.y / canvas.height,
+              x1: x / canvas.width,
+              y1: y / canvas.height,
+              color
+            }
+          });
+        }
+        lastEmitTime.current = now;
       }
     }
     lastPos.current = { x, y };
@@ -141,7 +148,7 @@ export default function Whiteboard({ roomId, canInteract = true }: WhiteboardPro
           <button onClick={() => setColor('#22c55e')} className={`w-6 h-6 rounded-full bg-green-500 ${color === '#22c55e' ? 'ring-2 ring-white scale-110' : ''}`} />
           <button onClick={() => setColor('#eab308')} className={`w-6 h-6 rounded-full bg-yellow-500 ${color === '#eab308' ? 'ring-2 ring-white scale-110' : ''}`} />
           <div className="w-px h-6 bg-slate-600 mx-1" />
-          <button onClick={() => setColor('#0f172a')} title="ممحات" className={`p-1.5 rounded-full ${color === '#0f172a' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}><Eraser className="w-5 h-5" /></button>
+          <button onClick={() => setColor('#0f172a')} title="ممحاة" className={`p-1.5 rounded-full ${color === '#0f172a' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}><Eraser className="w-5 h-5" /></button>
           <button onClick={clearBoard} title="مسح الكل" className="p-1.5 rounded-full text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"><Trash2 className="w-5 h-5" /></button>
         </div>
       )}
