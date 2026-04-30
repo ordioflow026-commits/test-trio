@@ -26,9 +26,6 @@ function CallOverlay({ activeCall, onClose }: { activeCall: { isVideo: boolean; 
         if (videoRef.current && activeCall.isVideo) {
           videoRef.current.srcObject = ms;
         }
-
-        // Ideally here we send signal via supabase.channel('group').send(...)
-        
       } catch (err) {
         console.error("Failed to access media devices:", err);
       }
@@ -97,10 +94,8 @@ export default function MainScreen() {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [isFirstLogin, setIsFirstLogin] = useState(true);
 
-  // Call Overlay State
   const [activeCall, setActiveCall] = useState<{ isVideo: boolean; title: string; count: number } | null>(null);
 
-  // Incoming Call Listener
   useEffect(() => {
     if (!user) return;
     
@@ -154,11 +149,12 @@ export default function MainScreen() {
   };
 
   return (
+    // 💡 التحديث الأساسي: إضافة dir={dir} لقلب كل عناصر الشاشة حسب اللغة
     <div className="min-h-screen bg-[#0B1120] flex flex-col font-sans" dir={dir}>
       {/* Top Navigation Bar */}
       <header className="bg-[#0F172A]/90 backdrop-blur-xl border-b border-slate-800/80 sticky top-0 z-20 shadow-lg shadow-black/20">
         <div className="flex items-center justify-between h-20 px-4 w-full">
-          {/* Left: Logo */}
+          {/* Logo Area */}
           <div className="w-24 sm:w-32 flex items-center gap-2">
             <img src="/trio_sync_logo.svg" alt="TrioSync Logo" className="w-8 h-8 rounded-lg shadow-md shadow-blue-500/20" />
             <span className="text-sm font-bold text-white tracking-wide hidden sm:block">TrioSync</span>
@@ -188,11 +184,10 @@ export default function MainScreen() {
               >
                 <Bell className="w-6 h-6" />
                 {hasNotifications && (
-                  <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-[#0F172A] rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                  <span className={`absolute top-2.5 ${dir === 'rtl' ? 'left-2.5' : 'right-2.5'} w-2.5 h-2.5 bg-red-500 border-2 border-[#0F172A] rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]`}></span>
                 )}
               </button>
               
-              {/* Welcome Notification Dropdown */}
               {showWelcomeModal && (
                 <div className="absolute top-16 left-1/2 transform -translate-x-1/2 mt-2 w-64 bg-slate-800 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.6)] border border-slate-700/50 p-4 z-50 animate-in fade-in slide-in-from-top-4">
                   <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-slate-800 border-l border-t border-slate-700/50 rotate-45"></div>
@@ -201,12 +196,13 @@ export default function MainScreen() {
                       <span className="text-xl">👋</span>
                     </div>
                     <div>
-                      <h3 className="font-bold text-white tracking-tight">Notification</h3>
-                      <p className="text-[10px] text-slate-400">Just now</p>
+                      {/* 💡 التحديث: ترجمة النصوص الثابتة */}
+                      <h3 className="font-bold text-white tracking-tight">{t('notifications') || 'Notification'}</h3>
+                      <p className="text-[10px] text-slate-400">{t('justNow') || 'Just now'}</p>
                     </div>
                   </div>
                   <p className="text-sm border-t border-slate-700/50 pt-3 text-slate-200 mt-2 font-medium relative z-10">
-                    Welcome back, <span className="text-blue-400">{userData.fullName}</span>!
+                    {t('welcomeBack') || 'Welcome back'}, <span className="text-blue-400">{userData.fullName}</span>!
                   </p>
                 </div>
               )}
@@ -236,7 +232,7 @@ export default function MainScreen() {
           </div>
         </div>
 
-        {/* Sub-Navigation (Only visible when Home is active) */}
+        {/* Sub-Navigation */}
         {activeMainTab === 'home' && (
           <div className="flex justify-around items-center p-4 bg-[#0F172A]/50 border-t border-blue-900/30 gap-3">
             {[
@@ -270,7 +266,7 @@ export default function MainScreen() {
         )}
       </header>
 
-      {/* Global Selection Header (Persists across tabs when active) */}
+      {/* Global Selection Header */}
       {isSelectionMode && (
         <div className="bg-[#00b4d8] text-white px-4 py-3 flex items-center justify-between z-20 shadow-md">
           <div className="flex items-center gap-3">
@@ -311,8 +307,8 @@ export default function MainScreen() {
             <div className="w-24 h-24 bg-slate-800/50 rounded-full flex items-center justify-center mb-6 border border-slate-700/50 shadow-lg">
               <Bell className="w-10 h-10 text-slate-400" />
             </div>
-            <p className="text-xl font-bold text-slate-200">{t('notifications')}</p>
-            <p className="text-sm mt-3 text-slate-400">You're all caught up!</p>
+            <p className="text-xl font-bold text-slate-200">{t('notifications') || 'Notifications'}</p>
+            <p className="text-sm mt-3 text-slate-400">{t('allCaughtUp') || "You're all caught up!"}</p>
           </div>
         )}
 
@@ -324,7 +320,7 @@ export default function MainScreen() {
                   <User className="w-12 h-12 text-slate-300" />
                 </div>
               </div>
-              <div className="absolute bottom-0 right-0 w-8 h-8 bg-green-500 border-4 border-slate-900 rounded-full"></div>
+              <div className={`absolute bottom-0 ${dir === 'rtl' ? 'left-0' : 'right-0'} w-8 h-8 bg-green-500 border-4 border-slate-900 rounded-full`}></div>
             </div>
             <p className="text-3xl font-bold text-white tracking-tight">{userData.fullName}</p>
             <p className="text-md mt-2 text-blue-400 font-medium" dir="ltr">{userData.phone}</p>
