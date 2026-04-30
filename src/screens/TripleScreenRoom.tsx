@@ -16,17 +16,17 @@ interface Props { onExit: () => void; isHost?: boolean; roomId?: string; roomNam
 export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomName, onNameSync }: Props) {
   const { t, dir, language } = useLanguage();
   const { user } = useUser();
-  const [currentSlot, setCurrentSlot] = useState(0);
+  
+  // 💡 التعديل 1: البدء بالشاشة الوسطى (Index 1) بدلاً من الأولى (0)
+  const [currentSlot, setCurrentSlot] = useState(1);
+  
   const [viewMode, setViewMode] = useState<ViewMode>('sync');
   const [participants, setParticipants] = useState<{ id: string, name: string }[]>([]);
-  
-  // 💡 الشاشة الوسطى مثبتة افتراضياً بقفل أخضر
   const [slots, setSlots] = useState<SlotData[]>([
     { type: 'empty', lock: 'none' }, 
-    { type: 'empty', lock: 'green' }, 
+    { type: 'empty', lock: 'green' }, // الشاشة الوسطى مقفلة أخضر كبداية
     { type: 'empty', lock: 'none' }
   ]);
-  
   const [displayRoomName, setDisplayRoomName] = useState<string>(roomName || roomId || ''); 
   
   const isAr = language === 'ar';
@@ -43,6 +43,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const zegoJoined = useRef(false);
   const channelRef = useRef<any>(null);
 
+  const canInteract = isHost || viewMode === 'free';
   const myName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'User');
   const myInitial = myName.charAt(0).toUpperCase();
 
@@ -194,31 +195,26 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     const editable = canEditSlot(index);
     const lockState = slot.lock || 'none';
     
-    // 💡 ألوان شفافة وأنيقة للأقفال
     const lockColors = {
       'none': 'border-white/20 text-white/50 hover:bg-white/10 hover:text-white hover:border-white/40',
-      'green': 'bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.3)]',
-      'yellow': 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.3)]',
-      'red': 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+      'green': 'bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.3)]',
+      'yellow': 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.3)]',
+      'red': 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
     };
 
+    // 💡 التعديل 2: تصغير الأيقونة وإخفاؤها لتظهر عند التمرير فقط
     const LockIndicator = () => {
-       // لا حاجة لعرض الأقفال في الوضع المغلق
        if (viewMode === 'sync') return null;
 
-       const isLocked = lockState !== 'none';
-       // تأثير الاختفاء إذا لم يكن مقفلاً (يظهر عند التمرير فقط)
-       const visibilityClass = isLocked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
-
        return (
-         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${visibilityClass}`}>
+         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-300 opacity-0 group-hover:opacity-100`}>
            {isHost ? (
-              <button onClick={() => toggleLock(index)} className={`w-8 h-8 md:w-10 md:h-10 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 ${lockColors[lockState]}`}>
-                {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4 md:w-5 md:h-5" />}
+              <button onClick={() => toggleLock(index)} className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 ${lockColors[lockState]}`}>
+                {lockState === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
               </button>
-           ) : isLocked ? (
-              <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full border flex items-center justify-center backdrop-blur-md ${lockColors[lockState]}`}>
-                <Lock className="w-4 h-4 md:w-5 md:h-5" />
+           ) : (lockState !== 'none') ? (
+              <div className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md ${lockColors[lockState]}`}>
+                <Lock className="w-3 h-3" />
               </div>
            ) : null}
          </div>
@@ -227,7 +223,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
     if (slot.type === 'empty') {
       return (
-        <div className="flex flex-col items-center justify-center h-full relative">
+        <div className="flex flex-col items-center justify-center h-full relative group">
           <LockIndicator />
           {editable ? (
             <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-28 h-28 rounded-full border border-[#00b4d8]/50 bg-[#00b4d8]/10 flex items-center justify-center hover:bg-[#00b4d8]/20 transition-all shadow-xl"><Plus className="w-12 h-12 text-[#00b4d8]" /></button>
@@ -240,7 +236,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     
     if (slot.type === 'menu') {
       return (
-        <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative" dir={dir}>
+        <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative group" dir={dir}>
           <LockIndicator />
           <div className="flex justify-center items-center w-full mb-8 pt-10">
             <h3 className="text-3xl font-extrabold text-white">{isAr ? 'إضافة محتوى' : 'Add Content'}</h3>
@@ -307,8 +303,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
             <>
-              {canGoLeft && <button onClick={() => handleNavigation(leftTarget)} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 rounded-full transition-all ${isIdle ? 'opacity-0' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>}
-              {canGoRight && <button onClick={() => handleNavigation(rightTarget)} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 rounded-full transition-all ${isIdle ? 'opacity-0' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>}
+              {canGoLeft && <button onClick={() => handleNavigation(leftTarget)} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 rounded-full transition-all opacity-0 group-hover:opacity-100 ${isIdle ? '!opacity-0' : ''}`}><ChevronLeft className="w-8 h-8" /></button>}
+              {canGoRight && <button onClick={() => handleNavigation(rightTarget)} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 rounded-full transition-all opacity-0 group-hover:opacity-100 ${isIdle ? '!opacity-0' : ''}`}><ChevronRight className="w-8 h-8" /></button>}
             </>
             <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out" style={{ width: '300%', transform: `translateX(${dir === 'rtl' ? currentSlot * 33.333 : -currentSlot * 33.333}%)` }}>{slots.map((s, i) => (<div key={i} className="w-1/3 h-full pt-16">{renderSlotContent(s, i)}</div>))}</div>
           </div>
