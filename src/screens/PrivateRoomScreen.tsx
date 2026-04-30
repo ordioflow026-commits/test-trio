@@ -24,45 +24,21 @@ export default function PrivateRoomScreen() {
   const [currentRoomName, setCurrentRoomName] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
+  // 💡 الاعتماد الكلي على الذاكرة المحلية لسرعة فائقة وعدم اختفاء الغرف
   useEffect(() => {
-    const syncRooms = async () => {
-      const saved = localStorage.getItem('joined_rooms');
-      let localRooms: RoomHistory[] = saved ? JSON.parse(saved) : [];
-
-      // 💡 الدمج الذكي: نحتفظ بالغرف المحلية ولا نسمح للسيرفر بمسحها إذا فشل الجلب
-      const visitorRooms = localRooms.filter(r => r.type === 'joined');
-      const localCreatedRooms = localRooms.filter(r => r.type === 'created');
-      const createdRoomsMap = new Map<string, RoomHistory>();
-      
-      // نضع الغرف المحلية أولاً
-      localCreatedRooms.forEach(r => createdRoomsMap.set(r.id, r));
-
-      if (user?.id) {
-        try {
-          const { data, error } = await supabase.from('private_rooms').select('id, name').eq('host_id', user.id);
-          if (!error && data && data.length > 0) {
-            // نضيف/نحدث غرف السيرفر
-            data.forEach(r => {
-              createdRoomsMap.set(r.id, {
-                id: r.id, name: r.name, type: 'created', link: `https://app.com/room/${r.id}?name=${encodeURIComponent(r.name)}`
-              });
-            });
-          }
-        } catch (err) {}
+    const saved = localStorage.getItem('trio_rooms_history');
+    if (saved) {
+      try {
+        setRecentRooms(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse rooms', e);
       }
-      
-      // تجميع القائمة النهائية وحفظها
-      const combined = [...Array.from(createdRoomsMap.values()), ...visitorRooms];
-      setRecentRooms(combined);
-      localStorage.setItem('joined_rooms', JSON.stringify(combined));
-    };
-    
-    syncRooms();
-  }, [user]);
+    }
+  }, []);
 
   const saveToLocal = (rooms: RoomHistory[]) => { 
     setRecentRooms(rooms); 
-    localStorage.setItem('joined_rooms', JSON.stringify(rooms)); 
+    localStorage.setItem('trio_rooms_history', JSON.stringify(rooms)); 
   };
 
   const validateInputs = () => {
@@ -88,12 +64,23 @@ export default function PrivateRoomScreen() {
       const link = `https://app.com/room/${roomId}?name=${encodeURIComponent(roomName.trim())}`;
       
       const hostId = user?.id || 'anonymous';
+      
+      // حفظ في السيرفر للزوار
       await supabase.from('private_rooms').insert([{ id: roomId, host_id: hostId, name: roomName.trim(), pin: roomPin.trim() }]);
       
+      // حفظ في الهاتف كمالك (لضمان بقائها في غرفي)
+      const newRoom: RoomHistory = { id: roomId, name: roomName.trim(), type: 'created', link };
+      const filteredRooms = recentRooms.filter(r => r.id !== roomId); // لمنع التكرار
+      saveToLocal([newRoom, ...filteredRooms]);
+      
       setGeneratedLink(link);
-      saveToLocal([{ id: roomId, name: roomName.trim(), type: 'created', link }, ...recentRooms.filter(r => r.id !== roomId)]);
-      setIsHost(true); setCurrentRoomId(roomId); setCurrentRoomName(roomName.trim()); setView('share');
-    } catch { setError('حدث خطأ أثناء الإنشاء. قد تكون هناك مشكلة في الاتصال.'); } finally { setLoading(false); }
+      setIsHost(true); 
+      setCurrentRoomId(roomId); 
+      setCurrentRoomName(roomName.trim()); 
+      setView('share');
+      setRoomName('');
+      setRoomPin('');
+    } catch { setError('حدث خطأ أثناء الإنشاء. تأكد من اتصالك.'); } finally { setLoading(false); }
   };
 
   const handleJoin = async (e: React.FormEvent) => {
@@ -119,8 +106,15 @@ export default function PrivateRoomScreen() {
       const { data: roomData } = await supabase.from('private_rooms').select('name').eq('id', roomCode).maybeSingle();
       const name = roomData?.name || extractedName || `Room ${roomCode}`;
       
-      saveToLocal([{ id: roomCode, name, type: 'joined', link: joinLink }, ...recentRooms.filter(r => r.id !== roomCode)]);
-      setIsHost(false); setCurrentRoomId(roomCode); setCurrentRoomName(name); setView('room'); setJoinLink('');
+      const newRoom: RoomHistory = { id: roomCode, name, type: 'joined', link: joinLink };
+      const filteredRooms = recentRooms.filter(r => r.id !== roomCode);
+      saveToLocal([newRoom, ...filteredRooms]);
+      
+      setIsHost(false); 
+      setCurrentRoomId(roomCode); 
+      setCurrentRoomName(name); 
+      setView('room'); 
+      setJoinLink('');
     } catch (err: any) { setError(err.message || 'فشل الانضمام للغرفة'); } finally { setLoading(false); }
   };
 
