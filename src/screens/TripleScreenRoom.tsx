@@ -29,12 +29,15 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const myInitial = myName.charAt(0).toUpperCase();
 
   const handleShare = async () => {
-    const roomUrl = `https://app.com/room/${roomId}`;
+    const defaultName = roomName || `Room ${roomId}`;
+    const roomUrl = `https://app.com/room/${roomId}?name=${encodeURIComponent(defaultName)}`;
+    const shareText = `مرحباً! انضم إلى غرفتي الخاصة "${defaultName}" 🚀\n\nاضغط على الرابط أدناه للدخول:\n${roomUrl}`;
+    
     if (navigator.share) {
-      try { await navigator.share({ title: `انضم لغرفتي`, text: `أنا في غرفتي الخاصة الآن، انضم إلي!`, url: roomUrl }); } catch (err) {}
+      try { await navigator.share({ title: defaultName, text: shareText }); } catch (err) {}
     } else {
-      navigator.clipboard.writeText(roomUrl);
-      alert('تم نسخ الرابط بنجاح!');
+      navigator.clipboard.writeText(shareText);
+      alert('تم نسخ تفاصيل الغرفة بنجاح!');
     }
   };
 

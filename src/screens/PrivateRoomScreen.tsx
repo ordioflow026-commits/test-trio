@@ -110,32 +110,38 @@ export default function PrivateRoomScreen() {
       let roomCode = '';
       let extractedName = '';
       
+      // 💡 الاستخراج الذكي: البحث عن الرابط حتى لو كان وسط نص طويل
+      const urlMatch = joinLink.match(/https?:\/\/[^\s]+/);
+      const processedLink = urlMatch ? urlMatch[0] : joinLink.trim();
+      
       try {
-        if (joinLink.includes('http')) {
-          const url = new URL(joinLink);
+        if (processedLink.includes('http')) {
+          const url = new URL(processedLink);
           roomCode = url.pathname.split('/').pop()?.trim() || '';
           extractedName = url.searchParams.get('name') || '';
         } else {
-          roomCode = joinLink.trim();
+          roomCode = processedLink.replace(/[^a-zA-Z0-9]/g, '');
         }
-      } catch { roomCode = joinLink.trim(); }
+      } catch { 
+        roomCode = processedLink.replace(/[^a-zA-Z0-9]/g, ''); 
+      }
 
-      if (!roomCode) throw new Error('الرابط غير صالح');
+      if (!roomCode || roomCode.length < 4) {
+        throw new Error('لم يتم العثور على رمز غرفة صحيح في النص المدخل.');
+      }
       
-      // 💡 نطلب أيضاً الـ host_id للتحقق مما إذا كان المستخدم هو المالك الأصلي
       const { data: roomData } = await supabase.from('private_rooms').select('name, host_id').eq('id', roomCode).maybeSingle();
       const name = roomData?.name || extractedName || `Room ${roomCode}`;
       
-      // 💡 التحقق الذكي: هل المستخدم هو صاحب الغرفة فعلاً؟
       const existingRoom = recentRooms.find(r => r.id === roomCode);
       const isActuallyHost = (roomData?.host_id && user?.id && roomData.host_id === user.id) || existingRoom?.type === 'created';
       const roomType = isActuallyHost ? 'created' : 'joined';
       
-      const newRoom: RoomHistory = { id: roomCode, name, type: roomType, link: joinLink };
+      const newRoom: RoomHistory = { id: roomCode, name, type: roomType, link: `https://app.com/room/${roomCode}?name=${encodeURIComponent(name)}` };
       const updatedRooms = [newRoom, ...recentRooms.filter(r => r.id !== roomCode)];
       saveToLocal(updatedRooms);
       
-      setIsHost(isActuallyHost); // إعطاء الصلاحيات إذا كان هو المالك!
+      setIsHost(isActuallyHost); 
       setCurrentRoomId(roomCode); 
       setCurrentRoomName(name); 
       setView('room'); 
@@ -155,6 +161,19 @@ export default function PrivateRoomScreen() {
     }
     const filtered = recentRooms.filter(r => r.id !== room.id);
     saveToLocal(filtered);
+  };
+
+  const handleShareClick = async () => {
+    // 💡 تنسيق المشاركة المفصول
+    const shareText = `مرحباً! انضم إلى غرفتي الخاصة "${currentRoomName}" 🚀\n\nاضغط على الرابط أدناه للدخول:\n${generatedLink}`;
+    if(navigator.share) {
+      try {
+        await navigator.share({ title: currentRoomName, text: shareText });
+      } catch(err) {}
+    } else {
+      navigator.clipboard.writeText(shareText);
+      setCopied(true); setTimeout(()=>setCopied(false),2000);
+    }
   };
 
   if (view === 'room') return <TripleScreenRoom onExit={() => setView('menu')} isHost={isHost} roomId={currentRoomId} roomName={currentRoomName} />;
@@ -233,7 +252,7 @@ export default function PrivateRoomScreen() {
           {error && <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm flex items-center gap-2"><AlertCircle className="w-5 h-5 shrink-0" />{error}</div>}
           <div>
             <label className="block text-sm font-medium text-slate-400 mb-1.5 px-1">{t('enterRoomLink')}</label>
-            <input type="text" value={joinLink} onChange={(e) => setJoinLink(e.target.value)} className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:border-blue-500 outline-none transition-all" placeholder="https://app.com/room/... أو الكود فقط" dir="ltr" />
+            <input type="text" value={joinLink} onChange={(e) => setJoinLink(e.target.value)} className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:border-blue-500 outline-none transition-all" placeholder="الرصق الرابط أو رسالة الدعوة هنا" dir="ltr" />
           </div>
           <button type="submit" disabled={!joinLink || loading} className="w-full mt-6 bg-slate-700 text-white font-bold py-4 rounded-xl hover:bg-slate-600 transition-all flex items-center justify-center">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : t('join')}</button>
         </form>
@@ -248,7 +267,7 @@ export default function PrivateRoomScreen() {
       <div className="w-full bg-slate-800 border border-slate-700 rounded-2xl p-4 mb-6"><span className="text-blue-100 font-mono text-sm truncate block text-center" dir="ltr">{generatedLink}</span></div>
       <div className="grid grid-cols-2 gap-3 w-full mb-6">
         <button onClick={() => { navigator.clipboard.writeText(generatedLink); setCopied(true); setTimeout(()=>setCopied(false),2000); }} className="bg-slate-800 text-slate-300 py-3.5 rounded-xl border border-slate-700 flex items-center justify-center gap-2"><Copy className="w-4 h-4"/> {copied ? 'تم النسخ!' : 'نسخ'}</button>
-        <button onClick={async () => { if(navigator.share) await navigator.share({title: currentRoomName, text: 'انضم لغرفتي الخاصة', url: generatedLink}); }} className="bg-blue-600/20 border border-blue-500 text-blue-400 py-3.5 rounded-xl flex items-center justify-center gap-2"><Share2 className="w-4 h-4"/> مشاركة...</button>
+        <button onClick={handleShareClick} className="bg-blue-600/20 border border-blue-500 text-blue-400 py-3.5 rounded-xl flex items-center justify-center gap-2"><Share2 className="w-4 h-4"/> مشاركة...</button>
       </div>
       <button onClick={() => setView('room')} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold">دخول الغرفة</button>
     </div>
