@@ -23,18 +23,44 @@ export default function PrivateRoomScreen() {
   const [currentRoomId, setCurrentRoomId] = useState<string | undefined>();
   const [currentRoomName, setCurrentRoomName] = useState<string>('');
   const [copied, setCopied] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  // 💡 الاعتماد الكلي على الذاكرة المحلية لسرعة فائقة وعدم اختفاء الغرف
   useEffect(() => {
-    const saved = localStorage.getItem('trio_rooms_history');
-    if (saved) {
-      try {
-        setRecentRooms(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse rooms', e);
+    const syncRooms = async () => {
+      setIsSyncing(true);
+      const saved = localStorage.getItem('trio_rooms_history');
+      let localRooms: RoomHistory[] = saved ? JSON.parse(saved) : [];
+      setRecentRooms(localRooms);
+
+      if (user?.id) {
+        try {
+          const { data, error } = await supabase.from('private_rooms').select('id, name').eq('host_id', user.id);
+          if (!error && data && data.length > 0) {
+            const serverRoomsMap = new Map<string, RoomHistory>();
+            
+            data.forEach(r => {
+              serverRoomsMap.set(r.id, {
+                id: r.id, name: r.name, type: 'created', link: `https://app.com/room/${r.id}?name=${encodeURIComponent(r.name)}`
+              });
+            });
+
+            localRooms.forEach(localRoom => {
+              if (localRoom.type === 'joined' || (!serverRoomsMap.has(localRoom.id) && localRoom.type === 'created')) {
+                 serverRoomsMap.set(localRoom.id, localRoom);
+              }
+            });
+
+            const combined = Array.from(serverRoomsMap.values());
+            setRecentRooms(combined);
+            localStorage.setItem('trio_rooms_history', JSON.stringify(combined));
+          }
+        } catch (err) {}
       }
-    }
-  }, []);
+      setIsSyncing(false);
+    };
+    
+    syncRooms();
+  }, [user]);
 
   const saveToLocal = (rooms: RoomHistory[]) => { 
     setRecentRooms(rooms); 
@@ -64,22 +90,15 @@ export default function PrivateRoomScreen() {
       const link = `https://app.com/room/${roomId}?name=${encodeURIComponent(roomName.trim())}`;
       
       const hostId = user?.id || 'anonymous';
-      
-      // حفظ في السيرفر للزوار
       await supabase.from('private_rooms').insert([{ id: roomId, host_id: hostId, name: roomName.trim(), pin: roomPin.trim() }]);
       
-      // حفظ في الهاتف كمالك (لضمان بقائها في غرفي)
       const newRoom: RoomHistory = { id: roomId, name: roomName.trim(), type: 'created', link };
-      const filteredRooms = recentRooms.filter(r => r.id !== roomId); // لمنع التكرار
-      saveToLocal([newRoom, ...filteredRooms]);
+      const updatedRooms = [newRoom, ...recentRooms.filter(r => r.id !== roomId)];
+      saveToLocal(updatedRooms);
       
       setGeneratedLink(link);
-      setIsHost(true); 
-      setCurrentRoomId(roomId); 
-      setCurrentRoomName(roomName.trim()); 
-      setView('share');
-      setRoomName('');
-      setRoomPin('');
+      setIsHost(true); setCurrentRoomId(roomId); setCurrentRoomName(roomName.trim()); setView('share');
+      setRoomName(''); setRoomPin('');
     } catch { setError('حدث خطأ أثناء الإنشاء. تأكد من اتصالك.'); } finally { setLoading(false); }
   };
 
@@ -103,14 +122,20 @@ export default function PrivateRoomScreen() {
 
       if (!roomCode) throw new Error('الرابط غير صالح');
       
-      const { data: roomData } = await supabase.from('private_rooms').select('name').eq('id', roomCode).maybeSingle();
+      // 💡 نطلب أيضاً الـ host_id للتحقق مما إذا كان المستخدم هو المالك الأصلي
+      const { data: roomData } = await supabase.from('private_rooms').select('name, host_id').eq('id', roomCode).maybeSingle();
       const name = roomData?.name || extractedName || `Room ${roomCode}`;
       
-      const newRoom: RoomHistory = { id: roomCode, name, type: 'joined', link: joinLink };
-      const filteredRooms = recentRooms.filter(r => r.id !== roomCode);
-      saveToLocal([newRoom, ...filteredRooms]);
+      // 💡 التحقق الذكي: هل المستخدم هو صاحب الغرفة فعلاً؟
+      const existingRoom = recentRooms.find(r => r.id === roomCode);
+      const isActuallyHost = (roomData?.host_id && user?.id && roomData.host_id === user.id) || existingRoom?.type === 'created';
+      const roomType = isActuallyHost ? 'created' : 'joined';
       
-      setIsHost(false); 
+      const newRoom: RoomHistory = { id: roomCode, name, type: roomType, link: joinLink };
+      const updatedRooms = [newRoom, ...recentRooms.filter(r => r.id !== roomCode)];
+      saveToLocal(updatedRooms);
+      
+      setIsHost(isActuallyHost); // إعطاء الصلاحيات إذا كان هو المالك!
       setCurrentRoomId(roomCode); 
       setCurrentRoomName(name); 
       setView('room'); 
@@ -128,7 +153,8 @@ export default function PrivateRoomScreen() {
       const confirmRemove = window.confirm("هل تريد إزالة هذه الغرفة من قائمة الزيارات الخاصة بك؟");
       if (!confirmRemove) return;
     }
-    saveToLocal(recentRooms.filter(r => r.id !== room.id));
+    const filtered = recentRooms.filter(r => r.id !== room.id);
+    saveToLocal(filtered);
   };
 
   if (view === 'room') return <TripleScreenRoom onExit={() => setView('menu')} isHost={isHost} roomId={currentRoomId} roomName={currentRoomName} />;
@@ -137,7 +163,8 @@ export default function PrivateRoomScreen() {
     const isMyRooms = view === 'myRooms';
     const filteredRooms = recentRooms.filter(r => r.type === (isMyRooms ? 'created' : 'joined'));
     return (
-      <div className="flex-1 flex flex-col p-6 bg-slate-900/50">
+      <div className="flex-1 flex flex-col p-6 bg-slate-900/50 relative">
+        {isSyncing && <div className="absolute top-4 right-4"><Loader2 className="w-4 h-4 text-blue-500 animate-spin" /></div>}
         <button onClick={() => setView('menu')} className="self-start p-2 text-slate-400 hover:text-white mb-6"><ArrowLeft className={dir === 'rtl' ? 'rotate-180' : ''}/></button>
         <div className="flex flex-col items-center mb-8">
           <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 border ${isMyRooms ? 'bg-blue-500/20 border-blue-500/30' : 'bg-emerald-500/20 border-emerald-500/30'}`}>{isMyRooms ? <Key className="text-blue-400 w-8 h-8" /> : <User className="text-emerald-400 w-8 h-8" />}</div>
