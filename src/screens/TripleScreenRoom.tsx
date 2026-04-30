@@ -30,6 +30,9 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
   const [isIdle, setIsIdle] = useState(false);
   const idleTimerRef = useRef<any>(null);
+  
+  // 💡 إضافة حساس لوجود المضيف
+  const hostWasPresent = useRef(false);
 
   const zpRef = useRef<any>(null);
   const zegoJoined = useRef(false);
@@ -75,9 +78,15 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       channel.on('presence', { event: 'sync' }, () => {
           const presenceState = channel.presenceState();
           const activeUsers: { id: string, name: string }[] = [];
+          let hostFound = false;
           
           Object.keys(presenceState).forEach((key) => {
             const userData = presenceState[key][0] as any;
+            
+            if (userData.isHost) {
+              hostFound = true;
+            }
+
             if (key !== user.id) {
               activeUsers.push({ id: key, name: userData.name || 'Guest' });
             }
@@ -89,6 +98,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                }
             }
           });
+          
           setParticipants(activeUsers);
 
           if (isHost) {
@@ -97,6 +107,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 event: 'room_state', 
                 payload: { ...stateRef.current, senderId: user.id }
              });
+          } else {
+             // 💡 حساس الطرد التلقائي: إذا كان المضيف موجوداً ثم اختفى فجأة، اطرد الزائر!
+             if (hostFound) {
+                 hostWasPresent.current = true;
+             } else if (hostWasPresent.current && !hostFound) {
+                 alert(isAr ? 'أنهى المضيف الجلسة. تم إغلاق الغرفة تلقائياً.' : 'The host has ended the session. Room closed.');
+                 handleExit();
+             }
           }
         })
         // 💡 مزامنة متبادلة (الكل يتلقى تحديثات الكل لتشغيل الغرفة المفتوحة بالكامل)
@@ -155,10 +173,13 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     onExit(); 
   };
 
-  const handleExitClick = () => {
-    // إذا كان المضيف هو من خرج، أرسل إشارة لإنهاء الجلسة للجميع
+  // 💡 تأخير بسيط عند خروج المضيف لضمان وصول رسالة الخروج قبل تدمير الاتصال
+  const handleExitClick = async () => {
     if (isHost && channelRef.current) {
-        channelRef.current.send({ type: 'broadcast', event: 'room_closed' });
+        try {
+          await channelRef.current.send({ type: 'broadcast', event: 'room_closed' });
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (err) {}
     }
     handleExit();
   };
