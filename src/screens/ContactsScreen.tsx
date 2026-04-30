@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from 'motion/react';
 interface Contact { id: number; name: string; phone: string; initials: string; }
 
 export default function ContactsScreen() {
-  const { t, dir } = useLanguage(); // 💡 التحديث: إضافة دالة الترجمة والاتجاه
+  const { t, dir } = useLanguage();
   const { user } = useUser();
   const { zp } = useZego();
   const { isSelectionMode, selectedContactIds, selectedContacts, toggleSelection } = useSelection();
@@ -48,7 +48,7 @@ export default function ContactsScreen() {
       const newSummaries: Record<string, { lastMessage: string, lastTime: string, unreadCount: number }> = {};
       profiles.forEach(p => {
         if (p.phone) {
-          const cleanPhone = p.phone.replace(/\\D/g, '').slice(-9);
+          const cleanPhone = p.phone.replace(/\D/g, '').slice(-9);
           profileToPhone.set(p.id, cleanPhone);
           newSummaries[cleanPhone] = { lastMessage: '', lastTime: '', unreadCount: 0 };
         }
@@ -126,8 +126,8 @@ export default function ContactsScreen() {
       const content = isVideo ? (t('groupVideoCall') || '📹 Group Video Call') : (t('groupAudioCall') || '📞 Group Audio Call');
 
       for (const phone of selectedContactIds) {
-        const cleanPhone = phone.replace(/\\D/g, '').slice(-9);
-        const profile = profiles.find(p => p.phone && p.phone.replace(/\\D/g, '').slice(-9) === cleanPhone);
+        const cleanPhone = phone.replace(/\D/g, '').slice(-9);
+        const profile = profiles.find(p => p.phone && p.phone.replace(/\D/g, '').slice(-9) === cleanPhone);
         if (profile) {
           const targetZegoId = profile.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
           const contactObj = contacts.find(c => c.phone === phone);
@@ -169,13 +169,15 @@ export default function ContactsScreen() {
         {isLoadingContacts && <div className="flex flex-col items-center p-6 text-slate-400"><Loader2 className="w-8 h-8 animate-spin mb-2" /><span>{t('loading') || 'Loading...'}</span></div>}
         {contacts.map((contact) => {
             const isSelected = selectedContactIds.includes(contact.phone);
-            const chatInfo = chatSummaries[contact.phone.replace(/\\D/g, '').slice(-9)];
+            const chatInfo = chatSummaries[contact.phone.replace(/\D/g, '').slice(-9)];
             return (
             <div key={`${contact.id}-${contact.phone}`} className="relative">
               <div onMouseDown={() => handleTouchStart(contact)} onMouseUp={handleTouchEnd} onTouchStart={() => handleTouchStart(contact)} onTouchEnd={handleTouchEnd} onClick={() => handleTap(contact)} className={`flex items-center px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-[#0070a8]' : 'hover:bg-slate-800/50'}`}>
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold mx-4 shrink-0 ${isSelected ? 'bg-[#00b4d8] text-white' : 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30'}`}>{isSelected ? <Check className="w-6 h-6" /> : contact.initials}</div>
-                <div className="flex-1 border-b border-slate-800/60 pb-3 flex justify-between items-center px-2 min-w-0">
-                  <div className="flex-1 min-w-0 px-3">
+                
+                {/* 💡 التحديث الأساسي: عزل منطقة الاسم والرقم لتبقى متناسقة ولا تنعكس */}
+                <div className="flex-1 border-b border-slate-800/60 pb-3 flex justify-between items-center px-2 min-w-0" dir="ltr">
+                  <div className="flex-1 min-w-0 pr-3">
                     <div className="flex justify-between items-baseline mb-0.5 min-w-0 gap-2">
                       <h3 className={`font-semibold text-[17px] truncate flex-1 text-left ${isSelected ? 'text-white' : 'text-slate-200'}`}>{contact.name}</h3>
                       {chatInfo?.lastTime && <span className="text-[11px] text-slate-500">{new Date(chatInfo.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
