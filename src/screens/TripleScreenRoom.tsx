@@ -252,7 +252,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
     const LockIndicator = () => {
        if (!isHost) {
-           // 1. نظافة شاشة الزائر: لا يرون الأقفال الفارغة، وفي المغلقة يرون الأبيض فقط
            if (viewMode === 'sync' && lockState !== 'white') return null;
            if (lockState === 'none') return null;
        } else {
@@ -262,49 +261,65 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
        const isMenuOpen = openLockMenu === index;
        
-       // 2. الاستبدال الذكي: القفل المفتوح يأخذ مكان اللون المختار
-       let availableLocks: LockState[] = [];
-       if (viewMode === 'sync') {
-           availableLocks = lockState === 'white' ? ['none'] : ['white'];
-       } else {
-           const baseColors: LockState[] = ['green', 'yellow', 'red', 'white'];
-           if (lockState === 'none') {
-               availableLocks = baseColors;
+       // الكلمات التوضيحية المختصرة لكل قفل
+       const lockLabels: Record<LockState, string> = {
+           none: 'حر',
+           green: 'مرن',
+           yellow: 'تنبيه',
+           red: 'إجبار',
+           white: 'كواليس'
+       };
+
+       const baseColors: LockState[] = ['green', 'yellow', 'red', 'white'];
+       const availableLocks: LockState[] = lockState === 'none' 
+           ? baseColors 
+           : baseColors.map(color => color === lockState ? 'none' : color);
+
+       // دالة التعامل مع الضغط على القفل الرئيسي
+       const handleMainLockClick = () => {
+           if (viewMode === 'sync') {
+               // 💡 التبديل المباشر بدون قائمة في الغرفة المغلقة
+               setSlotLock(index, lockState === 'white' ? 'none' : 'white');
+               setOpenLockMenu(null);
            } else {
-               availableLocks = baseColors.map(color => color === lockState ? 'none' : color);
+               // 💡 فتح القائمة في الغرفة المفتوحة
+               setOpenLockMenu(isMenuOpen ? null : index);
            }
-       }
+       };
 
        return (
          <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
            {isHost ? (
-              <div className="relative flex flex-col items-center">
+              <div className="relative flex items-center">
                   {/* الزر الرئيسي */}
                   <button 
-                     onClick={() => setOpenLockMenu(isMenuOpen ? null : index)} 
-                     className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}
+                     onClick={handleMainLockClick} 
+                     className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}
                   >
                     {lockState === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                   </button>
 
-                  {/* 3. القائمة المنبثقة للدوائر (تظهر للمضيف فقط) */}
-                  {isMenuOpen && (
-                      <div className="absolute top-full mt-3 flex gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-full shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200">
+                  {/* 💡 القائمة المنبثقة تفتح بجانب القفل (أفقياً) وتظهر في الغرفة المفتوحة فقط */}
+                  {isMenuOpen && viewMode !== 'sync' && (
+                      <div className={`absolute top-1/2 -translate-y-1/2 ${dir === 'rtl' ? 'right-[calc(100%+12px)]' : 'left-[calc(100%+12px)]'} flex gap-3 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200`}>
                           {availableLocks.map((l, i) => (
-                              <button
-                                  key={`${l}-${i}`}
-                                  onClick={() => setSlotLock(index, l)}
-                                  className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all hover:scale-125 ${lockColors[l]}`}
-                                  title={l === 'none' ? (dir === 'rtl' ? 'إلغاء القفل' : 'Unlock') : l}
-                              >
-                                  {l === 'none' ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
-                              </button>
+                              <div key={`${l}-${i}`} className="flex flex-col items-center gap-1">
+                                  <button
+                                      onClick={() => setSlotLock(index, l)}
+                                      className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all hover:scale-125 ${lockColors[l]}`}
+                                  >
+                                      {l === 'none' ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                                  </button>
+                                  {/* 💡 الكلمة التوضيحية المختصرة أسفل كل لون */}
+                                  <span className="text-[9px] font-bold text-slate-300 tracking-wider">
+                                      {lockLabels[l]}
+                                  </span>
+                              </div>
                           ))}
                       </div>
                   )}
               </div>
            ) : (
-              // الزر عند الزوار (بدون أي قوائم منبثقة)
               <div className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md ${lockColors[lockState]}`}>
                 <Lock className="w-3 h-3" />
               </div>
