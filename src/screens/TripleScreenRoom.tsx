@@ -171,9 +171,21 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (!isHost) return;
     const newSlots = [...slots];
     const currentLock = newSlots[index].lock || 'none';
-    // 💡 التسلسل أصبح يشمل القفل الأبيض
-    const nextLock: Record<LockState, LockState> = { 'none': 'green', 'green': 'yellow', 'yellow': 'red', 'red': 'white', 'white': 'none' };
-    newSlots[index].lock = nextLock[currentLock];
+    
+    let nextLock: LockState;
+
+    if (viewMode === 'sync') {
+      // 💡 الغرفة مغلقة: التبديل فقط بين القفل الأبيض أو لا شيء
+      nextLock = currentLock === 'white' ? 'none' : 'white';
+    } else {
+      // 💡 الغرفة مفتوحة: التبديل بين كل الألوان
+      const nextLockMap: Record<LockState, LockState> = { 
+        'none': 'green', 'green': 'yellow', 'yellow': 'red', 'red': 'white', 'white': 'none' 
+      };
+      nextLock = nextLockMap[currentLock];
+    }
+
+    newSlots[index].lock = nextLock;
     setSlots(newSlots);
     broadcastState(currentSlot, newSlots, viewMode);
   };
