@@ -19,11 +19,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [currentSlot, setCurrentSlot] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>('sync');
   const [participants, setParticipants] = useState<{ id: string, name: string }[]>([]);
+  
+  // 💡 جميع الشاشات تبدأ بدون قفل مفعل ليعمل التسلسل الهرمي بنجاح
   const [slots, setSlots] = useState<SlotData[]>([
     { type: 'empty', lock: 'none' }, 
-    { type: 'empty', lock: 'green' }, 
+    { type: 'empty', lock: 'none' }, 
     { type: 'empty', lock: 'none' }
   ]);
+  
   const [displayRoomName, setDisplayRoomName] = useState<string>(roomName || roomId || ''); 
   
   const isAr = language === 'ar';
@@ -202,6 +205,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     const LockIndicator = () => {
        if (viewMode === 'sync') return null;
 
+       // 💡 التسلسل الذكي لظهور الأقفال (الوسط -> اليمين -> اليسار)
+       if (index === 2 && lockState === 'none' && slots[1].lock === 'none') return null;
+       if (index === 0 && lockState === 'none' && slots[2].lock === 'none') return null;
+
        return (
          <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
            {isHost ? (
@@ -298,12 +305,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       </div>
       
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
-          {/* 💡 أزرار التنقل أصبحت خارج حاوية التمرير لتبقى ثابتة دائمًا */}
           {canGoLeft && <button onClick={() => handleNavigation(leftTarget)} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 z-[90] p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:bg-black/40 hover:text-white'}`}><ChevronLeft className="w-8 h-8" /></button>}
           {canGoRight && <button onClick={() => handleNavigation(rightTarget)} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 z-[90] p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:bg-black/40 hover:text-white'}`}><ChevronRight className="w-8 h-8" /></button>}
 
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
-            {/* 💡 تحسين الحاوية لضمان عدم تداخل الشاشات */}
             <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out w-[300%]" style={{ transform: `translateX(${dir === 'rtl' ? currentSlot * 33.333 : -currentSlot * 33.333}%)` }}>
                {slots.map((s, i) => (
                   <div key={i} className="w-1/3 h-full pt-16 flex-shrink-0">
