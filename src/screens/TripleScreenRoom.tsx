@@ -8,7 +8,8 @@ import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
 type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'media' | 'camera' | 'screen_share' | 'document' | 'mic';
 type ViewMode = 'sync' | 'free';
-type LockState = 'none' | 'green' | 'yellow' | 'red';
+// 💡 تمت إضافة القفل الأبيض
+type LockState = 'none' | 'green' | 'yellow' | 'red' | 'white';
 
 interface SlotData { type: ContentType; url?: string; lock?: LockState; }
 interface Props { onExit: () => void; isHost?: boolean; roomId?: string; roomName?: string; onNameSync?: (id: string, name: string) => void; }
@@ -39,7 +40,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [isIdle, setIsIdle] = useState(false);
   const idleTimerRef = useRef<any>(null);
   const zpRef = useRef<any>(null);
-  const zegoJoined = useRef(false);
   const channelRef = useRef<any>(null);
 
   const canInteract = isHost || viewMode === 'free';
@@ -109,9 +109,31 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         .on('broadcast', { event: 'room_state' }, (payload) => {
           const { slots: s, currentSlot: c, viewMode: m, senderId } = payload.payload;
           if (senderId === user.id) return; 
+          
           if (s) setSlots(s);
           if (m) setViewMode(m);
-          if (c !== undefined) setCurrentSlot(c);
+          
+          if (c !== undefined) {
+             if (isHost) {
+                 setCurrentSlot(c);
+             } else {
+                 // 💡 منطق الزوار الذكي لمعالجة "الكواليس"
+                 const currentSlots = s || slots;
+                 const whiteIndexes = currentSlots.map((slot, idx) => slot.lock === 'white' ? idx : -1).filter(idx => idx !== -1);
+                 
+                 if (whiteIndexes.length > 0) {
+                     if (whiteIndexes.includes(c)) {
+                         // إذا انتقل المضيف إلى شاشة بيضاء، اسحب الزوار إليها
+                         setCurrentSlot(c);
+                     } else {
+                         // إذا انتقل المضيف للكواليس (شاشة غير بيضاء)، أبقِ الزوار في شاشتهم البيضاء الحالية
+                         setCurrentSlot(prev => whiteIndexes.includes(prev) ? prev : whiteIndexes[0]);
+                     }
+                 } else {
+                     setCurrentSlot(c); // السلوك الافتراضي إذا لم يكن هناك قفل أبيض
+                 }
+             }
+          }
         })
         .on('broadcast', { event: 'room_closed' }, () => {
           if (!isHost) handleExit();
@@ -149,7 +171,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (!isHost) return;
     const newSlots = [...slots];
     const currentLock = newSlots[index].lock || 'none';
-    const nextLock: Record<LockState, LockState> = { 'none': 'green', 'green': 'yellow', 'yellow': 'red', 'red': 'none' };
+    // 💡 التسلسل أصبح يشمل القفل الأبيض
+    const nextLock: Record<LockState, LockState> = { 'none': 'green', 'green': 'yellow', 'yellow': 'red', 'red': 'white', 'white': 'none' };
     newSlots[index].lock = nextLock[currentLock];
     setSlots(newSlots);
     broadcastState(currentSlot, newSlots, viewMode);
@@ -173,7 +196,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     }
 
     if (viewMode === 'sync') return;
-    if (targetLock === 'red') return; 
+    if (targetLock === 'red' || targetLock === 'white') return; 
 
     setCurrentSlot(targetSlot);
     if (targetLock === 'yellow') {
@@ -185,9 +208,12 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     resetIdleTimer();
   };
 
-  // 💡 التعديل الجوهري: دالة البحث الذكي عن الشاشات المتاحة يميناً ويساراً لتخطي القفل الأحمر
+  // 💡 منع الزوار تماماً من التنقل إذا وجد قفل أبيض
   const getLeftTarget = () => {
     if (isHost) return currentSlot - 1;
+    const hasWhiteLock = slots.some(s => s.lock === 'white');
+    if (hasWhiteLock) return -1; 
+    
     if (viewMode === 'sync') return -1;
     for (let i = currentSlot - 1; i >= 0; i--) {
         if (slots[i].lock !== 'red') return i;
@@ -197,6 +223,9 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
   const getRightTarget = () => {
     if (isHost) return currentSlot + 1;
+    const hasWhiteLock = slots.some(s => s.lock === 'white');
+    if (hasWhiteLock) return -1;
+
     if (viewMode === 'sync') return -1;
     for (let i = currentSlot + 1; i <= 2; i++) {
         if (slots[i].lock !== 'red') return i;
@@ -218,14 +247,21 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       'none': 'border-white/20 text-white/50 hover:bg-white/10 hover:text-white hover:border-white/40',
       'green': 'bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.3)]',
       'yellow': 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.3)]',
-      'red': 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
+      'red': 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.3)]',
+      'white': 'bg-white/20 border-white/50 text-white shadow-[0_0_15px_rgba(255,255,255,0.4)]'
     };
 
     const LockIndicator = () => {
-       if (viewMode === 'sync') return null;
-
-       if (index === 2 && lockState === 'none' && slots[1].lock === 'none') return null;
-       if (index === 0 && lockState === 'none' && slots[2].lock === 'none') return null;
+       if (!isHost) {
+           // 💡 الزوار لا يرون الأقفال في الوضع المغلق، إلا إذا كان القفل أبيض
+           if (viewMode === 'sync' && lockState !== 'white') return null;
+           // الزوار لا يرون الأيقونات الفارغة أبداً
+           if (lockState === 'none') return null;
+       } else {
+           // المضيف يخضع لظهور الأقفال التسلسلي
+           if (index === 2 && lockState === 'none' && slots[1].lock === 'none') return null;
+           if (index === 0 && lockState === 'none' && slots[2].lock === 'none') return null;
+       }
 
        return (
          <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
@@ -233,11 +269,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
               <button onClick={() => toggleLock(index)} className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 ${lockColors[lockState]}`}>
                 {lockState === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
               </button>
-           ) : (lockState !== 'none') ? (
+           ) : (
               <div className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md ${lockColors[lockState]}`}>
                 <Lock className="w-3 h-3" />
               </div>
-           ) : null}
+           )}
          </div>
        );
     };
