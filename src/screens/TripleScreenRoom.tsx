@@ -20,7 +20,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [viewMode, setViewMode] = useState<ViewMode>('sync');
   const [participants, setParticipants] = useState<{ id: string, name: string }[]>([]);
   
-  // 💡 جميع الشاشات تبدأ بدون قفل مفعل ليعمل التسلسل الهرمي بنجاح
   const [slots, setSlots] = useState<SlotData[]>([
     { type: 'empty', lock: 'none' }, 
     { type: 'empty', lock: 'none' }, 
@@ -186,10 +185,30 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     resetIdleTimer();
   };
 
-  const leftTarget = currentSlot - 1;
-  const rightTarget = currentSlot + 1;
-  const canGoLeft = leftTarget >= 0 && (isHost || (viewMode === 'free' && slots[leftTarget].lock !== 'red'));
-  const canGoRight = rightTarget <= 2 && (isHost || (viewMode === 'free' && slots[rightTarget].lock !== 'red'));
+  // 💡 التعديل الجوهري: دالة البحث الذكي عن الشاشات المتاحة يميناً ويساراً لتخطي القفل الأحمر
+  const getLeftTarget = () => {
+    if (isHost) return currentSlot - 1;
+    if (viewMode === 'sync') return -1;
+    for (let i = currentSlot - 1; i >= 0; i--) {
+        if (slots[i].lock !== 'red') return i;
+    }
+    return -1;
+  };
+
+  const getRightTarget = () => {
+    if (isHost) return currentSlot + 1;
+    if (viewMode === 'sync') return -1;
+    for (let i = currentSlot + 1; i <= 2; i++) {
+        if (slots[i].lock !== 'red') return i;
+    }
+    return -1;
+  };
+
+  const leftTarget = getLeftTarget();
+  const rightTarget = getRightTarget();
+  
+  const canGoLeft = leftTarget >= 0 && leftTarget <= 2;
+  const canGoRight = rightTarget >= 0 && rightTarget <= 2;
 
   const renderSlotContent = (slot: SlotData, index: number) => {
     const editable = canEditSlot(index);
@@ -205,7 +224,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     const LockIndicator = () => {
        if (viewMode === 'sync') return null;
 
-       // 💡 التسلسل الذكي لظهور الأقفال (الوسط -> اليمين -> اليسار)
        if (index === 2 && lockState === 'none' && slots[1].lock === 'none') return null;
        if (index === 0 && lockState === 'none' && slots[2].lock === 'none') return null;
 
