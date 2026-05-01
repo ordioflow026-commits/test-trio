@@ -260,14 +260,21 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        }
 
        const isMenuOpen = openLockMenu === index;
+       const isRTL = dir === 'rtl';
        
-       // الكلمات التوضيحية المختصرة لكل قفل
-       const lockLabels: Record<LockState, string> = {
-           none: 'حر',
-           green: 'مرن',
-           yellow: 'تنبيه',
-           red: 'إجبار',
-           white: 'كواليس'
+       // 💡 كلمات توضيحية تدعم اللغتين حسب اتجاه التطبيق
+       const labels: Record<LockState, string> = isRTL ? {
+           none: 'إلغاء القفل',
+           green: 'مرن وتفاعلي',
+           yellow: 'تنبيه للمتابعة',
+           red: 'إجبار المشاهدة',
+           white: 'وضع الكواليس'
+       } : {
+           none: 'Unlock All',
+           green: 'Flexible Mode',
+           yellow: 'Stay Alert',
+           red: 'Force View',
+           white: 'Backstage Mode'
        };
 
        const baseColors: LockState[] = ['green', 'yellow', 'red', 'white'];
@@ -275,53 +282,50 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
            ? baseColors 
            : baseColors.map(color => color === lockState ? 'none' : color);
 
-       // دالة التعامل مع الضغط على القفل الرئيسي
-       const handleMainLockClick = () => {
+       const handleMainClick = () => {
            if (viewMode === 'sync') {
-               // 💡 التبديل المباشر بدون قائمة في الغرفة المغلقة
                setSlotLock(index, lockState === 'white' ? 'none' : 'white');
                setOpenLockMenu(null);
            } else {
-               // 💡 فتح القائمة في الغرفة المفتوحة
                setOpenLockMenu(isMenuOpen ? null : index);
            }
        };
 
        return (
-         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+         <div className={`absolute top-4 ${isRTL ? 'right-4' : 'left-4'} md:top-6 md:${isRTL ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0' : 'opacity-100'}`}>
            {isHost ? (
-              <div className="relative flex items-center">
-                  {/* الزر الرئيسي */}
+              <div className="flex items-start gap-3">
+                  {/* الزر الرئيسي الثابت */}
                   <button 
-                     onClick={handleMainLockClick} 
-                     className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}
+                     onClick={handleMainClick} 
+                     className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-cyan-400' : ''}`}
                   >
-                    {lockState === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                    {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   </button>
 
-                  {/* 💡 القائمة المنبثقة تفتح بجانب القفل (أفقياً) وتظهر في الغرفة المفتوحة فقط */}
+                  {/* 💡 القائمة العمودية الجانبية الذكية */}
                   {isMenuOpen && viewMode !== 'sync' && (
-                      <div className={`absolute top-1/2 -translate-y-1/2 ${dir === 'rtl' ? 'right-[calc(100%+12px)]' : 'left-[calc(100%+12px)]'} flex gap-3 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200`}>
+                      <div className="flex flex-col gap-2 p-2 bg-slate-900/90 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-200 min-w-[140px]">
                           {availableLocks.map((l, i) => (
-                              <div key={`${l}-${i}`} className="flex flex-col items-center gap-1">
-                                  <button
-                                      onClick={() => setSlotLock(index, l)}
-                                      className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all hover:scale-125 ${lockColors[l]}`}
-                                  >
-                                      {l === 'none' ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
-                                  </button>
-                                  {/* 💡 الكلمة التوضيحية المختصرة أسفل كل لون */}
-                                  <span className="text-[9px] font-bold text-slate-300 tracking-wider">
-                                      {lockLabels[l]}
+                              <button
+                                  key={`${l}-${i}`}
+                                  onClick={() => setSlotLock(index, l)}
+                                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group"
+                              >
+                                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 ${lockColors[l]} group-hover:scale-110 transition-transform`}>
+                                      {l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                                  </div>
+                                  <span className={`text-[10px] font-bold whitespace-nowrap ${isRTL ? 'text-right' : 'text-left'} text-slate-200`}>
+                                      {labels[l]}
                                   </span>
-                              </div>
+                              </button>
                           ))}
                       </div>
                   )}
               </div>
            ) : (
-              <div className={`w-7 h-7 rounded-full border flex items-center justify-center backdrop-blur-md ${lockColors[lockState]}`}>
-                <Lock className="w-3 h-3" />
+              <div className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md ${lockColors[lockState]}`}>
+                <Lock className="w-4 h-4" />
               </div>
            )}
          </div>
