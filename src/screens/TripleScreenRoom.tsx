@@ -219,7 +219,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
     if (slot.type === 'empty') {
       return (
-        <div className="flex flex-col items-center justify-center h-full relative">
+        <div className="flex flex-col items-center justify-center h-full relative group">
           <LockIndicator />
           {editable ? (
             <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-28 h-28 rounded-full border border-[#00b4d8]/50 bg-[#00b4d8]/10 flex items-center justify-center hover:bg-[#00b4d8]/20 transition-all shadow-xl"><Plus className="w-12 h-12 text-[#00b4d8]" /></button>
@@ -232,14 +232,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     
     if (slot.type === 'menu') {
       return (
-        <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative" dir={dir}>
+        <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative group" dir={dir}>
           <LockIndicator />
           <div className="flex justify-center items-center w-full mb-8 pt-10">
             <h3 className="text-3xl font-extrabold text-white">{isAr ? 'إضافة محتوى' : 'Add Content'}</h3>
             <button onClick={() => updateSlot(index, { type: 'empty' })} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-4 md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} p-4 bg-slate-800 rounded-2xl text-slate-400 hover:text-red-400 transition-all`}><X className="w-6 h-6" /></button>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full pb-24">
-            <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
+             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-cyan-400 font-bold uppercase tracking-wider">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => updateSlot(index, { type: 'web' })} className="p-6 bg-black/20 border border-white/5 hover:border-cyan-500/40 rounded-2xl transition-all"><Globe className="w-8 h-8 text-cyan-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Web</span></button>
@@ -296,13 +296,21 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         <div className="flex justify-center"><button onClick={() => { if (!isHost) return; const m = viewMode === 'sync' ? 'free' : 'sync'; setViewMode(m); broadcastState(currentSlot, slots, m); }} disabled={!isHost} className={`flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm transition-all ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>{viewMode === 'sync' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}<span className="text-xs font-bold uppercase">{viewMode}</span></button></div>
         <div className="flex items-center gap-3"><span className="text-white font-mono font-bold tracking-widest text-xs truncate max-w-[120px] uppercase opacity-70">{displayRoomName}</span><button onClick={async () => { if (navigator.share) { try { await navigator.share({ title: `انضم لغرفتي`, text: `Join my room "${displayRoomName}"\nhttps://app.com/room/${roomId}?name=${encodeURIComponent(displayRoomName)}` }); } catch(e){} } else { alert('Copied!'); } }} className="p-2.5 bg-blue-600 text-white rounded-full shadow-lg"><Share2 className="w-5 h-5" /></button></div>
       </div>
+      
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
+          {/* 💡 أزرار التنقل أصبحت خارج حاوية التمرير لتبقى ثابتة دائمًا */}
+          {canGoLeft && <button onClick={() => handleNavigation(leftTarget)} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 z-[90] p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:bg-black/40 hover:text-white'}`}><ChevronLeft className="w-8 h-8" /></button>}
+          {canGoRight && <button onClick={() => handleNavigation(rightTarget)} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 z-[90] p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:bg-black/40 hover:text-white'}`}><ChevronRight className="w-8 h-8" /></button>}
+
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
-            <>
-              {canGoLeft && <button onClick={() => handleNavigation(leftTarget)} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>}
-              {canGoRight && <button onClick={() => handleNavigation(rightTarget)} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>}
-            </>
-            <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out" style={{ width: '300%', transform: `translateX(${dir === 'rtl' ? currentSlot * 33.333 : -currentSlot * 33.333}%)` }}>{slots.map((s, i) => (<div key={i} className="w-1/3 h-full pt-16">{renderSlotContent(s, i)}</div>))}</div>
+            {/* 💡 تحسين الحاوية لضمان عدم تداخل الشاشات */}
+            <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out w-[300%]" style={{ transform: `translateX(${dir === 'rtl' ? currentSlot * 33.333 : -currentSlot * 33.333}%)` }}>
+               {slots.map((s, i) => (
+                  <div key={i} className="w-1/3 h-full pt-16 flex-shrink-0">
+                     {renderSlotContent(s, i)}
+                  </div>
+               ))}
+            </div>
           </div>
           <div className="h-[90px] w-full bg-[#1e293b]/90 backdrop-blur-xl border-t border-slate-700/50 flex items-center px-4 relative z-30">
               <div className="flex items-center gap-4 w-full overflow-x-auto no-scrollbar pb-1">
