@@ -301,7 +301,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                   </button>
 
                   {isMenuOpen && viewMode !== 'sync' && (
-                      <div className="flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[140px]">
+                      <div dir="ltr" className="flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[140px]">
                           {availableLocks.map((l, i) => (
                               <button
                                   key={`${l}-${i}`}
@@ -401,7 +401,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0A0E14] flex flex-col overflow-hidden font-sans" dir="ltr">
+    <div className="fixed inset-0 z-50 bg-[#0A0E14] flex flex-col overflow-hidden font-sans" dir={dir}>
       <div className="absolute top-0 left-0 right-0 h-16 z-[100] flex items-center justify-between px-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
         <button onClick={handleExitClick} className="p-2 bg-red-500/20 text-red-400 rounded-full transition-all shadow-lg"><LogOut className="w-5 h-5" /></button>
         <div className="flex justify-center"><button onClick={() => { if (!isHost) return; const m = viewMode === 'sync' ? 'free' : 'sync'; setViewMode(m); broadcastState(currentSlot, slots, m); }} disabled={!isHost} className={`flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm transition-all ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>{viewMode === 'sync' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}<span className="text-xs font-bold uppercase">{viewMode}</span></button></div>
@@ -409,11 +409,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       </div>
       
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
-          {canGoLeft && <button onClick={() => handleNavigation(leftTarget)} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 z-[90] p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:bg-black/40 hover:text-white'}`}><ChevronLeft className="w-8 h-8" /></button>}
-          {canGoRight && <button onClick={() => handleNavigation(rightTarget)} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 z-[90] p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:bg-black/40 hover:text-white'}`}><ChevronRight className="w-8 h-8" /></button>}
+          {canGoLeft && <button onClick={() => handleNavigation(leftTarget)} className={`absolute left-4 top-1/2 -translate-y-1/2 z-[90] p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:bg-black/40 hover:text-white'}`}><ChevronLeft className="w-8 h-8" /></button>}
+          {canGoRight && <button onClick={() => handleNavigation(rightTarget)} className={`absolute right-4 top-1/2 -translate-y-1/2 z-[90] p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:bg-black/40 hover:text-white'}`}><ChevronRight className="w-8 h-8" /></button>}
 
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
-            <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out w-[300%]" style={{ transform: `translateX(${dir === 'rtl' ? currentSlot * 33.333 : -currentSlot * 33.333}%)` }}>
+            <div dir="ltr" className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out w-[300%]" style={{ transform: `translateX(-${currentSlot * 33.333}%)` }}>
                {slots.map((s, i) => (
                   <div key={i} className="w-1/3 h-full pt-16 flex-shrink-0">
                      {renderSlotContent(s, i)}
