@@ -261,7 +261,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
        const isMenuOpen = openLockMenu === index;
        
-       // 💡 الكلمات تتغير حسب اللغة فقط. لا تدخل في الاتجاهات!
+       // تغيير الكلمات فقط بناءً على اللغة دون التدخل في الاتجاهات
        const labels: Record<LockState, string> = dir === 'rtl' ? {
            none: 'إلغاء القفل',
            green: 'مرن وتفاعلي',
@@ -291,7 +291,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        };
 
        return (
-         // 💡 السطر الأصلي الخاص بك 100%. لم أغير فيه أي كلاس يخص يمين/يسار أو الاتجاه.
+         // تم الحفاظ على السطر الأصلي بحذافيره لتجنب انقلاب الأسهم والتصميم
          <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
            {isHost ? (
               <div className="flex items-start gap-3">
@@ -302,7 +302,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                     {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   </button>
 
-                  {/* القائمة العمودية المضاف إليها الكلمات */}
+                  {/* القائمة العمودية والنصوص */}
                   {isMenuOpen && viewMode !== 'sync' && (
                       <div className="flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[140px]">
                           {availableLocks.map((l, i) => (
