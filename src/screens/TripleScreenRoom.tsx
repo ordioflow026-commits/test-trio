@@ -261,7 +261,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
        const isMenuOpen = openLockMenu === index;
        
-       // تغيير الكلمات فقط بناءً على اللغة دون التدخل في الاتجاهات
        const labels: Record<LockState, string> = dir === 'rtl' ? {
            none: 'إلغاء القفل',
            green: 'مرن وتفاعلي',
@@ -291,7 +290,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        };
 
        return (
-         // تم الحفاظ على السطر الأصلي بحذافيره لتجنب انقلاب الأسهم والتصميم
          <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
            {isHost ? (
               <div className="flex items-start gap-3">
@@ -302,9 +300,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                     {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   </button>
 
-                  {/* 💡 التعديل هنا: إضافة dir="ltr" لتثبيت شكل القائمة دائماً */}
                   {isMenuOpen && viewMode !== 'sync' && (
-                      <div dir="ltr" className="flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[140px]">
+                      <div className="flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[140px]">
                           {availableLocks.map((l, i) => (
                               <button
                                   key={`${l}-${i}`}
@@ -404,7 +401,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0A0E14] flex flex-col overflow-hidden font-sans" dir={dir}>
+    <div className="fixed inset-0 z-50 bg-[#0A0E14] flex flex-col overflow-hidden font-sans" dir="ltr">
       <div className="absolute top-0 left-0 right-0 h-16 z-[100] flex items-center justify-between px-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
         <button onClick={handleExitClick} className="p-2 bg-red-500/20 text-red-400 rounded-full transition-all shadow-lg"><LogOut className="w-5 h-5" /></button>
         <div className="flex justify-center"><button onClick={() => { if (!isHost) return; const m = viewMode === 'sync' ? 'free' : 'sync'; setViewMode(m); broadcastState(currentSlot, slots, m); }} disabled={!isHost} className={`flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm transition-all ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>{viewMode === 'sync' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}<span className="text-xs font-bold uppercase">{viewMode}</span></button></div>
