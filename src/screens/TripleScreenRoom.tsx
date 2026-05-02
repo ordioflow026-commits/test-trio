@@ -430,7 +430,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
             <div dir="ltr" className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out w-[300%]" style={{ transform: `translateX(-${currentSlot * 33.333}%)` }}>
                {slots.map((s, i) => (
-                  <div key={i} className={`w-1/3 h-full pt-16 flex-shrink-0 ${currentSlot === i ? 'z-50' : 'z-0'}`}>
+                  <div 
+                    key={i} 
+                    className={`w-1/3 h-full pt-16 flex-shrink-0 transition-opacity duration-300 ${currentSlot === i ? 'z-50 opacity-100 pointer-events-auto' : 'z-0 opacity-0 pointer-events-none hidden md:block'}`}
+                  >
                      {renderSlotContent(s, i)}
                   </div>
                ))}
