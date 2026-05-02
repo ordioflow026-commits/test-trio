@@ -40,6 +40,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
   const [isIdle, setIsIdle] = useState(false);
   const [openLockMenu, setOpenLockMenu] = useState<number | null>(null);
+  const [showYoutubeModal, setShowYoutubeModal] = useState<number | null>(null);
+  const [youtubeInput, setYoutubeInput] = useState('');
   const idleTimerRef = useRef<any>(null);
   const zpRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
@@ -355,7 +357,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
               <h4 className="text-cyan-400 font-bold uppercase tracking-wider">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => updateSlot(index, { type: 'web' })} className="p-6 bg-black/20 border border-white/5 hover:border-cyan-500/40 rounded-2xl transition-all"><Globe className="w-8 h-8 text-cyan-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Web</span></button>
-                <button onClick={() => { const url = prompt('YouTube URL:'); if (url) updateSlot(index, { type: 'youtube', url }); }} className="p-6 bg-black/20 border border-white/5 hover:border-red-500/40 rounded-2xl transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button>
+                <button onClick={() => setShowYoutubeModal(index)} className="p-6 bg-black/20 border border-white/5 hover:border-red-500/40 rounded-2xl transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button>
               </div>
             </div>
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
@@ -390,7 +392,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         <LockIndicator />
         {editable && <div className={`absolute top-4 ${dir === 'rtl' ? 'left-4' : 'right-4'} md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} z-[70] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 shadow-lg"><X className="w-6 h-6" /></button></div>}
         {slot.type === 'web' && <div className="w-full h-full bg-slate-900/80 flex flex-col items-center justify-center"><Globe className="w-20 h-20 text-cyan-500/50 mb-6" /><h2 className="text-2xl text-white font-bold">Web Browser</h2></div>}
-        {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center relative overflow-hidden">{slot.url ? <SyncYouTubePlayer videoId={slot.url} isHost={isHost} roomId={roomId as string} canInteract={editable} /> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
+        {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center relative overflow-hidden">{slot.url ? <SyncYouTubePlayer videoId={slot.url} isHost={isHost} roomId={roomId as string} canInteract={editable} isActive={currentSlot === index} /> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
         {slot.type === 'whiteboard' && <div className={`w-full h-full p-4 ${editable ? 'pointer-events-auto' : 'pointer-events-none'}`}><Whiteboard roomId={roomId} canInteract={editable} /></div>}
         {slot.type === 'media' && <div className="w-full h-full bg-slate-900/80 flex flex-col items-center justify-center"><ImageIcon className="w-20 h-20 text-green-500/50 mb-6" /><h2 className="text-2xl text-white font-bold">Gallery</h2></div>}
         {slot.type === 'camera' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Camera Stream</div>}
@@ -410,8 +412,17 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       </div>
       
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
-          {canGoLeft && <button onClick={() => handleNavigation(leftTarget)} className={`absolute left-4 top-1/2 -translate-y-1/2 z-[90] p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:bg-black/40 hover:text-white'}`}><ChevronLeft className="w-8 h-8" /></button>}
-          {canGoRight && <button onClick={() => handleNavigation(rightTarget)} className={`absolute right-4 top-1/2 -translate-y-1/2 z-[90] p-3 bg-black/20 text-white/50 rounded-full transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100 hover:bg-black/40 hover:text-white'}`}><ChevronRight className="w-8 h-8" /></button>}
+          {/* Smart Edge Navigation Arrows */}
+          {canGoLeft && (
+            <div className={`absolute ${dir === 'rtl' ? 'right-0' : 'left-0'} top-0 w-24 h-full z-[90] flex items-center justify-center group`} onMouseEnter={resetIdleTimer} onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer}>
+              <button onClick={() => handleNavigation(leftTarget)} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 group-hover:bg-black/80 group-hover:text-white group-hover:scale-110 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>
+            </div>
+          )}
+          {canGoRight && (
+            <div className={`absolute ${dir === 'rtl' ? 'left-0' : 'right-0'} top-0 w-24 h-full z-[90] flex items-center justify-center group`} onMouseEnter={resetIdleTimer} onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer}>
+              <button onClick={() => handleNavigation(rightTarget)} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 group-hover:bg-black/80 group-hover:text-white group-hover:scale-110 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>
+            </div>
+          )}
 
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
             <div dir="ltr" className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out w-[300%]" style={{ transform: `translateX(-${currentSlot * 33.333}%)` }}>
@@ -429,6 +440,27 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
               </div>
           </div>
       </div>
+
+      {/* Custom YouTube Modal */}
+      {showYoutubeModal !== null && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#0f172a] border border-slate-700/50 p-6 rounded-3xl shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-200">
+            <h3 className="text-xl font-bold text-white mb-4">{isAr ? 'إضافة فيديو يوتيوب' : 'Add YouTube Video'}</h3>
+            <input
+              type="text"
+              value={youtubeInput}
+              onChange={(e) => setYoutubeInput(e.target.value)}
+              placeholder={isAr ? 'ضع رابط الفيديو هنا...' : 'Paste video link here...'}
+              className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none mb-6"
+              dir="ltr"
+            />
+            <div className="flex justify-end gap-3">
+              <button onClick={() => {setShowYoutubeModal(null); setYoutubeInput('');}} className="px-5 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800 transition-colors">{isAr ? 'إلغاء' : 'Cancel'}</button>
+              <button onClick={() => { if(youtubeInput.trim()) { updateSlot(showYoutubeModal, { type: 'youtube', url: youtubeInput }); setShowYoutubeModal(null); setYoutubeInput(''); } }} className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold shadow-lg shadow-red-600/20 transition-all active:scale-95">{isAr ? 'إضافة' : 'Add'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,9 +7,10 @@ interface Props {
   isHost: boolean;
   roomId: string;
   canInteract: boolean;
+  isActive: boolean;
 }
 
-export default function SyncYouTubePlayer({ videoId, isHost, roomId, canInteract }: Props) {
+export default function SyncYouTubePlayer({ videoId, isHost, roomId, canInteract, isActive }: Props) {
   const playerRef = useRef<any>(null);
   const isReceivingSync = useRef(false);
   const channelRef = useRef<any>(null);
@@ -22,6 +23,12 @@ export default function SyncYouTubePlayer({ videoId, isHost, roomId, canInteract
   };
 
   const cleanVideoId = getYouTubeId(videoId || '');
+
+  useEffect(() => {
+    if (!isActive && playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
+      playerRef.current.pauseVideo();
+    }
+  }, [isActive]);
 
   useEffect(() => {
     if (!roomId) return;
