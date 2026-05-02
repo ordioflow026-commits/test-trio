@@ -302,9 +302,9 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                     {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   </button>
 
-                  {/* القائمة العمودية والنصوص */}
+                  {/* 💡 التعديل هنا: إضافة dir="ltr" لتثبيت شكل القائمة دائماً */}
                   {isMenuOpen && viewMode !== 'sync' && (
-                      <div className="flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[140px]">
+                      <div dir="ltr" className="flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[140px]">
                           {availableLocks.map((l, i) => (
                               <button
                                   key={`${l}-${i}`}
