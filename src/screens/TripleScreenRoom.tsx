@@ -260,10 +260,9 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        }
 
        const isMenuOpen = openLockMenu === index;
-       const isRTL = dir === 'rtl';
        
-       // 💡 كلمات توضيحية تدعم اللغتين حسب اتجاه التطبيق
-       const labels: Record<LockState, string> = isRTL ? {
+       // 💡 الكلمات فقط هي التي تتغير هنا
+       const labels: Record<LockState, string> = dir === 'rtl' ? {
            none: 'إلغاء القفل',
            green: 'مرن وتفاعلي',
            yellow: 'تنبيه للمتابعة',
@@ -292,10 +291,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        };
 
        return (
-         <div className={`absolute top-4 ${isRTL ? 'right-4' : 'left-4'} md:top-6 md:${isRTL ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0' : 'opacity-100'}`}>
+         // 💡 إجبار الاتجاه (dir="ltr") والمحافظة على (left-4) لضمان عدم انقلاب الأسهم والتصميم
+         <div className={`absolute top-4 left-4 md:top-6 md:left-6 z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0' : 'opacity-100'}`} dir="ltr">
            {isHost ? (
               <div className="flex items-start gap-3">
-                  {/* الزر الرئيسي الثابت */}
                   <button 
                      onClick={handleMainClick} 
                      className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-cyan-400' : ''}`}
@@ -303,7 +302,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                     {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   </button>
 
-                  {/* 💡 القائمة العمودية الجانبية الذكية */}
                   {isMenuOpen && viewMode !== 'sync' && (
                       <div className="flex flex-col gap-2 p-2 bg-slate-900/90 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-200 min-w-[140px]">
                           {availableLocks.map((l, i) => (
@@ -315,7 +313,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                                   <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 ${lockColors[l]} group-hover:scale-110 transition-transform`}>
                                       {l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                                   </div>
-                                  <span className={`text-[10px] font-bold whitespace-nowrap ${isRTL ? 'text-right' : 'text-left'} text-slate-200`}>
+                                  <span className="text-[10px] font-bold whitespace-nowrap text-left text-slate-200" dir={dir === 'rtl' ? 'rtl' : 'ltr'}>
                                       {labels[l]}
                                   </span>
                               </button>
