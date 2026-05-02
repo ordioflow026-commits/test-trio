@@ -351,7 +351,9 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           <LockIndicator />
           <div className="flex justify-center items-center w-full mb-8 pt-10">
             <h3 className="text-3xl font-extrabold text-white">{isAr ? 'إضافة محتوى' : 'Add Content'}</h3>
-            <button onClick={() => updateSlot(index, { type: 'empty' })} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-4 md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} p-4 bg-slate-800 rounded-2xl text-slate-400 hover:text-red-400 transition-all`}><X className="w-6 h-6" /></button>
+            <div className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-4 md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} z-[100]`}>
+              <button onClick={() => updateSlot(index, { type: 'empty' })} className="p-4 bg-slate-800 rounded-2xl text-slate-400 hover:text-red-400 transition-all z-[999] relative pointer-events-auto"><X className="w-6 h-6" /></button>
+            </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full pb-24">
              <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
@@ -391,7 +393,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       <div className="flex flex-col items-center justify-center h-full w-full relative group">
         {!editable && <div className="absolute inset-0 z-[60] bg-transparent" />}
         <LockIndicator />
-        {editable && <div className={`absolute top-4 ${dir === 'rtl' ? 'left-4' : 'right-4'} md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} z-[100] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 shadow-lg"><X className="w-6 h-6" /></button></div>}
+        {editable && <div className={`absolute top-4 ${dir === 'rtl' ? 'left-4' : 'right-4'} md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} z-[100] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 shadow-lg z-[999] relative pointer-events-auto"><X className="w-6 h-6" /></button></div>}
         {slot.type === 'web' && <div className="w-full h-full bg-slate-900/80 flex flex-col items-center justify-center"><Globe className="w-20 h-20 text-cyan-500/50 mb-6" /><h2 className="text-2xl text-white font-bold">Web Browser</h2></div>}
         {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center relative overflow-hidden">{slot.url ? <SyncYouTubePlayer videoId={slot.url} isHost={isHost} roomId={roomId as string} canInteract={editable} isActive={currentSlot === index} /> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
         {slot.type === 'whiteboard' && <div className={`w-full h-full p-4 ${editable ? 'pointer-events-auto' : 'pointer-events-none'}`}><Whiteboard roomId={roomId} canInteract={editable} /></div>}
@@ -428,7 +430,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
             <div dir="ltr" className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out w-[300%]" style={{ transform: `translateX(-${currentSlot * 33.333}%)` }}>
                {slots.map((s, i) => (
-                  <div key={i} className="w-1/3 h-full pt-16 flex-shrink-0">
+                  <div key={i} className={`w-1/3 h-full pt-16 flex-shrink-0 ${currentSlot === i ? 'z-50' : 'z-0'}`}>
                      {renderSlotContent(s, i)}
                   </div>
                ))}
