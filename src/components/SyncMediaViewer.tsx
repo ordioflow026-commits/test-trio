@@ -41,20 +41,31 @@ export default function SyncMediaViewer({ url, canInteract, onUploadSuccess }: P
 
   if (url) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-black/50 p-2">
+      // تم إضافة pointer-events-none هنا للسماح بمرور حركة الماوس لأزرار الغرفة
+      <div className="w-full h-full flex items-center justify-center bg-black/50 p-2 pointer-events-none">
         {isVideo(url) ? (
-          <video src={url} controls className="max-w-full max-h-full rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] outline-none animate-in zoom-in duration-300">
+          <video 
+             src={url} 
+             controls 
+             // تم إضافة pointer-events-auto هنا لكي تعمل أزرار الفيديو
+             className="max-w-full max-h-full rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] outline-none animate-in zoom-in duration-300 pointer-events-auto"
+          >
             Your browser does not support the video tag.
           </video>
         ) : (
-          <img src={url} alt="Shared Media" className="max-w-full max-h-full object-contain rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] animate-in zoom-in duration-300" />
+          <img 
+             src={url} 
+             alt="Shared Media" 
+             // تم إضافة pointer-events-auto هنا (احتياطياً)
+             className="max-w-full max-h-full object-contain rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] animate-in zoom-in duration-300 pointer-events-auto" 
+          />
         )}
       </div>
     );
   }
 
   return (
-    <div className="w-full h-full bg-slate-900/80 flex flex-col items-center justify-center p-6 text-center">
+    <div className="w-full h-full bg-slate-900/80 flex flex-col items-center justify-center p-6 text-center pointer-events-auto">
       <PlaySquare className="w-20 h-20 text-emerald-500/50 mb-6" />
       <h2 className="text-2xl text-white font-bold mb-6">عرض الوسائط (صور / فيديو)</h2>
       
