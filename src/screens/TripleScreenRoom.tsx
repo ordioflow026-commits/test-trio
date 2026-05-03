@@ -347,7 +347,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     
     if (slot.type === 'menu') {
       return (
-        <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative group" dir={dir}>
+        <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative group outline outline-2 outline-blue-500" dir={dir}>
           <LockIndicator />
           <div className="flex justify-center items-center w-full mb-8 pt-10">
             <h3 className="text-3xl font-extrabold text-white">{isAr ? 'إضافة محتوى' : 'Add Content'}</h3>
@@ -417,12 +417,12 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
           {/* Smart Edge Navigation Arrows */}
           {canGoLeft && (
-            <div className={`absolute ${dir === 'rtl' ? 'right-0' : 'left-0'} top-24 bottom-[90px] w-24 z-[90] flex items-center justify-center group`} onMouseEnter={resetIdleTimer} onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer}>
+            <div className={`absolute ${dir === 'rtl' ? 'right-0' : 'left-0'} top-24 bottom-[90px] w-24 z-[90] flex items-center justify-center group outline outline-2 outline-green-500`} onMouseEnter={resetIdleTimer} onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer}>
               <button onClick={() => handleNavigation(leftTarget)} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 group-hover:bg-black/80 group-hover:text-white group-hover:scale-110 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>
             </div>
           )}
           {canGoRight && (
-            <div className={`absolute ${dir === 'rtl' ? 'left-0' : 'right-0'} top-24 bottom-[90px] w-24 z-[90] flex items-center justify-center group`} onMouseEnter={resetIdleTimer} onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer}>
+            <div className={`absolute ${dir === 'rtl' ? 'left-0' : 'right-0'} top-24 bottom-[90px] w-24 z-[90] flex items-center justify-center group outline outline-2 outline-green-500`} onMouseEnter={resetIdleTimer} onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer}>
               <button onClick={() => handleNavigation(rightTarget)} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 group-hover:bg-black/80 group-hover:text-white group-hover:scale-110 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>
             </div>
           )}
@@ -432,7 +432,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                {slots.map((s, i) => (
                   <div 
                     key={i} 
-                    className={`w-1/3 h-full pt-16 flex-shrink-0 relative ${currentSlot === i ? 'z-50' : 'z-0'}`}
+                    className={`w-1/3 h-full pt-16 flex-shrink-0 relative outline outline-2 outline-red-500 ${currentSlot === i ? 'z-50' : 'z-0'}`}
                   >
                      {/* The Magic Fix: A blocker shield for inactive screens */}
                      {currentSlot !== i && <div className="absolute inset-0 z-[999] bg-transparent cursor-default"></div>}
