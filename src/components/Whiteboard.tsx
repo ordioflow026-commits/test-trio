@@ -162,7 +162,7 @@ export default function Whiteboard({ roomId, canInteract = true }: WhiteboardPro
   return (
     <div className="w-full h-full bg-slate-900 rounded-[32px] border border-slate-700/50 shadow-2xl relative overflow-hidden flex flex-col">
       {canInteract && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-md px-4 py-2 rounded-full border border-slate-600 shadow-xl flex items-center gap-3 z-10">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-md px-4 py-2 rounded-full border border-[#00b4d8]/40 shadow-[0_4px_12px_rgba(0,0,0,0.3)] flex items-center gap-3 z-[60]">
           <button onClick={() => setColor('#00b4d8')} className={`w-6 h-6 rounded-full bg-[#00b4d8] ${color === '#00b4d8' ? 'ring-2 ring-white scale-110' : ''}`} />
           <button onClick={() => setColor('#ef4444')} className={`w-6 h-6 rounded-full bg-red-500 ${color === '#ef4444' ? 'ring-2 ring-white scale-110' : ''}`} />
           <button onClick={() => setColor('#22c55e')} className={`w-6 h-6 rounded-full bg-green-500 ${color === '#22c55e' ? 'ring-2 ring-white scale-110' : ''}`} />
