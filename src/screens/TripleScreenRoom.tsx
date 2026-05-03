@@ -437,15 +437,15 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       </div>
       
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
-          {/* Smart Edge Navigation Arrows */}
+          {/* Smart Edge Navigation Arrows Fix: Reduced footprint so it doesn't block iframe menus */}
           {canGoLeft && (
-            <div className={`absolute ${dir === 'rtl' ? 'right-0' : 'left-0'} top-28 bottom-0 w-24 z-[90] flex items-center justify-center group`} onMouseEnter={resetIdleTimer} onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer}>
-              <button onClick={() => handleNavigation(leftTarget)} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 group-hover:bg-black/80 group-hover:text-white group-hover:scale-110 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>
+            <div className={`absolute ${dir === 'rtl' ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 z-[90] flex items-center justify-center group pointer-events-none`}>
+              <button onClick={() => { resetIdleTimer(); handleNavigation(leftTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 hover:bg-black/80 hover:text-white hover:scale-110 pointer-events-auto shadow-lg ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>
             </div>
           )}
           {canGoRight && (
-            <div className={`absolute ${dir === 'rtl' ? 'left-0' : 'right-0'} top-28 bottom-0 w-24 z-[90] flex items-center justify-center group`} onMouseEnter={resetIdleTimer} onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer}>
-              <button onClick={() => handleNavigation(rightTarget)} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 group-hover:bg-black/80 group-hover:text-white group-hover:scale-110 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>
+            <div className={`absolute ${dir === 'rtl' ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 z-[90] flex items-center justify-center group pointer-events-none`}>
+              <button onClick={() => { resetIdleTimer(); handleNavigation(rightTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 hover:bg-black/80 hover:text-white hover:scale-110 pointer-events-auto shadow-lg ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>
             </div>
           )}
 
