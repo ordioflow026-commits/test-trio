@@ -396,10 +396,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {!editable && <div className="absolute inset-0 z-[60] bg-transparent" />}
         <LockIndicator />
         {editable && (
-          <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ${isIdle ? 'opacity-50' : 'opacity-100'}`}>
             <button 
               onClick={() => updateSlot(index, { type: 'empty' })} 
-              className={`p-3 bg-[#0f172a]/90 border border-red-500/50 rounded-full text-red-400 shadow-xl backdrop-blur-md z-[999] relative transition-transform hover:scale-110 ${isIdle ? 'pointer-events-none' : 'pointer-events-auto'}`}
+              className="p-3 bg-[#0f172a]/90 border border-red-500/50 rounded-full text-red-400 shadow-xl backdrop-blur-md z-[999] relative transition-transform hover:scale-110 pointer-events-auto"
             >
               <X className="w-6 h-6" />
             </button>
@@ -437,15 +437,15 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       </div>
       
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
-          {/* Smart Edge Navigation Arrows Fix: Reduced footprint so it doesn't block iframe menus */}
+          {/* Smart Edge Navigation Arrows Fix: Always reachable even when idle */}
           {canGoLeft && (
             <div className={`absolute ${dir === 'rtl' ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 z-[90] flex items-center justify-center group pointer-events-none`}>
-              <button onClick={() => { resetIdleTimer(); handleNavigation(leftTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 hover:bg-black/80 hover:text-white hover:scale-110 pointer-events-auto shadow-lg ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>
+              <button onClick={() => { resetIdleTimer(); handleNavigation(leftTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 hover:bg-black/80 hover:text-white hover:scale-110 pointer-events-auto shadow-lg ${isIdle ? 'opacity-30' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>
             </div>
           )}
           {canGoRight && (
             <div className={`absolute ${dir === 'rtl' ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 z-[90] flex items-center justify-center group pointer-events-none`}>
-              <button onClick={() => { resetIdleTimer(); handleNavigation(rightTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 hover:bg-black/80 hover:text-white hover:scale-110 pointer-events-auto shadow-lg ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>
+              <button onClick={() => { resetIdleTimer(); handleNavigation(rightTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-black/40 text-white/50 rounded-full transition-all duration-500 hover:bg-black/80 hover:text-white hover:scale-110 pointer-events-auto shadow-lg ${isIdle ? 'opacity-30' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>
             </div>
           )}
 
