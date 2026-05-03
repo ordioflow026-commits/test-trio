@@ -49,17 +49,17 @@ export default function UniversalViewer({ roomId, canInteract = true, isLocalOnl
   return (
     <div className="w-full h-full bg-slate-900 rounded-[32px] border border-slate-700/50 shadow-2xl flex flex-col overflow-hidden">
       {/* Top Toolbar */}
-      <div className="bg-slate-800 p-4 flex flex-wrap items-center justify-between border-b border-slate-700 gap-4 z-10">
+      <div className="bg-slate-800 p-3 sm:p-4 flex flex-col sm:flex-row items-center justify-between border-b border-slate-700 gap-3 z-10 relative pt-12 sm:pt-4">
         {canInteract && (
-          <div className="flex w-full gap-2">
+          <div className="flex flex-col sm:flex-row w-full gap-2">
             <input 
               type="text" 
-              placeholder="Paste direct link (Image, PDF, Word, PPTX)..." 
-              className="flex-1 bg-slate-900 text-white px-4 py-2 rounded-lg border border-slate-600 focus:outline-none focus:border-cyan-500"
+              placeholder="Paste link here..." 
+              className="w-full bg-slate-900 text-white px-3 py-2 text-sm rounded-lg border border-slate-600 focus:outline-none focus:border-cyan-500"
               value={inputUrl}
               onChange={(e) => setInputUrl(e.target.value)}
             />
-            <button onClick={loadFile} className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+            <button onClick={loadFile} className="w-full sm:w-auto justify-center bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors font-bold text-sm">
               <LinkIcon className="w-4 h-4" /> Load
             </button>
           </div>
