@@ -1,21 +1,79 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UploadCloud, Loader2, PlaySquare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useLanguage } from '../contexts/LanguageContext'; // Added Language Context
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface Props {
   url?: string;
   canInteract: boolean;
   onUploadSuccess: (url: string) => void;
+  roomId?: string;
+  isHost?: boolean;
+  slotIndex?: number;
+  viewMode?: 'sync' | 'free';
 }
 
-export default function SyncMediaViewer({ url, canInteract, onUploadSuccess }: Props) {
+export default function SyncMediaViewer({ url, canInteract, onUploadSuccess, roomId, isHost = false, slotIndex = 0, viewMode = 'sync' }: Props) {
   const [uploading, setUploading] = useState(false);
   const { language } = useLanguage();
   const isAr = language === 'ar';
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const channelRef = useRef<any>(null);
+  const isRemoteUpdate = useRef(false);
 
   const isVideo = (fileUrl: string) => {
     return /\.(mp4|webm|ogg|mov)$/i.test(fileUrl);
+  };
+
+  // 1. Realtime Video Synchronization Engine (Collaborative)
+  useEffect(() => {
+    if (!url || !isVideo(url) || !roomId) return;
+
+    const channelName = `media_sync_${roomId}_${slotIndex}`;
+    const channel = supabase.channel(channelName);
+    channelRef.current = channel;
+
+    channel.on('broadcast', { event: 'video_state_change' }, (payload) => {
+      const { type, time } = payload.payload;
+      const vid = videoRef.current;
+      if (!vid) return;
+
+      // EVERYONE listens to sync signals now, creating a collaborative watch party!
+      isRemoteUpdate.current = true; // Lock local events to prevent infinite echo loops
+
+      // Force sync time if the difference is more than 0.5 seconds
+      if (Math.abs(vid.currentTime - time) > 0.5) {
+        vid.currentTime = time;
+      }
+
+      // Sync playback state
+      if (type === 'play' && vid.paused) {
+        vid.play().catch(() => {}); 
+      } else if (type === 'pause' && !vid.paused) {
+        vid.pause();
+      }
+
+      // Release the lock after applying changes
+      setTimeout(() => { isRemoteUpdate.current = false; }, 300);
+    }).subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [url, roomId, slotIndex]); // Removed viewMode and isHost from dependencies as they no longer block sync
+
+  // 2. Broadcast Local Actions (Anyone with canInteract can control the room)
+  const emitVideoEvent = (type: 'play' | 'pause' | 'seek') => {
+    const vid = videoRef.current;
+    // If remote update is running, OR if the user doesn't have permission to interact, block broadcasting
+    if (!channelRef.current || !vid || isRemoteUpdate.current || !canInteract) return;
+
+    channelRef.current.send({
+      type: 'broadcast',
+      event: 'video_state_change',
+      payload: { type, time: vid.currentTime }
+    });
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,9 +105,13 @@ export default function SyncMediaViewer({ url, canInteract, onUploadSuccess }: P
       <div className="w-full h-full flex items-center justify-center bg-black/50 p-2 relative">
         {isVideo(url) ? (
           <video 
+             ref={videoRef}
              src={url} 
-             controls 
-             className="max-w-full max-h-full rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] outline-none animate-in zoom-in duration-300"
+             controls={canInteract} // Only people allowed to interact see the controls
+             onPlay={() => emitVideoEvent('play')}
+             onPause={() => emitVideoEvent('pause')}
+             onSeeked={() => emitVideoEvent('seek')}
+             className="max-w-full max-h-full rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] outline-none animate-in zoom-in duration-300 pointer-events-auto"
           >
             {isAr ? 'متصفحك لا يدعم تشغيل الفيديو.' : 'Your browser does not support the video tag.'}
           </video>
@@ -57,7 +119,7 @@ export default function SyncMediaViewer({ url, canInteract, onUploadSuccess }: P
           <img 
              src={url} 
              alt="Shared Media" 
-             className="max-w-full max-h-full object-contain rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] animate-in zoom-in duration-300" 
+             className="max-w-full max-h-full object-contain rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] animate-in zoom-in duration-300 pointer-events-auto" 
           />
         )}
       </div>
