@@ -296,7 +296,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        };
 
        return (
-         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-50 hover:opacity-100' : 'opacity-100'}`}>
+         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
            {isHost ? (
               <div className="flex items-start gap-3">
                   <button 
@@ -396,7 +396,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {!editable && lockState !== 'yellow' && <div className="absolute inset-0 z-[60] bg-transparent pointer-events-auto" />}
         <LockIndicator />
         {editable && (
-          <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ${isIdle ? 'opacity-50' : 'opacity-100'}`}>
+          <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <button 
               onClick={() => updateSlot(index, { type: 'empty' })} 
               className="p-3 bg-slate-900/60 border-2 border-[#00b4d8]/80 rounded-full text-red-400 shadow-[0_4px_12px_rgba(0,0,0,0.3)] backdrop-blur-md z-[999] relative transition-transform hover:scale-110 pointer-events-auto hover:bg-[#00b4d8]/20"
@@ -437,15 +437,15 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       </div>
       
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
-          {/* Smart Edge Navigation Arrows Fix: Thicker unified cyan borders */}
+          {/* Smart Edge Navigation Arrows Fix: Hide completely on idle */}
           {canGoLeft && (
             <div className={`absolute ${dir === 'rtl' ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 z-[90] flex items-center justify-center group pointer-events-none`}>
-              <button onClick={() => { resetIdleTimer(); handleNavigation(leftTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-slate-900/60 border-2 border-[#00b4d8]/80 text-[#00b4d8] rounded-full transition-all duration-500 hover:bg-[#00b4d8]/80 hover:text-white hover:scale-110 pointer-events-auto shadow-[0_4px_12px_rgba(0,0,0,0.3)] backdrop-blur-md ${isIdle ? 'opacity-50 hover:opacity-100' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>
+              <button onClick={() => { resetIdleTimer(); handleNavigation(leftTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-slate-900/60 border-2 border-[#00b4d8]/80 text-[#00b4d8] rounded-full transition-all duration-500 hover:bg-[#00b4d8]/80 hover:text-white hover:scale-110 pointer-events-auto shadow-[0_4px_12px_rgba(0,0,0,0.3)] backdrop-blur-md ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>
             </div>
           )}
           {canGoRight && (
             <div className={`absolute ${dir === 'rtl' ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 z-[90] flex items-center justify-center group pointer-events-none`}>
-              <button onClick={() => { resetIdleTimer(); handleNavigation(rightTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-slate-900/60 border-2 border-[#00b4d8]/80 text-[#00b4d8] rounded-full transition-all duration-500 hover:bg-[#00b4d8]/80 hover:text-white hover:scale-110 pointer-events-auto shadow-[0_4px_12px_rgba(0,0,0,0.3)] backdrop-blur-md ${isIdle ? 'opacity-50 hover:opacity-100' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>
+              <button onClick={() => { resetIdleTimer(); handleNavigation(rightTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-slate-900/60 border-2 border-[#00b4d8]/80 text-[#00b4d8] rounded-full transition-all duration-500 hover:bg-[#00b4d8]/80 hover:text-white hover:scale-110 pointer-events-auto shadow-[0_4px_12px_rgba(0,0,0,0.3)] backdrop-blur-md ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight className="w-8 h-8" /></button>
             </div>
           )}
 
