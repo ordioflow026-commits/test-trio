@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Link as LinkIcon, Image as ImageIcon, FileText } from 'lucide-react';
+import { Link as LinkIcon, Image as ImageIcon, FileText, Upload, Loader2 } from 'lucide-react';
 
 interface UniversalViewerProps {
   roomId?: string;
@@ -11,8 +11,10 @@ interface UniversalViewerProps {
 export default function UniversalViewer({ roomId, canInteract = true, isLocalOnly = false }: UniversalViewerProps) {
   const [url, setUrl] = useState('');
   const [inputUrl, setInputUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
   const channelRef = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!roomId) return;
@@ -41,27 +43,81 @@ export default function UniversalViewer({ roomId, canInteract = true, isLocalOnl
     }
   };
 
-  // Helper to determine if the URL is a direct image
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !canInteract) return;
+
+    setIsUploading(true);
+    try {
+      // The correct bucket name provided by the user
+      const bucketName = 'room-media'; 
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      const filePath = `room_${roomId}/${fileName}`;
+
+      const { error } = await supabase.storage.from(bucketName).upload(filePath, file);
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+
+      setUrl(publicUrl);
+      if (!isLocalOnly && channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'doc_sync',
+          payload: { url: publicUrl }
+        });
+      }
+    } catch (err: any) {
+      alert('Upload failed. Please ensure the storage bucket exists and is public: ' + err.message);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const isImage = (testUrl: string) => {
     return /\.(jpeg|jpg|gif|png|webp|svg|bmp)(\?.*)?$/i.test(testUrl);
   };
 
   return (
     <div className="w-full h-full bg-slate-900 rounded-[32px] border border-slate-700/50 shadow-2xl flex flex-col overflow-hidden">
-      {/* Top Toolbar */}
+      {/* Top Toolbar - Fully Responsive */}
       <div className="bg-slate-800 p-3 sm:p-4 flex flex-col sm:flex-row items-center justify-between border-b border-slate-700 gap-3 z-10 relative pt-12 sm:pt-4">
         {canInteract && (
-          <div className="flex flex-col sm:flex-row w-full gap-2">
+          <div className="flex flex-col sm:flex-row w-full gap-2 items-center">
+            {/* Upload Button */}
             <input 
-              type="text" 
-              placeholder="Paste link here..." 
-              className="w-full bg-slate-900 text-white px-3 py-2 text-sm rounded-lg border border-slate-600 focus:outline-none focus:border-cyan-500"
-              value={inputUrl}
-              onChange={(e) => setInputUrl(e.target.value)}
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileUpload} 
+              className="hidden" 
+              accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.ppt,.pptx"
             />
-            <button onClick={loadFile} className="w-full sm:w-auto justify-center bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors font-bold text-sm">
-              <LinkIcon className="w-4 h-4" /> Load
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              disabled={isUploading}
+              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors font-bold text-sm shadow-md disabled:opacity-50 shrink-0"
+            >
+              {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {isUploading ? 'Uploading...' : 'Upload File'}
             </button>
+
+            <div className="hidden sm:block w-px h-6 bg-slate-600 mx-1" />
+
+            {/* URL Input */}
+            <div className="flex w-full gap-2">
+              <input 
+                type="text" 
+                placeholder="Or paste link here..." 
+                className="w-full bg-slate-900 text-white px-3 py-2 text-sm rounded-lg border border-slate-600 focus:outline-none focus:border-cyan-500"
+                value={inputUrl}
+                onChange={(e) => setInputUrl(e.target.value)}
+              />
+              <button onClick={loadFile} className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors font-bold text-sm shrink-0">
+                <LinkIcon className="w-4 h-4" /> Load
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -74,8 +130,8 @@ export default function UniversalViewer({ roomId, canInteract = true, isLocalOnl
               <ImageIcon className="w-12 h-12" />
               <FileText className="w-12 h-12" />
             </div>
-            <p>Waiting for a document or image link...</p>
-            <p className="text-xs mt-2 text-slate-600 text-center max-w-sm">Supports direct links to JPG, PNG, PDF, DOCX, and PPTX.</p>
+            <p className="text-center px-4">Upload a file from your device or paste a link.</p>
+            <p className="text-xs mt-2 text-slate-600 text-center max-w-sm">Supports JPG, PNG, PDF, DOCX, and PPTX.</p>
           </div>
         ) : isImage(url) ? (
           <div className="w-full h-full flex items-center justify-center overflow-auto">
