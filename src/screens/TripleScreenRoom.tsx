@@ -5,7 +5,7 @@ import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
 import SyncYouTubePlayer from '../components/SyncYouTubePlayer';
 import SyncMediaViewer from '../components/SyncMediaViewer';
-import DocumentViewer from '../components/DocumentViewer';
+import UniversalViewer from '../components/UniversalViewer';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
@@ -435,7 +435,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {slot.type === 'mic' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Audio Stream</div>}
         {slot.type === 'document' && (
           <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-            <DocumentViewer roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} />
+            <UniversalViewer roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} />
           </div>
         )}
         {slot.type === 'screen_share' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Screen Sharing</div>}
