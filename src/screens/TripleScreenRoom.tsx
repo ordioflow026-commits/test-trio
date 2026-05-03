@@ -5,6 +5,7 @@ import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
 import SyncYouTubePlayer from '../components/SyncYouTubePlayer';
 import SyncMediaViewer from '../components/SyncMediaViewer';
+import DocumentViewer from '../components/DocumentViewer';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
@@ -432,7 +433,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {slot.type === 'media' && <div className="w-full h-full bg-black relative overflow-hidden"><SyncMediaViewer url={slot.url} canInteract={canInteractInside} onUploadSuccess={(newUrl) => updateSlot(index, { type: 'media', url: newUrl })} roomId={roomId} isHost={isHost} slotIndex={index} viewMode={viewMode} /></div>}
         {slot.type === 'camera' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Camera Stream</div>}
         {slot.type === 'mic' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Audio Stream</div>}
-        {slot.type === 'document' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Document Viewer</div>}
+        {slot.type === 'document' && (
+          <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+            <DocumentViewer roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} />
+          </div>
+        )}
         {slot.type === 'screen_share' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Screen Sharing</div>}
       </div>
     );
