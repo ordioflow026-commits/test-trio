@@ -5,9 +5,10 @@ import { supabase } from '../lib/supabase';
 interface WhiteboardProps {
   roomId?: string;
   canInteract?: boolean;
+  isLocalOnly?: boolean;
 }
 
-export default function Whiteboard({ roomId, canInteract = true }: WhiteboardProps) {
+export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = false }: WhiteboardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#00b4d8');
@@ -105,23 +106,25 @@ export default function Whiteboard({ roomId, canInteract = true }: WhiteboardPro
       ctx.lineTo(x, y);
       ctx.stroke();
 
-      // 2. البث الشبكي (يحدث فقط إذا مرت المدة المحددة لتخفيف الضغط)
-      const now = Date.now();
-      if (now - lastEmitTime.current >= THROTTLE_MS) {
-        if (channelRef.current) {
-          channelRef.current.send({
-            type: 'broadcast',
-            event: 'draw',
-            payload: {
-              x0: lastPos.current.x / canvas.width,
-              y0: lastPos.current.y / canvas.height,
-              x1: x / canvas.width,
-              y1: y / canvas.height,
-              color
-            }
-          });
+      // 2. البث الشبكي (يحدث فقط إذا مرت المدة المحددة ولم يكن الرسم محلياً فقط)
+      if (!isLocalOnly) {
+        const now = Date.now();
+        if (now - lastEmitTime.current >= THROTTLE_MS) {
+          if (channelRef.current) {
+            channelRef.current.send({
+              type: 'broadcast',
+              event: 'draw',
+              payload: {
+                x0: lastPos.current.x / canvas.width,
+                y0: lastPos.current.y / canvas.height,
+                x1: x / canvas.width,
+                y1: y / canvas.height,
+                color
+              }
+            });
+          }
+          lastEmitTime.current = now;
         }
-        lastEmitTime.current = now;
       }
     }
     lastPos.current = { x, y };
@@ -154,7 +157,7 @@ export default function Whiteboard({ roomId, canInteract = true }: WhiteboardPro
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     ctx?.clearRect(0, 0, canvas.width, canvas.height);
-    if (channelRef.current) {
+    if (!isLocalOnly && channelRef.current) {
       channelRef.current.send({ type: 'broadcast', event: 'draw', payload: { clear: true } });
     }
   };
