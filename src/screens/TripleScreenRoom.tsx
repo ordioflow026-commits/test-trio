@@ -395,7 +395,16 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       <div className="flex flex-col items-center justify-center h-full w-full relative group">
         {!editable && <div className="absolute inset-0 z-[60] bg-transparent" />}
         <LockIndicator />
-        {editable && <div className={`absolute top-4 ${dir === 'rtl' ? 'left-4' : 'right-4'} md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} z-[100] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 shadow-lg z-[999] relative pointer-events-auto"><X className="w-6 h-6" /></button></div>}
+        {editable && (
+          <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+            <button 
+              onClick={() => updateSlot(index, { type: 'empty' })} 
+              className={`p-3 bg-[#0f172a]/90 border border-red-500/50 rounded-full text-red-400 shadow-xl backdrop-blur-md z-[999] relative transition-transform hover:scale-110 ${isIdle ? 'pointer-events-none' : 'pointer-events-auto'}`}
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+        )}
         {slot.type === 'web' && (
           <div className="w-full h-full bg-slate-900 relative overflow-hidden">
             {slot.url ? (
