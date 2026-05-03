@@ -407,10 +407,20 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         )}
         {slot.type === 'web' && (
           <div className="w-full h-full bg-slate-900 relative overflow-hidden">
+            {/* Intelligent Wake Shield: Captures touch when idle to wake UI, then steps aside */}
+            {isIdle && (
+              <div 
+                className="absolute inset-0 z-[70] bg-transparent pointer-events-auto" 
+                onClick={resetIdleTimer} 
+                onTouchStart={resetIdleTimer}
+                onMouseMove={resetIdleTimer}
+              />
+            )}
+            
             {slot.url ? (
               <iframe src={slot.url} className="w-full h-full border-0 bg-white pointer-events-auto" sandbox="allow-same-origin allow-scripts allow-forms allow-popups" title="Web Browser" />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center">
+              <div className="w-full h-full flex flex-col items-center justify-center relative z-10 pointer-events-none">
                 <Globe className="w-20 h-20 text-cyan-500/50 mb-6 animate-pulse" />
                 <h2 className="text-2xl text-white font-bold">{isAr ? 'في انتظار الرابط...' : 'Waiting for URL...'}</h2>
               </div>
