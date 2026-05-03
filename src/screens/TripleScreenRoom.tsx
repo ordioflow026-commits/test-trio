@@ -43,6 +43,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [openLockMenu, setOpenLockMenu] = useState<number | null>(null);
   const [showYoutubeModal, setShowYoutubeModal] = useState<number | null>(null);
   const [youtubeInput, setYoutubeInput] = useState('');
+  const [showWebModal, setShowWebModal] = useState<number | null>(null);
+  const [webInput, setWebInput] = useState('');
   const idleTimerRef = useRef<any>(null);
   const zpRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
@@ -359,7 +361,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
              <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-cyan-400 font-bold uppercase tracking-wider">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => updateSlot(index, { type: 'web' })} className="p-6 bg-black/20 border border-white/5 hover:border-cyan-500/40 rounded-2xl transition-all"><Globe className="w-8 h-8 text-cyan-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Web</span></button>
+                <button onClick={() => setShowWebModal(index)} className="p-6 bg-black/20 border border-white/5 hover:border-cyan-500/40 rounded-2xl transition-all"><Globe className="w-8 h-8 text-cyan-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Web</span></button>
                 <button onClick={() => setShowYoutubeModal(index)} className="p-6 bg-black/20 border border-white/5 hover:border-red-500/40 rounded-2xl transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button>
               </div>
             </div>
@@ -394,7 +396,18 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {!editable && <div className="absolute inset-0 z-[60] bg-transparent" />}
         <LockIndicator />
         {editable && <div className={`absolute top-4 ${dir === 'rtl' ? 'left-4' : 'right-4'} md:top-8 md:${dir === 'rtl' ? 'left-8' : 'right-8'} z-[100] transition-all duration-500 ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><button onClick={() => updateSlot(index, { type: 'empty' })} className="p-3 bg-red-500/20 border border-red-500/50 rounded-full text-red-400 shadow-lg z-[999] relative pointer-events-auto"><X className="w-6 h-6" /></button></div>}
-        {slot.type === 'web' && <div className="w-full h-full bg-slate-900/80 flex flex-col items-center justify-center"><Globe className="w-20 h-20 text-cyan-500/50 mb-6" /><h2 className="text-2xl text-white font-bold">Web Browser</h2></div>}
+        {slot.type === 'web' && (
+          <div className="w-full h-full bg-slate-900 relative overflow-hidden">
+            {slot.url ? (
+              <iframe src={slot.url} className="w-full h-full border-0 bg-white pointer-events-auto" sandbox="allow-same-origin allow-scripts allow-forms allow-popups" title="Web Browser" />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center">
+                <Globe className="w-20 h-20 text-cyan-500/50 mb-6 animate-pulse" />
+                <h2 className="text-2xl text-white font-bold">{isAr ? 'في انتظار الرابط...' : 'Waiting for URL...'}</h2>
+              </div>
+            )}
+          </div>
+        )}
         {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center relative overflow-hidden">{slot.url ? <SyncYouTubePlayer videoId={slot.url} isHost={isHost} roomId={roomId as string} canInteract={editable} isActive={currentSlot === index} /> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
         {slot.type === 'whiteboard' && <div className={`w-full h-full p-4 ${editable ? 'pointer-events-auto' : 'pointer-events-none'}`}><Whiteboard roomId={roomId} canInteract={editable} /></div>}
         {slot.type === 'media' && <div className="w-full h-full bg-black relative overflow-hidden"><SyncMediaViewer url={slot.url} canInteract={editable} onUploadSuccess={(newUrl) => updateSlot(index, { type: 'media', url: newUrl })} roomId={roomId} isHost={isHost} slotIndex={index} viewMode={viewMode} /></div>}
@@ -469,6 +482,35 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             <div className="flex justify-end gap-3">
               <button onClick={() => {setShowYoutubeModal(null); setYoutubeInput('');}} className="px-5 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800 transition-colors">{isAr ? 'إلغاء' : 'Cancel'}</button>
               <button onClick={() => { if(youtubeInput.trim()) { updateSlot(showYoutubeModal, { type: 'youtube', url: youtubeInput }); setShowYoutubeModal(null); setYoutubeInput(''); } }} className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold shadow-lg shadow-red-600/20 transition-all active:scale-95">{isAr ? 'إضافة' : 'Add'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Web Browser Modal */}
+      {showWebModal !== null && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#0f172a] border border-slate-700/50 p-6 rounded-3xl shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-200">
+            <h3 className="text-xl font-bold text-white mb-4">{isAr ? 'تصفح موقع ويب' : 'Browse Website'}</h3>
+            <input
+              type="url"
+              value={webInput}
+              onChange={(e) => setWebInput(e.target.value)}
+              placeholder="https://example.com"
+              className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none mb-6"
+              dir="ltr"
+            />
+            <div className="flex justify-end gap-3">
+              <button onClick={() => {setShowWebModal(null); setWebInput('');}} className="px-5 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800 transition-colors">{isAr ? 'إلغاء' : 'Cancel'}</button>
+              <button onClick={() => { 
+                let url = webInput.trim(); 
+                if(url) { 
+                  if(!url.startsWith('http')) url = 'https://' + url; 
+                  updateSlot(showWebModal, { type: 'web', url: url }); 
+                  setShowWebModal(null); 
+                  setWebInput(''); 
+                } 
+              }} className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold shadow-lg shadow-cyan-600/20 transition-all active:scale-95">{isAr ? 'فتح الموقع' : 'Open'}</button>
             </div>
           </div>
         </div>
