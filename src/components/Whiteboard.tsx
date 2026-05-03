@@ -47,11 +47,31 @@ export default function Whiteboard({ roomId, canInteract = true }: WhiteboardPro
   }, [roomId]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-    }
+    const handleResize = () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        // Save current drawing
+        const ctx = canvas.getContext('2d');
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) tempCtx.drawImage(canvas, 0, 0);
+
+        // Resize canvas
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+
+        // Restore drawing scaled to new size
+        if (ctx) ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+      }
+    };
+
+    // Initial setup
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
