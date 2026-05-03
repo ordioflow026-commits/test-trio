@@ -108,9 +108,16 @@ export default function SyncMediaViewer({ url, canInteract, onUploadSuccess, roo
              ref={videoRef}
              src={url} 
              controls={canInteract} // Only people allowed to interact see the controls
-             onPlay={() => emitVideoEvent('play')}
-             onPause={() => emitVideoEvent('pause')}
+             onPlay={() => {
+               console.log('🟢 المضيف/الزائر ضغط تشغيل: هذا الحدث محلي ولم يرسل للإنترنت!');
+               emitVideoEvent('play');
+             }}
+             onPause={() => {
+               console.log('🔴 المضيف/الزائر ضغط إيقاف: هذا الحدث محلي ولم يرسل للإنترنت!');
+               emitVideoEvent('pause');
+             }}
              onSeeked={() => emitVideoEvent('seek')}
+             onTimeUpdate={(e) => console.log('⏳ وقت الفيديو يتغير محلياً:', e.currentTarget.currentTime)}
              className="max-w-full max-h-full rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.5)] outline-none animate-in zoom-in duration-300 pointer-events-auto"
           >
             {isAr ? 'متصفحك لا يدعم تشغيل الفيديو.' : 'Your browser does not support the video tag.'}
