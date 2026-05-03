@@ -247,6 +247,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const renderSlotContent = (slot: SlotData, index: number) => {
     const editable = canEditSlot(index);
     const lockState = slot.lock || 'none';
+    const canInteractInside = editable || (!isHost && lockState === 'yellow');
     
     const lockColors = {
       'none': 'border-white/20 text-white/50 hover:bg-white/10 hover:text-white hover:border-white/40',
@@ -393,7 +394,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     
     return (
       <div className="flex flex-col items-center justify-center h-full w-full relative group">
-        {!editable && <div className="absolute inset-0 z-[60] bg-transparent" />}
+        {!editable && lockState !== 'yellow' && <div className="absolute inset-0 z-[60] bg-transparent pointer-events-auto" />}
         <LockIndicator />
         {editable && (
           <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ${isIdle ? 'opacity-50' : 'opacity-100'}`}>
@@ -417,9 +418,9 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             )}
           </div>
         )}
-        {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center relative overflow-hidden">{slot.url ? <SyncYouTubePlayer videoId={slot.url} isHost={isHost} roomId={roomId as string} canInteract={editable} isActive={currentSlot === index} /> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
-        {slot.type === 'whiteboard' && <div className={`w-full h-full p-4 ${editable ? 'pointer-events-auto' : 'pointer-events-none'}`}><Whiteboard roomId={roomId} canInteract={editable} /></div>}
-        {slot.type === 'media' && <div className="w-full h-full bg-black relative overflow-hidden"><SyncMediaViewer url={slot.url} canInteract={editable} onUploadSuccess={(newUrl) => updateSlot(index, { type: 'media', url: newUrl })} roomId={roomId} isHost={isHost} slotIndex={index} viewMode={viewMode} /></div>}
+        {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center relative overflow-hidden">{slot.url ? <SyncYouTubePlayer videoId={slot.url} isHost={isHost} roomId={roomId as string} canInteract={canInteractInside} isActive={currentSlot === index} /> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
+        {slot.type === 'whiteboard' && <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}><Whiteboard roomId={roomId} canInteract={canInteractInside} /></div>}
+        {slot.type === 'media' && <div className="w-full h-full bg-black relative overflow-hidden"><SyncMediaViewer url={slot.url} canInteract={canInteractInside} onUploadSuccess={(newUrl) => updateSlot(index, { type: 'media', url: newUrl })} roomId={roomId} isHost={isHost} slotIndex={index} viewMode={viewMode} /></div>}
         {slot.type === 'camera' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Camera Stream</div>}
         {slot.type === 'mic' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Audio Stream</div>}
         {slot.type === 'document' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Document Viewer</div>}
