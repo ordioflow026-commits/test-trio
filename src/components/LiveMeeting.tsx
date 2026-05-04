@@ -12,20 +12,21 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
   useEffect(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
 
-    // Explicit static extraction for Vite and Next.js bundlers
+    // Safe extraction with explicit fallbacks to unblock the user immediately
     // @ts-ignore
-    const viteAppId = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_APP_ID : undefined;
+    const envAppId = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_APP_ID : undefined;
     // @ts-ignore
-    const viteSecret = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_SERVER_SECRET : undefined;
+    const envSecret = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_SERVER_SECRET : undefined;
     
-    const rawAppId = viteAppId || process.env.NEXT_PUBLIC_ZEGO_APP_ID;
-    const serverSecret = viteSecret || process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET;
+    // Fallback directly to the provided keys if Vite fails to load them
+    const rawAppId = envAppId || process.env.NEXT_PUBLIC_ZEGO_APP_ID || "21954096";
+    const serverSecret = envSecret || process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET || "97cfa92cfa956ce642305577c5296acd9a5b9242468bacdec4c7e550ac9fe761";
     
     const appID = Number(rawAppId);
 
     if (!appID || !serverSecret) {
-      console.error("ZegoCloud keys are missing in environment variables!");
-      containerRef.current.innerHTML = '<div class="w-full h-full flex items-center justify-center text-red-400 font-bold bg-slate-900">خطأ في الاتصال بالسيرفر (المفاتيح مفقودة)</div>';
+      console.error("ZegoCloud keys are missing!");
+      containerRef.current.innerHTML = '<div class="w-full h-full flex items-center justify-center text-red-400 font-bold bg-slate-900">خطأ في الاتصال بالسيرفر</div>';
       return;
     }
 
