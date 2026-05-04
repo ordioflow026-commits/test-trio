@@ -12,19 +12,25 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
   useEffect(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
 
-    const appID = Number(process.env.VITE_ZEGO_APP_ID || process.env.NEXT_PUBLIC_ZEGO_APP_ID); // Adjusted to match Vite environments, assuming this is Vite based on previous files. Wait, user provided NEXT_PUBLIC_ZEGO_APP_ID. I'll use exactly what they asked. But I should check if VITE is used. I'll stick to user's code.
+    const getEnv = (key: string) => {
+      try {
+        if (typeof import.meta !== 'undefined' && import.meta.env) return import.meta.env[key];
+        if (typeof process !== 'undefined' && process.env) return process.env[key];
+      } catch (e) {}
+      return undefined;
+    };
 
-    const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET;
+    const rawAppId = getEnv('VITE_ZEGO_APP_ID') || getEnv('NEXT_PUBLIC_ZEGO_APP_ID');
+    const serverSecret = getEnv('VITE_ZEGO_SERVER_SECRET') || getEnv('NEXT_PUBLIC_ZEGO_SERVER_SECRET');
+    const appID = Number(rawAppId);
 
     if (!appID || !serverSecret) {
       console.error("ZegoCloud keys are missing in environment variables!");
+      containerRef.current.innerHTML = '<div class="w-full h-full flex items-center justify-center text-red-400 font-bold bg-slate-900">خطأ في الاتصال بالسيرفر (المفاتيح مفقودة)</div>';
       return;
     }
 
-    // Generate random ID for the current session
     const userID = Math.random().toString(36).substring(2, 10);
-    
-    // Specific call room ID mapped to the main classroom ID
     const callRoomId = `live_${roomId}`;
 
     const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
@@ -43,10 +49,11 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
         mode: ZegoUIKitPrebuilt.VideoConference,
       },
       showScreenSharingButton: true,
-      turnOnMicrophoneWhenJoining: false,
-      turnOnCameraWhenJoining: false,
-      showPreJoinView: false, // Skip pre-join to save slot space
-      layout: 'Auto', // Automatically adjust grid for participants
+      turnOnMicrophoneWhenJoining: true,
+      turnOnCameraWhenJoining: true,
+      showPreJoinView: false,
+      layout: 'Auto',
+      showUserList: false,
     });
 
     return () => {
@@ -58,7 +65,7 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
 
   return (
     <div className="w-full h-full bg-[#1e1e1e] rounded-[32px] overflow-hidden relative border border-slate-700 shadow-2xl">
-      <div ref={containerRef} className="w-full h-full zego-container" style={{ width: '100%', height: '100%' }} />
+      <div ref={containerRef} className="w-full h-full" />
     </div>
   );
 }
