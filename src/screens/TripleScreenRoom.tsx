@@ -4,6 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
 import SyncYouTubePlayer from '../components/SyncYouTubePlayer';
+import SyncMediaViewer from '../components/SyncMediaViewer';
 import Notebook from '../components/Notebook';
 import UniversalViewer from '../components/UniversalViewer';
 import { supabase } from '../lib/supabase';
@@ -359,6 +360,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full pb-24">
+             {/* Internet */}
              <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-cyan-400 font-bold uppercase tracking-wider">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
               <div className="grid grid-cols-2 gap-4">
@@ -366,6 +368,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <button onClick={() => setShowYoutubeModal(index)} className="p-6 bg-black/20 border border-white/5 hover:border-red-500/40 rounded-2xl transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button>
               </div>
             </div>
+            {/* Education (3 tools) */}
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-purple-400 font-bold uppercase tracking-wider">{isAr ? 'الشرح والتعليم' : 'Education'}</h4>
               <div className="grid grid-cols-3 gap-3">
@@ -374,6 +377,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <button onClick={() => updateSlot(index, { type: 'screen_share' })} className="p-4 bg-black/20 border border-white/5 hover:border-indigo-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><MonitorUp className="w-6 h-6 text-indigo-400 mb-2" /><span className="text-[10px] text-white block text-center font-bold">Screen</span></button>
               </div>
             </div>
+            {/* Files (2 tools) */}
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-emerald-400 font-bold uppercase tracking-wider">{isAr ? 'الملفات والعرض' : 'Files'}</h4>
               <div className="grid grid-cols-2 gap-4">
@@ -381,11 +385,12 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <button onClick={() => updateSlot(index, { type: 'document' })} className="p-6 bg-black/20 border border-white/5 hover:border-teal-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><FileText className="w-8 h-8 text-teal-400 mb-2" /><span className="text-xs text-white block text-center font-bold">Docs</span></button>
               </div>
             </div>
+            {/* Live */}
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-amber-400 font-bold uppercase tracking-wider">{isAr ? 'التواصل الحي' : 'Live'}</h4>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => updateSlot(index, { type: 'camera' })} className="p-6 bg-black/20 border border-white/5 hover:border-amber-500/40 rounded-2xl transition-all"><Camera className="w-8 h-8 text-amber-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Camera</span></button>
-                <button onClick={() => updateSlot(index, { type: 'mic' })} className="p-6 bg-black/20 border border-white/5 hover:border-orange-500/40 rounded-2xl transition-all"><Mic className="w-8 h-8 text-orange-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Mic</span></button>
+                <button onClick={() => updateSlot(index, { type: 'camera' })} className="p-6 bg-black/20 border border-white/5 hover:border-amber-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><Camera className="w-8 h-8 text-amber-400 mb-2" /><span className="text-xs text-white block text-center font-bold">Camera</span></button>
+                <button onClick={() => updateSlot(index, { type: 'mic' })} className="p-6 bg-black/20 border border-white/5 hover:border-orange-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><Mic className="w-8 h-8 text-orange-400 mb-2" /><span className="text-xs text-white block text-center font-bold">Mic</span></button>
               </div>
             </div>
           </div>
@@ -431,6 +436,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         )}
         {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center relative overflow-hidden">{slot.url ? <SyncYouTubePlayer videoId={slot.url} isHost={isHost} roomId={roomId as string} canInteract={canInteractInside} isActive={currentSlot === index} /> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
         {slot.type === 'whiteboard' && <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}><Whiteboard roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} /></div>}
+        {slot.type === 'media' && <div className="w-full h-full bg-black relative overflow-hidden"><SyncMediaViewer url={slot.url} canInteract={canInteractInside} onUploadSuccess={(newUrl) => updateSlot(index, { type: 'media', url: newUrl })} roomId={roomId} isHost={isHost} slotIndex={index} viewMode={viewMode} /></div>}
         {slot.type === 'notes' && (
           <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}>
             <Notebook roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} />
