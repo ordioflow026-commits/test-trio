@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Send, X, MessageCircle, User } from 'lucide-react';
+import { Send, X, MessageCircle, User, Edit3 } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -95,6 +95,12 @@ export default function RoomChat({ roomId, isHost, isOpen, onClose }: RoomChatPr
     localStorage.setItem('chat_user_name', tempName.trim());
   };
 
+  const changeName = () => {
+    localStorage.removeItem('chat_user_name');
+    setTempName(userName); // Put current name in input
+    setUserName(''); // Clear active name to show the prompt screen
+  };
+
   const sendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !channelRef.current || !userName) return;
@@ -124,8 +130,19 @@ export default function RoomChat({ roomId, isHost, isOpen, onClose }: RoomChatPr
       <div className={`fixed top-0 ${dir === 'rtl' ? 'left-0' : 'right-0'} h-full w-[85%] sm:w-96 bg-slate-900 border-${dir === 'rtl' ? 'r' : 'l'} border-slate-700 shadow-2xl z-[101] transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : (dir === 'rtl' ? '-translate-x-full' : 'translate-x-full')}`}>
         
         <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800">
-          <h3 className="text-white font-bold flex items-center gap-2"><MessageCircle className="w-5 h-5 text-cyan-400"/> الدردشة المباشرة</h3>
-          <button onClick={onClose} className="p-2 bg-slate-700 hover:bg-slate-600 rounded-full text-slate-300 transition-colors"><X className="w-4 h-4"/></button>
+          <h3 className="text-white font-bold flex items-center gap-2">
+            <MessageCircle className="w-5 h-5 text-cyan-400"/> الدردشة المباشرة
+          </h3>
+          <div className="flex items-center gap-3">
+            {userName && (
+              <button onClick={changeName} className="text-xs flex items-center gap-1 text-slate-400 hover:text-cyan-400 transition-colors" title="تغيير الاسم">
+                <Edit3 className="w-4 h-4"/>
+              </button>
+            )}
+            <button onClick={onClose} className="p-2 bg-slate-700 hover:bg-slate-600 rounded-full text-slate-300 transition-colors">
+              <X className="w-4 h-4"/>
+            </button>
+          </div>
         </div>
 
         {!userName ? (
