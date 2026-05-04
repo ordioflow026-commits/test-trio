@@ -436,7 +436,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         )}
         {slot.type === 'youtube' && <div className="w-full h-full bg-black flex items-center justify-center relative overflow-hidden">{slot.url ? <SyncYouTubePlayer videoId={slot.url} isHost={isHost} roomId={roomId as string} canInteract={canInteractInside} isActive={currentSlot === index} /> : <Youtube className="w-20 h-20 text-red-500/50" />}</div>}
         {slot.type === 'whiteboard' && <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}><Whiteboard roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} /></div>}
-        {slot.type === 'media' && <div className="w-full h-full bg-black relative overflow-hidden"><SyncMediaViewer url={slot.url} canInteract={canInteractInside} onUploadSuccess={(newUrl) => updateSlot(index, { type: 'media', url: newUrl })} roomId={roomId} isHost={isHost} slotIndex={index} viewMode={viewMode} /></div>}
+        {slot.type === 'media' && <div className="w-full h-full bg-black relative overflow-hidden"><SyncMediaViewer url={slot.url} canInteract={canInteractInside} isLocalOnly={!editable} onUploadSuccess={(newUrl) => updateSlot(index, { type: 'media', url: newUrl })} roomId={roomId} isHost={isHost} slotIndex={index} viewMode={viewMode} /></div>}
         {slot.type === 'notes' && (
           <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}>
             <Notebook roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} />

@@ -11,9 +11,10 @@ interface Props {
   isHost?: boolean;
   slotIndex?: number;
   viewMode?: 'sync' | 'free';
+  isLocalOnly?: boolean;
 }
 
-export default function SyncMediaViewer({ url, canInteract, onUploadSuccess, roomId, isHost = false, slotIndex = 0, viewMode = 'sync' }: Props) {
+export default function SyncMediaViewer({ url, canInteract, onUploadSuccess, roomId, isHost = false, slotIndex = 0, viewMode = 'sync', isLocalOnly = false }: Props) {
   const [uploading, setUploading] = useState(false);
   const { language } = useLanguage();
   const isAr = language === 'ar';
@@ -69,11 +70,13 @@ export default function SyncMediaViewer({ url, canInteract, onUploadSuccess, roo
     // If remote update is running, OR if the user doesn't have permission to interact, block broadcasting
     if (!channelRef.current || !vid || isRemoteUpdate.current || !canInteract) return;
 
-    channelRef.current.send({
-      type: 'broadcast',
-      event: 'video_state_change',
-      payload: { type, time: vid.currentTime }
-    });
+    if (!isLocalOnly) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'video_state_change',
+        payload: { type, time: vid.currentTime }
+      });
+    }
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
