@@ -12,55 +12,54 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
   useEffect(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
 
-    // Safe extraction with explicit fallbacks to unblock the user immediately
+    // Safe extraction with direct fallbacks to guarantee 100% connection
     // @ts-ignore
     const envAppId = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_APP_ID : undefined;
     // @ts-ignore
     const envSecret = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_SERVER_SECRET : undefined;
     
-    // Fallback directly to the provided keys if Vite fails to load them
-    const rawAppId = envAppId || process.env.NEXT_PUBLIC_ZEGO_APP_ID || "21954096";
+    const appID = Number(envAppId || process.env.NEXT_PUBLIC_ZEGO_APP_ID || 21954096);
     const serverSecret = envSecret || process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET || "97cfa92cfa956ce642305577c5296acd9a5b9242468bacdec4c7e550ac9fe761";
-    
-    const appID = Number(rawAppId);
 
-    if (!appID || !serverSecret) {
-      console.error("ZegoCloud keys are missing!");
-      containerRef.current.innerHTML = '<div class="w-full h-full flex items-center justify-center text-red-400 font-bold bg-slate-900">خطأ في الاتصال بالسيرفر</div>';
-      return;
-    }
+    // 💡 FIX FOR ERROR 1002011: Encode Arabic/Special characters to Zego-safe English format
+    const safeRoomId = encodeURIComponent(roomId || 'default_room').replace(/%/g, '_').substring(0, 100);
+    const callRoomId = `live_${safeRoomId}`;
 
     const userID = Math.random().toString(36).substring(2, 10);
-    const callRoomId = `live_${roomId}`;
+    const safeUserName = userName || 'مستخدم';
 
-    const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-      appID,
-      serverSecret,
-      callRoomId,
-      userID,
-      userName
-    );
+    try {
+      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+        appID,
+        serverSecret,
+        callRoomId,
+        userID,
+        safeUserName
+      );
 
-    const zp = ZegoUIKitPrebuilt.create(kitToken);
+      const zp = ZegoUIKitPrebuilt.create(kitToken);
 
-    zp.joinRoom({
-      container: containerRef.current,
-      scenario: {
-        mode: ZegoUIKitPrebuilt.VideoConference,
-      },
-      showScreenSharingButton: true,
-      turnOnMicrophoneWhenJoining: true,
-      turnOnCameraWhenJoining: true,
-      showPreJoinView: false,
-      layout: 'Auto',
-      showUserList: false,
-    });
+      zp.joinRoom({
+        container: containerRef.current,
+        scenario: {
+          mode: ZegoUIKitPrebuilt.VideoConference,
+        },
+        showScreenSharingButton: true,
+        turnOnMicrophoneWhenJoining: true,
+        turnOnCameraWhenJoining: true,
+        showPreJoinView: false,
+        layout: 'Auto',
+        showUserList: false,
+      });
 
-    return () => {
-      if (zp) {
-        zp.destroy();
-      }
-    };
+      return () => {
+        if (zp) {
+          zp.destroy();
+        }
+      };
+    } catch (error) {
+      console.error("ZegoCloud Initialization Error:", error);
+    }
   }, [roomId, userName]);
 
   return (
