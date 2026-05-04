@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Eraser, Trash2 } from 'lucide-react';
+import { Eraser, Trash2, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface WhiteboardProps {
@@ -14,10 +14,8 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
   const [color, setColor] = useState('#00b4d8');
   const channelRef = useRef<any>(null);
   const lastPos = useRef<{ x: number, y: number } | null>(null);
-  
-  // 💡 إضافة متغيرات التحكم في سرعة الإرسال (Throttling)
   const lastEmitTime = useRef<number>(0);
-  const THROTTLE_MS = 30; // إرسال التحديثات كل 30 ملي ثانية كحد أقصى
+  const THROTTLE_MS = 30;
 
   useEffect(() => {
     if (!roomId) return;
@@ -51,7 +49,6 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
     const handleResize = () => {
       const canvas = canvasRef.current;
       if (canvas) {
-        // Save current drawing
         const ctx = canvas.getContext('2d');
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
@@ -59,32 +56,23 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
         const tempCtx = tempCanvas.getContext('2d');
         if (tempCtx) tempCtx.drawImage(canvas, 0, 0);
 
-        // Resize canvas
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
-
-        // Restore drawing scaled to new size
         if (ctx) ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
       }
     };
-
-    // Initial setup
     handleResize();
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isDrawing || !canInteract || !canvasRef.current) return;
-    
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
     const rect = canvas.getBoundingClientRect();
     let clientX, clientY;
-
     if ('touches' in e) {
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
@@ -92,12 +80,10 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
       clientX = (e as React.MouseEvent).clientX;
       clientY = (e as React.MouseEvent).clientY;
     }
-
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
     if (lastPos.current) {
-      // 1. الرسم المحلي (يحدث دائماً وبنعومة تامة)
       ctx.beginPath();
       ctx.strokeStyle = color;
       ctx.lineWidth = 4;
@@ -106,21 +92,13 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
       ctx.lineTo(x, y);
       ctx.stroke();
 
-      // 2. البث الشبكي (يحدث فقط إذا مرت المدة المحددة ولم يكن الرسم محلياً فقط)
       if (!isLocalOnly) {
         const now = Date.now();
         if (now - lastEmitTime.current >= THROTTLE_MS) {
           if (channelRef.current) {
             channelRef.current.send({
-              type: 'broadcast',
-              event: 'draw',
-              payload: {
-                x0: lastPos.current.x / canvas.width,
-                y0: lastPos.current.y / canvas.height,
-                x1: x / canvas.width,
-                y1: y / canvas.height,
-                color
-              }
+              type: 'broadcast', event: 'draw',
+              payload: { x0: lastPos.current.x / canvas.width, y0: lastPos.current.y / canvas.height, x1: x / canvas.width, y1: y / canvas.height, color }
             });
           }
           lastEmitTime.current = now;
@@ -162,8 +140,31 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
     }
   };
 
+  const downloadBoard = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const ctx = tempCanvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#0f172a'; // Match background color
+      ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+      ctx.drawImage(canvas, 0, 0);
+      const link = document.createElement('a');
+      link.download = `board_${Date.now()}.png`;
+      link.href = tempCanvas.toDataURL('image/png');
+      link.click();
+    }
+  };
+
   return (
     <div className="w-full h-full bg-slate-900 rounded-[32px] border border-slate-700/50 shadow-2xl relative overflow-hidden flex flex-col">
+      {/* Download Button visible to EVERYONE */}
+      <button onClick={downloadBoard} className="absolute top-4 right-4 z-[60] p-2.5 bg-slate-800/90 hover:bg-slate-700 backdrop-blur-md border border-cyan-500/50 rounded-full text-cyan-400 shadow-[0_4px_15px_rgba(0,180,216,0.3)] transition-all hover:scale-110" title="تحميل السبورة كصورة">
+        <Download className="w-5 h-5" />
+      </button>
+
       {canInteract && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-md px-4 py-2 rounded-full border border-[#00b4d8]/40 shadow-[0_4px_12px_rgba(0,0,0,0.3)] flex items-center gap-3 z-[60]">
           <button onClick={() => setColor('#00b4d8')} className={`w-6 h-6 rounded-full bg-[#00b4d8] ${color === '#00b4d8' ? 'ring-2 ring-white scale-110' : ''}`} />
@@ -176,17 +177,7 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
         </div>
       )}
       
-      <canvas
-        ref={canvasRef}
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={stopDrawing}
-        onMouseOut={stopDrawing}
-        onTouchStart={startDrawing}
-        onTouchMove={draw}
-        onTouchEnd={stopDrawing}
-        className={`flex-1 w-full h-full touch-none ${canInteract ? 'cursor-crosshair' : 'cursor-default'}`}
-      />
+      <canvas ref={canvasRef} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseOut={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} className={`flex-1 w-full h-full touch-none ${canInteract ? 'cursor-crosshair' : 'cursor-default'}`} />
     </div>
   );
 }
