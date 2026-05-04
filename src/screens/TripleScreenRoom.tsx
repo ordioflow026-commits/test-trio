@@ -49,6 +49,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [showWebModal, setShowWebModal] = useState<number | null>(null);
   const [webInput, setWebInput] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const idleTimerRef = useRef<any>(null);
   const zpRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
@@ -555,11 +556,20 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
       {/* Floating Chat Button */}
       <button 
-        onClick={() => setIsChatOpen(true)}
+        onClick={() => {
+          setIsChatOpen(true);
+          setUnreadCount(0); // Reset unread messages when opened
+        }}
         className={`fixed bottom-6 ${dir === 'rtl' ? 'left-6' : 'right-6'} z-[80] p-4 bg-cyan-600 hover:bg-cyan-500 rounded-full shadow-[0_4px_20px_rgba(0,180,216,0.4)] text-white transition-transform hover:scale-110 active:scale-95 flex items-center justify-center`}
         title="الدردشة"
       >
         <MessageCircle className="w-6 h-6"/>
+        
+        {unreadCount > 0 && !isChatOpen && (
+          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-slate-900 animate-bounce shadow-lg">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
       </button>
 
       {/* Slide-out Chat */}
@@ -567,7 +577,13 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         roomId={roomId} 
         isHost={isHost} 
         isOpen={isChatOpen} 
-        onClose={() => setIsChatOpen(false)} 
+        onClose={() => setIsChatOpen(false)}
+        onNewMessage={() => {
+          // Only increment if the chat drawer is currently closed
+          if (!isChatOpen) {
+            setUnreadCount(prev => prev + 1);
+          }
+        }}
       />
     </div>
   );

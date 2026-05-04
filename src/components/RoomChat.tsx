@@ -14,9 +14,10 @@ interface RoomChatProps {
   isHost: boolean;
   isOpen: boolean;
   onClose: () => void;
+  onNewMessage?: () => void;
 }
 
-export default function RoomChat({ roomId, isHost, isOpen, onClose }: RoomChatProps) {
+export default function RoomChat({ roomId, isHost, isOpen, onClose, onNewMessage }: RoomChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [userName, setUserName] = useState<string>('');
@@ -51,9 +52,15 @@ export default function RoomChat({ roomId, isHost, isOpen, onClose }: RoomChatPr
     channelRef.current = channel;
 
     channel.on('broadcast', { event: 'new_message' }, (payload) => {
+      const incomingMsg = payload.payload.message;
       setMessages((prev) => {
-        if (prev.find(m => m.id === payload.payload.message.id)) return prev;
-        return [...prev, payload.payload.message];
+        // Ignore if we already have this message (e.g., we sent it)
+        if (prev.find(m => m.id === incomingMsg.id)) return prev;
+        
+        // If it's a truly new message from someone else, trigger the notification
+        if (onNewMessage) onNewMessage();
+        
+        return [...prev, incomingMsg];
       });
     });
 
