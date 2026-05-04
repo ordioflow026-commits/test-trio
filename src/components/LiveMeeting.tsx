@@ -12,16 +12,15 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
   useEffect(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
 
-    const getEnv = (key: string) => {
-      try {
-        if (typeof import.meta !== 'undefined' && import.meta.env) return import.meta.env[key];
-        if (typeof process !== 'undefined' && process.env) return process.env[key];
-      } catch (e) {}
-      return undefined;
-    };
-
-    const rawAppId = getEnv('VITE_ZEGO_APP_ID') || getEnv('NEXT_PUBLIC_ZEGO_APP_ID');
-    const serverSecret = getEnv('VITE_ZEGO_SERVER_SECRET') || getEnv('NEXT_PUBLIC_ZEGO_SERVER_SECRET');
+    // Explicit static extraction for Vite and Next.js bundlers
+    // @ts-ignore
+    const viteAppId = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_APP_ID : undefined;
+    // @ts-ignore
+    const viteSecret = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_SERVER_SECRET : undefined;
+    
+    const rawAppId = viteAppId || process.env.NEXT_PUBLIC_ZEGO_APP_ID;
+    const serverSecret = viteSecret || process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET;
+    
     const appID = Number(rawAppId);
 
     if (!appID || !serverSecret) {
