@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, AlignJustify, Download } from 'lucide-react';
+import { FileText, AlignJustify, Download, FileText as FileTxt, FileText as FileWord } from 'lucide-react';
 
 interface NotebookProps {
   roomId?: string;
@@ -11,6 +11,7 @@ interface NotebookProps {
 export default function Notebook({ roomId, canInteract = true, isLocalOnly = false }: NotebookProps) {
   const [content, setContent] = useState('');
   const [isLined, setIsLined] = useState(false);
+  const [showDlMenu, setShowDlMenu] = useState(false);
   const channelRef = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
 
@@ -53,25 +54,44 @@ export default function Notebook({ roomId, canInteract = true, isLocalOnly = fal
     }
   };
 
-  const downloadNotes = () => {
-    if (!content.trim()) return; // Don't download empty files
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const downloadNotes = (format: 'txt' | 'doc') => {
+    if (!content.trim()) return;
+    let blob;
+    if (format === 'txt') {
+      blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    } else {
+      const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'></head><body dir="auto" style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6;"><p>${content.replace(/\n/g, '<br>')}</p></body></html>`;
+      blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    }
+    
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `notes_${Date.now()}.txt`;
+    link.download = `notes_${Date.now()}.${format}`;
     link.click();
+    setShowDlMenu(false);
   };
 
   return (
     <div className="w-full h-full bg-slate-100 rounded-[32px] border border-slate-700/50 shadow-2xl overflow-hidden flex flex-col relative pointer-events-auto">
       
-      
-      <div className="absolute top-4 right-6 z-50 flex gap-2">
+      <div className="absolute top-4 right-6 z-50 flex gap-3">
         
-        <button onClick={downloadNotes} className="flex items-center gap-2 px-3 py-2 bg-slate-800 text-cyan-400 hover:text-white hover:bg-slate-700 text-sm rounded-full shadow-lg transition-all" title="تحميل الملاحظات كملف نصي">
-          <Download className="w-4 h-4"/>
-          <span className="hidden sm:inline font-bold">تحميل</span>
-        </button>
+        <div className="relative">
+          <button onClick={() => setShowDlMenu(!showDlMenu)} className="flex items-center gap-2 px-3 py-2 bg-slate-800 text-cyan-400 hover:text-white hover:bg-slate-700 text-sm rounded-full shadow-lg transition-all" title="خيارات التحميل">
+            <Download className="w-4 h-4"/>
+            <span className="hidden sm:inline font-bold">تحميل</span>
+          </button>
+          {showDlMenu && (
+            <div className="absolute top-12 right-0 bg-[#0f172a]/95 border border-slate-700/50 rounded-xl shadow-2xl backdrop-blur-xl p-2 min-w-[140px] animate-in fade-in zoom-in duration-200">
+              <button onClick={() => downloadNotes('doc')} className="w-full flex items-center gap-3 p-2 hover:bg-white/10 rounded-lg text-slate-200 text-sm font-bold transition-colors">
+                <FileWord className="w-4 h-4 text-blue-400"/> ملف Word
+              </button>
+              <button onClick={() => downloadNotes('txt')} className="w-full flex items-center gap-3 p-2 hover:bg-white/10 rounded-lg text-slate-200 text-sm font-bold transition-colors">
+                <FileTxt className="w-4 h-4 text-slate-300"/> نص (TXT)
+              </button>
+            </div>
+          )}
+        </div>
 
         {canInteract && (
           <button onClick={togglePaperStyle} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white text-sm rounded-full hover:bg-slate-700 shadow-lg transition-colors" title="تغيير شكل الورقة">

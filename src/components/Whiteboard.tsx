@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Eraser, Trash2, Download } from 'lucide-react';
+import { Eraser, Trash2, Download, FileImage, FileText as FileWord } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface WhiteboardProps {
@@ -12,6 +12,7 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#00b4d8');
+  const [showDlMenu, setShowDlMenu] = useState(false);
   const channelRef = useRef<any>(null);
   const lastPos = useRef<{ x: number, y: number } | null>(null);
   const lastEmitTime = useRef<number>(0);
@@ -140,7 +141,7 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
     }
   };
 
-  const downloadBoard = () => {
+  const downloadBoard = (format: 'png' | 'doc') => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const tempCanvas = document.createElement('canvas');
@@ -148,22 +149,44 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
     tempCanvas.height = canvas.height;
     const ctx = tempCanvas.getContext('2d');
     if (ctx) {
-      ctx.fillStyle = '#0f172a'; // Match background color
+      ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
       ctx.drawImage(canvas, 0, 0);
+      
+      const dataUrl = tempCanvas.toDataURL('image/png');
       const link = document.createElement('a');
-      link.download = `board_${Date.now()}.png`;
-      link.href = tempCanvas.toDataURL('image/png');
+      link.download = `board_${Date.now()}.${format}`;
+
+      if (format === 'png') {
+        link.href = dataUrl;
+      } else {
+        const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'></head><body><img src="${dataUrl}" style="width:100%; max-width:800px;"/></body></html>`;
+        const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+        link.href = URL.createObjectURL(blob);
+      }
       link.click();
+      setShowDlMenu(false);
     }
   };
 
   return (
     <div className="w-full h-full bg-slate-900 rounded-[32px] border border-slate-700/50 shadow-2xl relative overflow-hidden flex flex-col">
-      {/* Download Button visible to EVERYONE */}
-      <button onClick={downloadBoard} className="absolute top-4 right-4 z-[60] p-2.5 bg-slate-800/90 hover:bg-slate-700 backdrop-blur-md border border-cyan-500/50 rounded-full text-cyan-400 shadow-[0_4px_15px_rgba(0,180,216,0.3)] transition-all hover:scale-110" title="تحميل السبورة كصورة">
-        <Download className="w-5 h-5" />
-      </button>
+      {/* Dropdown Download Menu */}
+      <div className="absolute top-4 right-4 z-[70]">
+        <button onClick={() => setShowDlMenu(!showDlMenu)} className="p-2.5 bg-slate-800/90 hover:bg-slate-700 backdrop-blur-md border border-cyan-500/50 rounded-full text-cyan-400 shadow-[0_4px_15px_rgba(0,180,216,0.3)] transition-all hover:scale-110">
+          <Download className="w-5 h-5" />
+        </button>
+        {showDlMenu && (
+          <div className="absolute top-12 right-0 bg-[#0f172a]/95 border border-slate-700/50 rounded-xl shadow-2xl backdrop-blur-xl p-2 min-w-[140px] animate-in fade-in zoom-in duration-200">
+            <button onClick={() => downloadBoard('png')} className="w-full flex items-center gap-3 p-2 hover:bg-white/10 rounded-lg text-slate-200 text-sm font-bold transition-colors">
+              <FileImage className="w-4 h-4 text-emerald-400" /> كصورة (PNG)
+            </button>
+            <button onClick={() => downloadBoard('doc')} className="w-full flex items-center gap-3 p-2 hover:bg-white/10 rounded-lg text-slate-200 text-sm font-bold transition-colors">
+              <FileWord className="w-4 h-4 text-blue-400" /> كملف (Word)
+            </button>
+          </div>
+        )}
+      </div>
 
       {canInteract && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-md px-4 py-2 rounded-full border border-[#00b4d8]/40 shadow-[0_4px_12px_rgba(0,0,0,0.3)] flex items-center gap-3 z-[60]">
