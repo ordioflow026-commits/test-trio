@@ -9,7 +9,7 @@ import UniversalViewer from '../components/UniversalViewer';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
-type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'notes' | 'camera' | 'screen_share' | 'document' | 'mic';
+type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'notes' | 'media' | 'camera' | 'screen_share' | 'document' | 'mic';
 type ViewMode = 'sync' | 'free';
 // 💡 تمت إضافة القفل الأبيض
 type LockState = 'none' | 'green' | 'yellow' | 'red' | 'white';
@@ -368,16 +368,17 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             </div>
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-purple-400 font-bold uppercase tracking-wider">{isAr ? 'الشرح والتعليم' : 'Education'}</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => updateSlot(index, { type: 'whiteboard' })} className="p-6 bg-black/20 border border-white/5 hover:border-purple-500/40 rounded-2xl transition-all"><PenTool className="w-8 h-8 text-purple-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Board</span></button>
-                <button onClick={() => updateSlot(index, { type: 'screen_share' })} className="p-6 bg-black/20 border border-white/5 hover:border-indigo-500/40 rounded-2xl transition-all"><MonitorUp className="w-8 h-8 text-indigo-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Screen</span></button>
+              <div className="grid grid-cols-3 gap-3">
+                <button onClick={() => updateSlot(index, { type: 'whiteboard' })} className="p-4 bg-black/20 border border-white/5 hover:border-purple-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><PenTool className="w-6 h-6 text-purple-400 mb-2" /><span className="text-[10px] text-white block text-center font-bold">Board</span></button>
+                <button onClick={() => updateSlot(index, { type: 'notes' })} className="p-4 bg-black/20 border border-white/5 hover:border-blue-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><FileText className="w-6 h-6 text-blue-400 mb-2" /><span className="text-[10px] text-white block text-center font-bold">Notes</span></button>
+                <button onClick={() => updateSlot(index, { type: 'screen_share' })} className="p-4 bg-black/20 border border-white/5 hover:border-indigo-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><MonitorUp className="w-6 h-6 text-indigo-400 mb-2" /><span className="text-[10px] text-white block text-center font-bold">Screen</span></button>
               </div>
             </div>
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-emerald-400 font-bold uppercase tracking-wider">{isAr ? 'الملفات والعرض' : 'Files'}</h4>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => updateSlot(index, { type: 'notes' })} className="p-6 bg-black/20 border border-white/5 hover:border-emerald-500/40 rounded-2xl transition-all"><FileText className="w-8 h-8 text-emerald-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Notes</span></button>
-                <button onClick={() => updateSlot(index, { type: 'document' })} className="p-6 bg-black/20 border border-white/5 hover:border-teal-500/40 rounded-2xl transition-all"><FileText className="w-8 h-8 text-teal-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Docs</span></button>
+                <button onClick={() => updateSlot(index, { type: 'media' })} className="p-6 bg-black/20 border border-white/5 hover:border-emerald-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><ImageIcon className="w-8 h-8 text-emerald-400 mb-2" /><span className="text-xs text-white block text-center font-bold">Media</span></button>
+                <button onClick={() => updateSlot(index, { type: 'document' })} className="p-6 bg-black/20 border border-white/5 hover:border-teal-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><FileText className="w-8 h-8 text-teal-400 mb-2" /><span className="text-xs text-white block text-center font-bold">Docs</span></button>
               </div>
             </div>
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
