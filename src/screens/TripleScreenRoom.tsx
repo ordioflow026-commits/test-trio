@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, FileText, MonitorUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, FileText, MonitorUp, MessageCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
@@ -7,6 +7,7 @@ import SyncYouTubePlayer from '../components/SyncYouTubePlayer';
 import SyncMediaViewer from '../components/SyncMediaViewer';
 import Notebook from '../components/Notebook';
 import UniversalViewer from '../components/UniversalViewer';
+import RoomChat from '../components/RoomChat';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
@@ -47,6 +48,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [youtubeInput, setYoutubeInput] = useState('');
   const [showWebModal, setShowWebModal] = useState<number | null>(null);
   const [webInput, setWebInput] = useState('');
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const idleTimerRef = useRef<any>(null);
   const zpRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
@@ -550,6 +552,23 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           </div>
         </div>
       )}
+
+      {/* Floating Chat Button */}
+      <button 
+        onClick={() => setIsChatOpen(true)}
+        className={`fixed bottom-6 ${dir === 'rtl' ? 'left-6' : 'right-6'} z-[80] p-4 bg-cyan-600 hover:bg-cyan-500 rounded-full shadow-[0_4px_20px_rgba(0,180,216,0.4)] text-white transition-transform hover:scale-110 active:scale-95 flex items-center justify-center`}
+        title="الدردشة"
+      >
+        <MessageCircle className="w-6 h-6"/>
+      </button>
+
+      {/* Slide-out Chat */}
+      <RoomChat 
+        roomId={roomId} 
+        isHost={isHost} 
+        isOpen={isChatOpen} 
+        onClose={() => setIsChatOpen(false)} 
+      />
     </div>
   );
 }
