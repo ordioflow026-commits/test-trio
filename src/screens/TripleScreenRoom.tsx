@@ -8,6 +8,7 @@ import SyncMediaViewer from '../components/SyncMediaViewer';
 import Notebook from '../components/Notebook';
 import UniversalViewer from '../components/UniversalViewer';
 import RoomChat from '../components/RoomChat';
+import LiveMeeting from '../components/LiveMeeting';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
@@ -445,14 +446,19 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             <Notebook roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} />
           </div>
         )}
-        {slot.type === 'camera' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Camera Stream</div>}
-        {slot.type === 'mic' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Audio Stream</div>}
+        {(slot.type === 'camera' || slot.type === 'mic' || slot.type === 'screen_share') && (
+          <div className={`w-full h-full p-2 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+            <LiveMeeting 
+              roomId={roomId as string} 
+              userName={typeof window !== 'undefined' ? (localStorage.getItem('chat_user_name') || 'مستخدم') : 'مستخدم'} 
+            />
+          </div>
+        )}
         {slot.type === 'document' && (
           <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}>
             <UniversalViewer roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} />
           </div>
         )}
-        {slot.type === 'screen_share' && <div className="w-full h-full bg-slate-900 flex items-center justify-center font-bold text-white uppercase tracking-widest">Screen Sharing</div>}
       </div>
     );
   };
