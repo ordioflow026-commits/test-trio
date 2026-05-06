@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
 interface LiveMeetingProps {
@@ -7,64 +7,101 @@ interface LiveMeetingProps {
 }
 
 export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
-  
-  // 💡 Smart Hashing Function: Converts Arabic/Complex strings into a unique Zego-safe number
-  const hashCode = (str: string) => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    return Math.abs(hash).toString();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [logs, setLogs] = useState<string[]>([]);
+  const hasAttempted = useRef(false);
+
+  const addLog = (msg: string) => {
+    setLogs(prev => [...prev, msg]);
+    console.log(msg);
   };
 
-  // 💡 The Official ZegoCloud Ref Pattern (Bypasses React 18 useEffect bugs)
-  const myMeeting = async (element: HTMLDivElement | null) => {
-    if (!element) return;
+  useEffect(() => {
+    // Prevent React 18 Strict Mode double-execution
+    if (hasAttempted.current) return;
+    hasAttempted.current = true;
+    let zp: any = null;
 
-    // Keys
-    const appID = 21954096;
-    const serverSecret = "97cfa92cfa956ce642305577c5296acd9a5b9242468bacdec4c7e550ac9fe761";
+    const startMeeting = async () => {
+      try {
+        addLog("⏳ 1. Starting ZegoCloud initialization...");
+        
+        // Hardcoding keys for diagnostic purity (bypassing any Vite .env issues)
+        const appID = 21954096;
+        const serverSecret = "97cfa92cfa956ce642305577c5296acd9a5b9242468bacdec4c7e550ac9fe761";
+        
+        addLog(`✅ 2. Keys loaded | AppID type: ${typeof appID} | Secret length: ${serverSecret.length}`);
 
-    // 100% Safe unique ID derived from the Arabic Room Name
-    const safeRoomId = `live_${hashCode(roomId || 'default')}`;
-    
-    const userID = `user_${Math.random().toString(36).substring(2, 10)}`;
-    const safeUserName = userName ? userName : `User_${Math.floor(Math.random() * 100)}`;
+        const safeRoomId = "testroom" + Math.floor(Math.random() * 1000);
+        const safeUserId = "user_" + Math.floor(Math.random() * 100000);
+        const safeUserName = "Guest_" + Math.floor(Math.random() * 1000);
 
-    try {
-      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-        appID,
-        serverSecret,
-        safeRoomId,
-        userID,
-        safeUserName
-      );
+        addLog(`✅ 3. Data sanitized | Room: ${safeRoomId} | User: ${safeUserName}`);
+        addLog("⏳ 4. Generating Token...");
 
-      const zp = ZegoUIKitPrebuilt.create(kitToken);
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+          appID,
+          serverSecret,
+          safeRoomId,
+          safeUserId,
+          safeUserName
+        );
 
-      zp.joinRoom({
-        container: element,
-        scenario: {
-          mode: ZegoUIKitPrebuilt.VideoConference,
-        },
-        showScreenSharingButton: true,
-        turnOnMicrophoneWhenJoining: false,
-        turnOnCameraWhenJoining: false,
-        showPreJoinView: false,
-        layout: 'Auto',
-        showUserList: false,
-      });
-    } catch (error) {
-      console.error("ZegoCloud Join Error:", error);
-    }
-  };
+        addLog("✅ 5. Token generated successfully!");
+        addLog("⏳ 6. Creating Zego Instance...");
+
+        zp = ZegoUIKitPrebuilt.create(kitToken);
+
+        addLog("✅ 7. Instance created! Sending joinRoom command...");
+
+        if (!containerRef.current) {
+           throw new Error("Container DOM element is missing!");
+        }
+
+        zp.joinRoom({
+          container: containerRef.current,
+          scenario: {
+            mode: ZegoUIKitPrebuilt.VideoConference,
+          },
+          showPreJoinView: false,
+          showUserList: false,
+        });
+
+        addLog("🚀 8. joinRoom executed. Waiting for Zego UI...");
+
+      } catch (error: any) {
+        addLog(`❌ CRITICAL ERROR CAUGHT:`);
+        addLog(`Message: ${error.message || JSON.stringify(error)}`);
+        if (error.stack) addLog(`Stack: ${error.stack.substring(0, 150)}...`);
+      }
+    };
+
+    startMeeting();
+
+    return () => {
+      if (zp) {
+        addLog("🧹 Cleanup: Destroying instance.");
+        zp.destroy();
+      }
+    };
+  }, []); // Empty dependency array
 
   return (
-    <div className="w-full h-full bg-[#0f172a] rounded-[32px] overflow-hidden relative border border-slate-700 shadow-2xl">
-      {/* Assigning the async function directly to the ref guarantees a single safe mount */}
-      <div ref={myMeeting} className="w-full h-full" />
+    <div className="w-full h-full bg-slate-900 rounded-[32px] overflow-hidden relative border border-slate-700 shadow-2xl">
+      {/* Zego UI Container */}
+      <div ref={containerRef} className="absolute inset-0 z-0" />
+      
+      {/* Diagnostic Overlay */}
+      <div className="absolute inset-0 z-50 bg-black/80 p-4 overflow-y-auto pointer-events-none">
+        <h3 className="text-cyan-400 font-bold mb-4 border-b border-cyan-800 pb-2">ZegoCloud Diagnostic Tracker:</h3>
+        <div className="flex flex-col gap-2 font-mono text-[10px] sm:text-xs text-green-400" dir="ltr">
+          {logs.map((log, idx) => (
+            <span key={idx} className={log.includes('❌') ? 'text-red-500 font-bold' : ''}>
+              {log}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
