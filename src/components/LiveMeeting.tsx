@@ -8,7 +8,6 @@ interface LiveMeetingProps {
 
 export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
 
-  // 💡 Smart Hashing Function: Converts ANY Arabic/Complex string into a unique Zego-safe ID
   const hashCode = (str: string) => {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -19,22 +18,13 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
     return Math.abs(hash).toString();
   };
 
-  // 💡 Official ZegoCloud Ref Pattern (100% bug-free for React 18)
   const myMeeting = async (element: HTMLDivElement | null) => {
     if (!element) return;
 
-    // Safe Environment Variable Extraction
-    const getEnv = (key: string) => {
-      try {
-        if (typeof import.meta !== 'undefined' && import.meta.env) return import.meta.env[key];
-        if (typeof process !== 'undefined' && process.env) return process.env[key];
-      } catch (e) {}
-      return undefined;
-    };
-
-    // Uses your provided keys as a permanent fallback if env fails
-    const appID = Number(getEnv('VITE_ZEGO_APP_ID') || getEnv('NEXT_PUBLIC_ZEGO_APP_ID') || 21954096);
-    const serverSecret = getEnv('VITE_ZEGO_SERVER_SECRET') || getEnv('NEXT_PUBLIC_ZEGO_SERVER_SECRET') || "97cfa92cfa956ce642305577c5296acd9a5b9242468bacdec4c7e550ac9fe761";
+    const appID = 21954096;
+    
+    // 🔴 تنبيه هام لكِ: احذفي النص العربي وضعي المفتاح السري الجديد (ServerSecret) بين علامتي التنصيص!
+    const serverSecret = "ضعي_مفتاح_SERVER_SECRET_الجديد_هنا"; 
 
     const safeRoomId = `live_${hashCode(roomId || 'default_room')}`;
     const userID = `user_${Math.random().toString(36).substring(2, 10)}`;
