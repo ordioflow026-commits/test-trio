@@ -12,28 +12,26 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
   useEffect(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
 
-    // @ts-ignore
-    const envAppId = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_APP_ID : undefined;
-    // @ts-ignore
-    const envSecret = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_SERVER_SECRET : undefined;
+    const appID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID || process.env.VITE_ZEGO_APP_ID || 21954096);
+    const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET || process.env.VITE_ZEGO_SERVER_SECRET || "97cfa92cfa956ce642305577c5296acd9a5b9242468bacdec4c7e550ac9fe761";
+
+    // 100% Safe Room ID (English Only)
+    const safeRoomId = "room_" + (roomId || "test").replace(/[^a-zA-Z0-9]/g, '');
+    const finalRoomId = safeRoomId.length > 6 ? safeRoomId.substring(0, 20) : "room_test_123";
+
+    // 100% Safe User ID
+    const userID = "user_" + Math.random().toString(36).substring(2, 8);
     
-    const appID = Number(envAppId || process.env.NEXT_PUBLIC_ZEGO_APP_ID || 21954096);
-    const serverSecret = envSecret || process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET || "97cfa92cfa956ce642305577c5296acd9a5b9242468bacdec4c7e550ac9fe761";
-
-    // 💡 AGGRESSIVE SANITIZATION: Strip ALL characters except English letters and numbers to 100% guarantee no 1002011 errors.
-    const cleanRoomId = (roomId || '').replace(/[^a-zA-Z0-9]/g, '');
-    const callRoomId = `live_${cleanRoomId || 'default123'}`.substring(0, 50);
-
-    const userID = Math.random().toString(36).substring(2, 10);
-    const safeUserName = userName || 'User';
+    // 💡 100% Safe User Name: Force English to bypass ZegoCloud Arabic character rejection
+    const finalUserName = "Participant_" + Math.floor(Math.random() * 1000);
 
     try {
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
         appID,
         serverSecret,
-        callRoomId,
+        finalRoomId,
         userID,
-        safeUserName
+        finalUserName
       );
 
       const zp = ZegoUIKitPrebuilt.create(kitToken);
@@ -44,8 +42,8 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
           mode: ZegoUIKitPrebuilt.VideoConference,
         },
         showScreenSharingButton: true,
-        turnOnMicrophoneWhenJoining: false, // Changed to false to prevent initial echo
-        turnOnCameraWhenJoining: false,     // Changed to false to let user choose when ready
+        turnOnMicrophoneWhenJoining: false,
+        turnOnCameraWhenJoining: false,
         showPreJoinView: false,
         layout: 'Auto',
         showUserList: false,
@@ -57,9 +55,9 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
         }
       };
     } catch (error) {
-      console.error("ZegoCloud Initialization Error:", error);
+      console.error("ZegoCloud Error:", error);
     }
-  }, [roomId, userName]);
+  }, [roomId]); // Removed userName from dependency to prevent re-renders
 
   return (
     <div className="w-full h-full bg-[#0f172a] rounded-[32px] overflow-hidden relative border border-slate-700 shadow-2xl">
