@@ -12,7 +12,6 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
   useEffect(() => {
     if (!containerRef.current || typeof window === 'undefined') return;
 
-    // Safe extraction with direct fallbacks to guarantee 100% connection
     // @ts-ignore
     const envAppId = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_ZEGO_APP_ID : undefined;
     // @ts-ignore
@@ -21,12 +20,12 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
     const appID = Number(envAppId || process.env.NEXT_PUBLIC_ZEGO_APP_ID || 21954096);
     const serverSecret = envSecret || process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET || "97cfa92cfa956ce642305577c5296acd9a5b9242468bacdec4c7e550ac9fe761";
 
-    // 💡 FIX FOR ERROR 1002011: Encode Arabic/Special characters to Zego-safe English format
-    const safeRoomId = encodeURIComponent(roomId || 'default_room').replace(/%/g, '_').substring(0, 100);
-    const callRoomId = `live_${safeRoomId}`;
+    // 💡 AGGRESSIVE SANITIZATION: Strip ALL characters except English letters and numbers to 100% guarantee no 1002011 errors.
+    const cleanRoomId = (roomId || '').replace(/[^a-zA-Z0-9]/g, '');
+    const callRoomId = `live_${cleanRoomId || 'default123'}`.substring(0, 50);
 
     const userID = Math.random().toString(36).substring(2, 10);
-    const safeUserName = userName || 'مستخدم';
+    const safeUserName = userName || 'User';
 
     try {
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
@@ -45,8 +44,8 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
           mode: ZegoUIKitPrebuilt.VideoConference,
         },
         showScreenSharingButton: true,
-        turnOnMicrophoneWhenJoining: true,
-        turnOnCameraWhenJoining: true,
+        turnOnMicrophoneWhenJoining: false, // Changed to false to prevent initial echo
+        turnOnCameraWhenJoining: false,     // Changed to false to let user choose when ready
         showPreJoinView: false,
         layout: 'Auto',
         showUserList: false,
@@ -63,7 +62,7 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
   }, [roomId, userName]);
 
   return (
-    <div className="w-full h-full bg-[#1e1e1e] rounded-[32px] overflow-hidden relative border border-slate-700 shadow-2xl">
+    <div className="w-full h-full bg-[#0f172a] rounded-[32px] overflow-hidden relative border border-slate-700 shadow-2xl">
       <div ref={containerRef} className="w-full h-full" />
     </div>
   );

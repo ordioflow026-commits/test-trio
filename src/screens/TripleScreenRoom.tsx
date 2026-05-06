@@ -12,7 +12,7 @@ import LiveMeeting from '../components/LiveMeeting';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
-type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'notes' | 'media' | 'camera' | 'screen_share' | 'document' | 'mic';
+type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'notes' | 'media' | 'camera' | 'screen_share' | 'document' | 'mic' | 'live';
 type ViewMode = 'sync' | 'free';
 // 💡 تمت إضافة القفل الأبيض
 type LockState = 'none' | 'green' | 'yellow' | 'red' | 'white';
@@ -372,16 +372,15 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <button onClick={() => setShowYoutubeModal(index)} className="p-6 bg-black/20 border border-white/5 hover:border-red-500/40 rounded-2xl transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button>
               </div>
             </div>
-            {/* Education (3 tools) */}
+            {/* Education */}
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-purple-400 font-bold uppercase tracking-wider">{isAr ? 'الشرح والتعليم' : 'Education'}</h4>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => updateSlot(index, { type: 'whiteboard' })} className="p-4 bg-black/20 border border-white/5 hover:border-purple-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><PenTool className="w-6 h-6 text-purple-400 mb-2" /><span className="text-[10px] text-white block text-center font-bold">Board</span></button>
                 <button onClick={() => updateSlot(index, { type: 'notes' })} className="p-4 bg-black/20 border border-white/5 hover:border-blue-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><FileText className="w-6 h-6 text-blue-400 mb-2" /><span className="text-[10px] text-white block text-center font-bold">Notes</span></button>
-                <button onClick={() => updateSlot(index, { type: 'screen_share' })} className="p-4 bg-black/20 border border-white/5 hover:border-indigo-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><MonitorUp className="w-6 h-6 text-indigo-400 mb-2" /><span className="text-[10px] text-white block text-center font-bold">Screen</span></button>
               </div>
             </div>
-            {/* Files (2 tools) */}
+            {/* Files */}
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-emerald-400 font-bold uppercase tracking-wider">{isAr ? 'الملفات والعرض' : 'Files'}</h4>
               <div className="grid grid-cols-2 gap-4">
@@ -389,13 +388,13 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <button onClick={() => updateSlot(index, { type: 'document' })} className="p-6 bg-black/20 border border-white/5 hover:border-teal-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><FileText className="w-8 h-8 text-teal-400 mb-2" /><span className="text-xs text-white block text-center font-bold">Docs</span></button>
               </div>
             </div>
-            {/* Live */}
+            {/* Live Broadcast (Merged UI) */}
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
-              <h4 className="text-amber-400 font-bold uppercase tracking-wider">{isAr ? 'التواصل الحي' : 'Live'}</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => updateSlot(index, { type: 'camera' })} className="p-6 bg-black/20 border border-white/5 hover:border-amber-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><Camera className="w-8 h-8 text-amber-400 mb-2" /><span className="text-xs text-white block text-center font-bold">Camera</span></button>
-                <button onClick={() => updateSlot(index, { type: 'mic' })} className="p-6 bg-black/20 border border-white/5 hover:border-orange-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><Mic className="w-8 h-8 text-orange-400 mb-2" /><span className="text-xs text-white block text-center font-bold">Mic</span></button>
-              </div>
+              <h4 className="text-amber-400 font-bold uppercase tracking-wider">{isAr ? 'الاتصال الحي' : 'Live'}</h4>
+              <button onClick={() => updateSlot(index, { type: 'live' })} className="w-full h-full p-4 bg-black/20 border border-white/5 hover:border-amber-500/40 rounded-2xl transition-all flex flex-col items-center justify-center">
+                <Video className="w-8 h-8 text-amber-400 mb-2" />
+                <span className="text-xs text-white block text-center font-bold">{isAr ? 'بث مباشر (صوت وصورة وشاشة)' : 'Live Stream'}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -446,11 +445,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             <Notebook roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} />
           </div>
         )}
-        {(slot.type === 'camera' || slot.type === 'mic' || slot.type === 'screen_share') && (
+        {(slot.type === 'live' || slot.type === 'camera' || slot.type === 'mic' || slot.type === 'screen_share') && (
           <div className={`w-full h-full p-2 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}>
             <LiveMeeting 
               roomId={roomId as string} 
-              userName={typeof window !== 'undefined' ? (localStorage.getItem('chat_user_name') || 'مستخدم') : 'مستخدم'} 
+              userName={typeof window !== 'undefined' ? (localStorage.getItem('chat_user_name') || myName) : myName} 
             />
           </div>
         )}
