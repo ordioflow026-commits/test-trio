@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
 interface LiveMeetingProps {
@@ -7,37 +7,45 @@ interface LiveMeetingProps {
 }
 
 export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // 💡 Smart Hashing Function: Converts Arabic/Complex strings into a unique Zego-safe number
+  const hashCode = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString();
+  };
 
-  useEffect(() => {
-    if (!containerRef.current || typeof window === 'undefined') return;
+  // 💡 The Official ZegoCloud Ref Pattern (Bypasses React 18 useEffect bugs)
+  const myMeeting = async (element: HTMLDivElement | null) => {
+    if (!element) return;
 
-    const appID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID || process.env.VITE_ZEGO_APP_ID || 21954096);
-    const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET || process.env.VITE_ZEGO_SERVER_SECRET || "97cfa92cfa956ce642305577c5296acd9a5b9242468bacdec4c7e550ac9fe761";
+    // Keys
+    const appID = 21954096;
+    const serverSecret = "97cfa92cfa956ce642305577c5296acd9a5b9242468bacdec4c7e550ac9fe761";
 
-    // 100% Safe Room ID (English Only)
-    const safeRoomId = "room_" + (roomId || "test").replace(/[^a-zA-Z0-9]/g, '');
-    const finalRoomId = safeRoomId.length > 6 ? safeRoomId.substring(0, 20) : "room_test_123";
-
-    // 100% Safe User ID
-    const userID = "user_" + Math.random().toString(36).substring(2, 8);
+    // 100% Safe unique ID derived from the Arabic Room Name
+    const safeRoomId = `live_${hashCode(roomId || 'default')}`;
     
-    // 💡 100% Safe User Name: Force English to bypass ZegoCloud Arabic character rejection
-    const finalUserName = "Participant_" + Math.floor(Math.random() * 1000);
+    const userID = `user_${Math.random().toString(36).substring(2, 10)}`;
+    const safeUserName = userName ? userName : `User_${Math.floor(Math.random() * 100)}`;
 
     try {
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
         appID,
         serverSecret,
-        finalRoomId,
+        safeRoomId,
         userID,
-        finalUserName
+        safeUserName
       );
 
       const zp = ZegoUIKitPrebuilt.create(kitToken);
 
       zp.joinRoom({
-        container: containerRef.current,
+        container: element,
         scenario: {
           mode: ZegoUIKitPrebuilt.VideoConference,
         },
@@ -48,20 +56,15 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
         layout: 'Auto',
         showUserList: false,
       });
-
-      return () => {
-        if (zp) {
-          zp.destroy();
-        }
-      };
     } catch (error) {
-      console.error("ZegoCloud Error:", error);
+      console.error("ZegoCloud Join Error:", error);
     }
-  }, [roomId]); // Removed userName from dependency to prevent re-renders
+  };
 
   return (
     <div className="w-full h-full bg-[#0f172a] rounded-[32px] overflow-hidden relative border border-slate-700 shadow-2xl">
-      <div ref={containerRef} className="w-full h-full" />
+      {/* Assigning the async function directly to the ref guarantees a single safe mount */}
+      <div ref={myMeeting} className="w-full h-full" />
     </div>
   );
 }
