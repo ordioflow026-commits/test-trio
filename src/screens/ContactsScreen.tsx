@@ -89,16 +89,12 @@ export default function ContactsScreen() {
     channel = supabase.channel('contacts_messages').on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => fetchChats()).subscribe();
 
     if (user) {
-      presenceChannel = supabase.channel('global_presence', { config: { presence: { key: user.id } } });
+      presenceChannel = supabase.channel('global_presence');
       presenceChannel
         .on('presence', { event: 'sync' }, updatePresence)
         .on('presence', { event: 'join' }, updatePresence)
         .on('presence', { event: 'leave' }, updatePresence)
-        .subscribe(async (status: string) => {
-          if (status === 'SUBSCRIBED') {
-            await presenceChannel.track({ id: user.id });
-          }
-        });
+        .subscribe();
     }
 
     return () => { 

@@ -12,9 +12,33 @@ import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
 
 function SessionChecker({ children }: { children: React.ReactNode }) {
-  const { setUser } = useUser();
+  const { user, setUser } = useUser();
   const [isChecking, setIsChecking] = useState(true);
   const navigate = useNavigate();
+
+  // Handle global presence
+  useEffect(() => {
+    if (!user) return;
+    
+    // Create the presence channel for this user
+    const presenceChannel = supabase.channel('global_presence', {
+      config: {
+        presence: {
+          key: user.id
+        }
+      }
+    });
+
+    presenceChannel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await presenceChannel.track({ id: user.id });
+      }
+    });
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [user]);
 
   useEffect(() => {
     let isMounted = true;
