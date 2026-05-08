@@ -125,7 +125,7 @@ export default function ContactsScreen() {
       const { data: profiles } = await supabase.from('profiles').select('id, phone');
       if (!profiles) return;
       const callees: any[] = [];
-      const content = isVideo ? (t('groupVideoCall') || '📹 Group Video Call') : (t('groupAudioCall') || '📞 Group Audio Call');
+      const content = isVideo ? (t('groupVideoCall') || '📹 مكالمة فيديو جماعية') : (t('groupAudioCall') || '📞 مكالمة جماعية');
 
       for (const phone of selectedContactIds) {
         const cleanPhone = phone.replace(/\D/g, '').slice(-9);
@@ -134,13 +134,20 @@ export default function ContactsScreen() {
           const targetZegoId = profile.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
           const contactObj = contacts.find(c => c.phone === phone);
           callees.push({ userID: targetZegoId, userName: contactObj?.name || 'User' });
-          await supabase.from('messages').insert({ sender_id: user?.id, receiver_id: profile.id, content, status: 'sent' });
+          
+          // Silently log a private message to this specific recipient
+          await supabase.from('messages').insert({ 
+            sender_id: user?.id, 
+            receiver_id: profile.id, 
+            content, 
+            status: 'sent' 
+          });
         }
       }
 
       if (callees.length > 0) {
         zp.sendCallInvitation({ callees, callType: isVideo ? 1 : 0, timeout: 60 }).catch(console.error);
-        selectedContactIds.forEach(id => toggleSelection({ id, name: '' }));
+        selectedContactIds.forEach(id => toggleSelection({ id, name: '' }, false));
       } else alert(t('noUsersFound') || 'No registered users found.');
     } catch (err) { console.error(err); }
   };
