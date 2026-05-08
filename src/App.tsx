@@ -16,58 +16,46 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
   const [isChecking, setIsChecking] = useState(true);
   const navigate = useNavigate();
 
-  // Handle global presence
   useEffect(() => {
     if (!user) return;
-    
-    // Create the presence channel for this user
-    const presenceChannel = supabase.channel('global_presence', {
-      config: {
-        presence: {
-          key: user.id
-        }
-      }
+    let isSubscribed = true;
+    const presenceChannel = supabase.channel('app_presence', { config: { presence: { key: user.id } } });
+
+    presenceChannel.on('presence', { event: 'sync' }, () => {
+       const state = presenceChannel.presenceState();
+       window.dispatchEvent(new CustomEvent('app_presence_sync', { detail: Object.keys(state) }));
     });
 
     presenceChannel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await presenceChannel.track({ id: user.id });
+      if (status === 'SUBSCRIBED' && isSubscribed) {
+        try { await presenceChannel.track({ id: user.id }); } catch(e){}
       }
     });
 
-    return () => {
-      supabase.removeChannel(presenceChannel);
-    };
+    return () => { isSubscribed = false; supabase.removeChannel(presenceChannel); };
   }, [user]);
 
   useEffect(() => {
     let isMounted = true;
+    
+    // Emergency Timeout to prevent infinite blue screen
+    const emergencyTimeout = setTimeout(() => {
+      if (isMounted) setIsChecking(false);
+    }, 3000);
 
     const loadUser = async (session: any) => {
       if (!session?.user) {
-        if (isMounted) {
-          setUser(null);
-          setIsChecking(false);
-        }
+        if (isMounted) { setUser(null); setIsChecking(false); }
         return;
       }
-      
       try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
         if (isMounted) {
           if (profile) {
             setUser({ id: profile.id, fullName: profile.name, phone: profile.phone });
-            if (window.location.pathname === '/') {
-              navigate('/main', { replace: true });
-            }
+            if (window.location.pathname === '/') navigate('/main', { replace: true });
           } else {
-             // User exists in auth but no profile - maybe mid-signup, keep logged out until signup finish
-             setUser(null);
+            setUser(null);
           }
           setIsChecking(false);
         }
@@ -76,42 +64,22 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // 1. Initial Check
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        if (isMounted) setIsChecking(false);
-      } else {
-        loadUser(session);
-      }
-    });
+      if (!session) { if (isMounted) setIsChecking(false); }
+      else loadUser(session);
+    }).catch(() => { if (isMounted) setIsChecking(false); });
 
-    // 2. Listen for auth changes to persist session automatically
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        loadUser(session);
-      } else if (event === 'SIGNED_OUT') {
-        if (isMounted) {
-          setUser(null);
-          setIsChecking(false);
-          navigate('/', { replace: true });
-        }
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') loadUser(session);
+      else if (event === 'SIGNED_OUT') {
+        if (isMounted) { setUser(null); setIsChecking(false); navigate('/', { replace: true }); }
       }
     });
 
-    return () => { 
-      isMounted = false; 
-      subscription.unsubscribe();
-    };
+    return () => { isMounted = false; clearTimeout(emergencyTimeout); subscription.unsubscribe(); };
   }, [navigate, setUser]);
 
-  if (isChecking) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-      </div>
-    );
-  }
-
+  if (isChecking) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center"><Loader2 className="w-12 h-12 text-[#00b4d8] animate-spin" /></div>;
   return <>{children}</>;
 }
 
@@ -134,9 +102,9 @@ export default function App() {
                 </ZegoProvider>
               </SessionChecker>
             </SelectionProvider>
-        </div>
-      </BrowserRouter>
-    </UserProvider>
-  </LanguageProvider>
+          </div>
+        </BrowserRouter>
+      </UserProvider>
+    </LanguageProvider>
   );
 }
