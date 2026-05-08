@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X, Square, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Mic, Paperclip, Camera, Send, Image as ImageIcon, FileText, File, Check, CheckCheck, Copy, Trash2, X, Square, ArrowDown, CornerUpLeft } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { useZego } from '../contexts/ZegoContext';
@@ -48,6 +48,7 @@ export default function ChatDetailScreen() {
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [inputKey, setInputKey] = useState(Date.now());
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [replyToMsg, setReplyToMsg] = useState<Message | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -223,7 +224,14 @@ export default function ChatDetailScreen() {
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !user || !contactProfileId) return;
-    const content = messageText.trim();
+    
+    let content = messageText.trim();
+    if (replyToMsg) {
+      const senderName = replyToMsg.sender_id === user.id ? (t('you') || 'أنت') : contact.name;
+      content = `[REPLY|${senderName}|${replyToMsg.content}] ${content}`;
+      setReplyToMsg(null);
+    }
+    
     setMessageText('');
     
     const tempId = generateUUID();
@@ -365,6 +373,18 @@ export default function ChatDetailScreen() {
             <span className="font-semibold text-[18px]">{selectedMessageIds.length}</span>
           </div>
           <div className="flex items-center gap-2">
+            {selectedMessageIds.length === 1 && (
+              <button 
+                onClick={() => {
+                  const targetMsg = messages.find(m => m.id === selectedMessageIds[0]);
+                  if (targetMsg) setReplyToMsg(targetMsg);
+                  setSelectedMessageIds([]);
+                }} 
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <CornerUpLeft className="w-6 h-6 text-white" />
+              </button>
+            )}
             <button onClick={handleCopyMultiple} className="p-2 hover:bg-white/10 rounded-full transition-colors">
               <Copy className="w-6 h-6 text-white" />
             </button>
@@ -479,27 +499,54 @@ export default function ChatDetailScreen() {
                           className={`max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm text-white select-none relative ${isMe ? 'bg-[#00b4d8] rounded-br-none' : 'bg-slate-800/80 rounded-bl-none border border-slate-700/50'}`}
                         >
                           {selectedMessageIds.length > 0 && <div className="absolute inset-0 z-10 cursor-pointer rounded-2xl" />}
-
-                          {msg.content.startsWith('Audio: ') ? (
-                            <div dir="ltr" style={{ minWidth: '200px', width: '100%', maxWidth: '240px' }}>
-                              <audio controls preload="metadata" src={msg.content.replace('Audio: ', '')} style={{ display: 'block', width: '100%', minWidth: '200px', height: '54px', minHeight: '54px', flexShrink: 0 }} className="outline-none rounded-full bg-slate-100/10" />
-                            </div>
-                          ) : msg.content.startsWith('File: ') ? (
-                            <div className="flex flex-col gap-1 mt-1">
-                              {msg.content.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || msg.content.includes('#.jpg') ? (
-                                <img src={msg.content.replace('File: ', '')} className="max-w-[200px] rounded-lg cursor-pointer" alt="attachment" onClick={() => setFullScreenImage(msg.content.replace('File: ', ''))} />
-                              ) : (
-                                <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/20 rounded-xl hover:bg-black/30 transition-colors mt-1 relative z-20">
-                                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                                    <FileText className="w-5 h-5 text-white" />
+                          
+                          {(() => {
+                            const replyMatch = msg.content.match(/^\[REPLY\|(.*?)\|(.*?)\] ([\s\S]*)$/);
+                            if (replyMatch) {
+                              const [_, quoteSender, quoteContent, actualContent] = replyMatch;
+                              
+                              let displayQuote = quoteContent;
+                              if (quoteContent.startsWith('Audio: ')) displayQuote = '🎵 Audio';
+                              else if (quoteContent.startsWith('File: ')) displayQuote = '📎 Attachment';
+                              
+                              return (
+                                <div className="flex flex-col gap-1.5 w-full">
+                                  <div className="w-full bg-black/20 rounded-xl px-3 py-2 border-l-4 border-[#00E5FF] mb-1">
+                                    <span className="text-[#00E5FF] text-[12px] font-bold block mb-0.5">{quoteSender}</span>
+                                    <p className="text-[13px] text-white/80 line-clamp-2 truncate">{displayQuote}</p>
                                   </div>
-                                  <span className="text-sm font-medium text-white underline-offset-4 underline truncate max-w-[150px]">
-                                    عرض الملف المرفق
-                                  </span>
-                                </a>
-                              )}
-                            </div>
-                          ) : <p className="text-[15px]">{msg.content}</p>}
+                                  <p className="text-[15px]">{actualContent}</p>
+                                </div>
+                              );
+                            }
+                            
+                            if (msg.content.startsWith('Audio: ')) {
+                              return (
+                                <div dir="ltr" style={{ minWidth: '200px', width: '100%', maxWidth: '240px' }}>
+                                  <audio controls preload="metadata" src={msg.content.replace('Audio: ', '')} style={{ display: 'block', width: '100%', minWidth: '200px', height: '54px', minHeight: '54px', flexShrink: 0 }} className="outline-none rounded-full bg-slate-100/10" />
+                                </div>
+                              );
+                            } else if (msg.content.startsWith('File: ')) {
+                              return (
+                                <div className="flex flex-col gap-1 mt-1">
+                                  {msg.content.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || msg.content.includes('#.jpg') ? (
+                                    <img src={msg.content.replace('File: ', '')} className="max-w-[200px] rounded-lg cursor-pointer" alt="attachment" onClick={() => setFullScreenImage(msg.content.replace('File: ', ''))} />
+                                  ) : (
+                                    <a href={msg.content.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/20 rounded-xl hover:bg-black/30 transition-colors mt-1 relative z-20">
+                                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                                        <FileText className="w-5 h-5 text-white" />
+                                      </div>
+                                      <span className="text-sm font-medium text-white underline-offset-4 underline truncate max-w-[150px]">
+                                        عرض الملف المرفق
+                                      </span>
+                                    </a>
+                                  )}
+                                </div>
+                              );
+                            } else {
+                              return <p className="text-[15px]">{msg.content}</p>;
+                            }
+                          })()}
                           
                           <div className="flex items-center justify-end gap-1 mt-1 relative z-0">
                             <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -565,6 +612,30 @@ export default function ChatDetailScreen() {
       )}
 
       <footer className={`px-2 pb-3 mb-safe z-40 w-full relative ${(!contactProfileId && !isLoading) || selectedMessageIds.length > 0 ? 'opacity-40 pointer-events-none' : ''}`}>
+        
+        {replyToMsg && (
+          <div className="px-3 pb-2 mx-2 mb-2">
+            <div className="bg-slate-800/90 backdrop-blur-sm p-3 rounded-2xl flex items-center justify-between border-l-4 border-[#00E5FF] shadow-lg">
+              <div className="flex flex-col mr-2 w-full">
+                <span className="text-[#00E5FF] text-[13px] font-bold">
+                  {replyToMsg.sender_id === user?.id ? (t('you') || 'أنت') : contact.name}
+                </span>
+                <span className="text-white/80 text-[14px] line-clamp-1">
+                  {replyToMsg.content.startsWith('Audio: ') ? '🎵 Audio' : 
+                   replyToMsg.content.startsWith('File: ') ? '📎 Attachment' : 
+                   replyToMsg.content.replace(/^\[REPLY\|(.*?)\|(.*?)\] /, '')}
+                </span>
+              </div>
+              <button 
+                onClick={() => setReplyToMsg(null)}
+                className="p-1.5 hover:bg-white/10 rounded-full transition-colors shrink-0"
+              >
+                <X className="w-5 h-5 text-white/70" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {recordedAudioBlob ? (
           <div className="flex items-center gap-2 bg-[#009fb7] p-1 pl-2 rounded-[28px] shadow-sm">
             <button onClick={cancelRecording} className="p-3 bg-red-400 text-white rounded-full hover:bg-red-500 transition-colors shadow-sm"><Trash2 className="w-5 h-5" /></button>
