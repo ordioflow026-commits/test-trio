@@ -84,8 +84,10 @@ export default function ContactsScreen() {
 
   const handleDeleteContact = (e: React.MouseEvent, contact: Contact) => {
     e.stopPropagation();
-    setContacts(prev => prev.filter(c => c.phone !== contact.phone));
-    if (selectedContactIds.includes(contact.phone)) toggleSelection({ id: contact.phone, name: contact.name }, false);
+    if (window.confirm(t('confirmDeleteContact') || `Are you sure you want to delete ${contact.name}?`)) {
+      setContacts(prev => prev.filter(c => c.phone !== contact.phone));
+      if (selectedContactIds.includes(contact.phone)) toggleSelection({ id: contact.phone, name: contact.name }, false);
+    }
   };
 
   const triggerContactFetch = async () => {
@@ -185,6 +187,15 @@ export default function ContactsScreen() {
                     <p className="text-[14px] truncate text-slate-400 text-left">{chatInfo?.lastMessage ? (chatInfo.lastMessage.startsWith('File: ') ? (t('attachment') || '📎 Attachment') : chatInfo.lastMessage) : contact.phone}</p>
                   </div>
                   {chatInfo && chatInfo.unreadCount > 0 && !isSelectionMode && <div className="bg-blue-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">{chatInfo.unreadCount}</div>}
+                  
+                  {!isSelectionMode && (
+                    <button 
+                      onClick={(e) => handleDeleteContact(e, contact)}
+                      className="ml-2 p-2 text-slate-500 hover:text-red-500 hover:bg-slate-800 rounded-full transition-colors shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
               <AnimatePresence>
