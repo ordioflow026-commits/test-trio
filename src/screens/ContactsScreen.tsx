@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Phone, Video, Check, X, Mic, ChevronDown, Users, Loader2, Trash2, UserPlus, Plus } from 'lucide-react';
+import { MessageSquare, Phone, Video, Check, X, Mic, ChevronDown, Users, Loader2, Trash2, UserPlus, Plus, Search } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Capacitor } from '@capacitor/core';
 import { Contacts } from '@capacitor-community/contacts';
@@ -24,6 +24,7 @@ export default function ContactsScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
   const [chatSummaries, setChatSummaries] = useState<Record<string, { lastMessage: string, lastTime: string, unreadCount: number }>>({});
@@ -162,11 +163,25 @@ export default function ContactsScreen() {
   
   const onlinePhonesSet = new Set(onlineUserIds.map(id => profileToPhone.get(id)).filter(Boolean));
 
+  const filteredContacts = contacts.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || String(c.phone).includes(searchQuery));
+
   return (
     <div className="flex flex-col h-full bg-slate-900 relative" dir={dir}>
       <div className="px-4 py-3 flex justify-between items-center border-b border-slate-800/60 bg-slate-900 z-10 shadow-sm">
         <button onClick={() => triggerContactFetch()} className="flex items-center gap-2 text-[13px] font-semibold text-blue-400"><Users className="w-4 h-4" /> {t('loadContacts') || 'Load Contacts'}</button>
         <button onClick={() => setShowAddForm(!showAddForm)} className="flex items-center gap-2 text-[13px] font-semibold text-blue-400"><UserPlus className="w-4 h-4" /> {t('addManual') || 'Add Manual'}</button>
+      </div>
+      <div className="px-4 py-2 bg-slate-900 z-10 border-b border-slate-800/60 shadow-sm relative">
+        <div className="relative">
+          <Search className={`absolute ${dir === 'rtl' ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400`} />
+          <input
+            type="text"
+            placeholder={t('search') || 'Search contacts...'}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className={`w-full bg-slate-800/80 border border-slate-700/50 rounded-xl ${dir === 'rtl' ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2.5 text-white text-[15px] outline-none placeholder-slate-400 focus:border-blue-500/50 transition-colors`}
+          />
+        </div>
       </div>
       <AnimatePresence>
         {showAddForm && (
@@ -184,7 +199,7 @@ export default function ContactsScreen() {
       </AnimatePresence>
       <div className="flex-1 overflow-y-auto pt-2 pb-20">
         {isLoadingContacts && <div className="flex flex-col items-center p-6 text-slate-400"><Loader2 className="w-8 h-8 animate-spin mb-2" /><span>{t('loading') || 'Loading...'}</span></div>}
-        {contacts.map((contact) => {
+        {filteredContacts.map((contact) => {
             const rawPhone = contact?.phone ? String(contact.phone) : '';
             const safePhone = rawPhone.replace(/\D/g, '').slice(-9);
             
