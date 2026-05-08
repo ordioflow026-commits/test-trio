@@ -28,9 +28,11 @@ export default function ContactsScreen() {
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
   const [chatSummaries, setChatSummaries] = useState<Record<string, { lastMessage: string, lastTime: string, unreadCount: number }>>({});
+  const [onlinePhones, setOnlinePhones] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const profileToPhoneRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => { localStorage.setItem('triosync_device_contacts', JSON.stringify(contacts)); }, [contacts]);
 
@@ -40,6 +42,20 @@ export default function ContactsScreen() {
     window.addEventListener('fetch-contacts', handleFetch);
 
     let channel: any = null;
+    let presenceChannel: any = null;
+
+    const updatePresence = () => {
+      if (!presenceChannel) return;
+      const state = presenceChannel.presenceState();
+      const onlineIds = Object.keys(state);
+      const onlinePhonesSet = new Set<string>();
+      onlineIds.forEach(id => {
+        const phone = profileToPhoneRef.current.get(id);
+        if (phone) onlinePhonesSet.add(phone);
+      });
+      setOnlinePhones(onlinePhonesSet);
+    };
+
     const fetchChats = async () => {
       if (!user || !isMounted) return;
       const { data: profiles } = await supabase.from('profiles').select('id, phone');
@@ -53,6 +69,8 @@ export default function ContactsScreen() {
           newSummaries[cleanPhone] = { lastMessage: '', lastTime: '', unreadCount: 0 };
         }
       });
+      profileToPhoneRef.current = profileToPhone;
+      updatePresence();
       const { data: messages } = await supabase.from('messages').select('*').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: true });
       if (!messages || !isMounted) return;
       messages.forEach(msg => {
@@ -69,7 +87,26 @@ export default function ContactsScreen() {
     };
     fetchChats();
     channel = supabase.channel('contacts_messages').on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => fetchChats()).subscribe();
-    return () => { isMounted = false; window.removeEventListener('fetch-contacts', handleFetch); if (channel) supabase.removeChannel(channel); };
+
+    if (user) {
+      presenceChannel = supabase.channel('global_presence', { config: { presence: { key: user.id } } });
+      presenceChannel
+        .on('presence', { event: 'sync' }, updatePresence)
+        .on('presence', { event: 'join' }, updatePresence)
+        .on('presence', { event: 'leave' }, updatePresence)
+        .subscribe(async (status: string) => {
+          if (status === 'SUBSCRIBED') {
+            await presenceChannel.track({ id: user.id });
+          }
+        });
+    }
+
+    return () => { 
+      isMounted = false; 
+      window.removeEventListener('fetch-contacts', handleFetch); 
+      if (channel) supabase.removeChannel(channel); 
+      if (presenceChannel) supabase.removeChannel(presenceChannel);
+    };
   }, [user]);
 
   const handleManualAdd = (e: React.FormEvent) => {
@@ -197,7 +234,12 @@ export default function ContactsScreen() {
             return (
             <div key={`${contact.id}-${contact.phone}`} className="relative">
               <div onMouseDown={() => handleTouchStart(contact)} onMouseUp={handleTouchEnd} onTouchStart={() => handleTouchStart(contact)} onTouchEnd={handleTouchEnd} onClick={() => handleTap(contact)} className={`flex items-center px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-[#0070a8]' : 'hover:bg-slate-800/50'}`}>
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold mx-4 shrink-0 ${isSelected ? 'bg-[#00b4d8] text-white' : 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30'}`}>{isSelected ? <Check className="w-6 h-6" /> : contact.initials}</div>
+                <div className="relative mx-4 shrink-0">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold ${isSelected ? 'bg-[#00b4d8] text-white' : 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30'}`}>{isSelected ? <Check className="w-6 h-6" /> : contact.initials}</div>
+                  {onlinePhones.has(contact.phone.replace(/\D/g, '').slice(-9)) && (
+                    <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-slate-900 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                  )}
+                </div>
                 
                 {/* 💡 التحديث الأساسي: عزل منطقة الاسم والرقم لتبقى متناسقة ولا تنعكس */}
                 <div className="flex-1 border-b border-slate-800/60 pb-3 flex justify-between items-center px-2 min-w-0" dir="ltr">
