@@ -146,9 +146,9 @@ export default function ContactsScreen() {
           
           callees.push({ userID: targetZegoId, userName: contactName });
           
-          // 💡 التحديث: صياغة رسالة دقيقة لكل شخص تحدد المتصل والمستقبل
+          // 💡 التحديث: رسالة طبيعية وواضحة بدون ذكر اسم المستقبل
           const callIcon = isVideo ? '📹 مكالمة فيديو' : '📞 مكالمة صوتية';
-          const content = `${callIcon}\nالمتصل: ${myName}\nالمستقبل: ${contactName}`;
+          const content = `تم الاتصال بك ${callIcon} من طرف ${myName}`;
 
           // إرسال السجل الصامت
           await supabase.from('messages').insert({ 
