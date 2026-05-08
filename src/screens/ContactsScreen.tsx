@@ -28,7 +28,9 @@ export default function ContactsScreen() {
   const [newContactPhone, setNewContactPhone] = useState('');
   const [chatSummaries, setChatSummaries] = useState<Record<string, { lastMessage: string, lastTime: string, unreadCount: number }>>({});
   
-  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>(() => {
+    return (window as any).currentOnlineUsers || [];
+  });
   const [profileToPhone, setProfileToPhone] = useState<Map<string, string>>(new Map());
   
   const navigate = useNavigate();

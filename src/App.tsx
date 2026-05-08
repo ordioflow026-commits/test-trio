@@ -23,7 +23,9 @@ function SessionChecker({ children }: { children: React.ReactNode }) {
 
     presenceChannel.on('presence', { event: 'sync' }, () => {
        const state = presenceChannel.presenceState();
-       window.dispatchEvent(new CustomEvent('app_presence_sync', { detail: Object.keys(state) }));
+       const activeIds = Object.keys(state);
+       (window as any).currentOnlineUsers = activeIds;
+       window.dispatchEvent(new CustomEvent('app_presence_sync', { detail: activeIds }));
     });
 
     presenceChannel.subscribe(async (status) => {
