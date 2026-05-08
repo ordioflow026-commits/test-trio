@@ -125,7 +125,16 @@ export default function ContactsScreen() {
       const { data: profiles } = await supabase.from('profiles').select('id, phone');
       if (!profiles) return;
       const callees: any[] = [];
-      const content = isVideo ? (t('groupVideoCall') || '📹 مكالمة فيديو جماعية') : (t('groupAudioCall') || '📞 مكالمة جماعية');
+      
+      // 💡 استخراج اسم المتصل (المضيف) من الذاكرة المحلية أو الإيميل
+      let myName = user?.email ? user.email.split('@')[0] : 'المضيف';
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          if (parsed.fullName) myName = parsed.fullName;
+        } catch(e) {}
+      }
 
       for (const phone of selectedContactIds) {
         const cleanPhone = phone.replace(/\D/g, '').slice(-9);
@@ -133,9 +142,15 @@ export default function ContactsScreen() {
         if (profile) {
           const targetZegoId = profile.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
           const contactObj = contacts.find(c => c.phone === phone);
-          callees.push({ userID: targetZegoId, userName: contactObj?.name || 'User' });
+          const contactName = contactObj?.name || 'مستخدم';
           
-          // Silently log a private message to this specific recipient
+          callees.push({ userID: targetZegoId, userName: contactName });
+          
+          // 💡 التحديث: صياغة رسالة دقيقة لكل شخص تحدد المتصل والمستقبل
+          const callIcon = isVideo ? '📹 مكالمة فيديو' : '📞 مكالمة صوتية';
+          const content = `${callIcon}\nالمتصل: ${myName}\nالمستقبل: ${contactName}`;
+
+          // إرسال السجل الصامت
           await supabase.from('messages').insert({ 
             sender_id: user?.id, 
             receiver_id: profile.id, 
