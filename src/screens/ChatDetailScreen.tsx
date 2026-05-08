@@ -51,7 +51,10 @@ export default function ChatDetailScreen() {
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [inputKey, setInputKey] = useState(Date.now());
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
   
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingChannelRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const cancelRecordingRef = useRef(false);
@@ -123,6 +126,31 @@ export default function ChatDetailScreen() {
     initChat();
     return () => { isMounted = false; if (channel) supabase.removeChannel(channel); };
   }, [contact.phone, user]);
+
+  useEffect(() => {
+    if (!user || !contactProfileId) return;
+
+    const typingChannel = supabase.channel('chat_typing_status');
+    typingChannelRef.current = typingChannel;
+
+    typingChannel
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        if (payload.payload?.senderId === contactProfileId) {
+          setIsOtherUserTyping(true);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => {
+            setIsOtherUserTyping(false);
+          }, 3000);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(typingChannel);
+      typingChannelRef.current = null;
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, [user, contactProfileId]);
 
   useEffect(() => {
     const markMessagesAsRead = async () => {
@@ -202,6 +230,17 @@ export default function ChatDetailScreen() {
     await Promise.all(uploadPromises);
     setUploadingCount(prev => Math.max(0, prev - files.length));
     setInputKey(Date.now());
+  };
+
+  const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessageText(e.target.value);
+    if (user && typingChannelRef.current) {
+      typingChannelRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { senderId: user.id }
+      }).catch(console.error);
+    }
   };
 
   const handleSendMessage = async () => {
@@ -357,7 +396,11 @@ export default function ChatDetailScreen() {
               <div className="w-10 h-10 rounded-full bg-[#3b82f6] flex items-center justify-center font-semibold shrink-0">{contact.initials}</div>
               <div className="flex flex-col">
                 <span className="font-semibold text-[17px] leading-tight truncate max-w-[150px]">{contact.name}</span>
-                <span className="text-[13px] text-slate-300 mt-0.5">{contact.phone}</span>
+                {isOtherUserTyping ? (
+                  <span className="text-[13px] text-[#00E5FF] mt-0.5 animate-pulse">{dir === 'rtl' ? 'جاري الكتابة...' : 'typing...'}</span>
+                ) : (
+                  <span className="text-[13px] text-slate-300 mt-0.5">{contact.phone}</span>
+                )}
               </div>
             </div>
           </div>
@@ -495,7 +538,7 @@ export default function ChatDetailScreen() {
         ) : (
           <div className="flex items-end gap-2">
             <div className="flex-1 bg-[#009fb7] rounded-[28px] flex items-center shadow-sm pl-4 pr-1 min-h-[48px]">
-              <textarea value={messageText} onChange={e => setMessageText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Message" className="flex-1 bg-transparent text-white outline-none py-3 resize-none max-h-32" rows={1} />
+              <textarea value={messageText} onChange={handleTyping} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Message" className="flex-1 bg-transparent text-white outline-none py-3 resize-none max-h-32" rows={1} />
               <div className="flex items-center gap-1 text-white shrink-0 ml-2">
                 <button onClick={() => setShowAttachmentMenu(!showAttachmentMenu)} className="p-2 hover:bg-white/20 rounded-full"><Paperclip className="w-[22px] h-[22px]" /></button>
                 <button onClick={() => cameraInputRef.current?.click()} className="p-2 hover:bg-white/20 rounded-full"><Camera className="w-[22px] h-[22px]" /></button>
