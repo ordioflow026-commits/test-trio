@@ -275,20 +275,7 @@ export default function MainScreen() {
             </button>
             <span className="font-semibold text-lg">{selectedContactIds.length} {t('selected') || 'Selected'}</span>
           </div>
-          <div className="flex items-center gap-4 pr-2">
-            <button
-               onClick={() => setActiveCall({ isVideo: true, title: 'Group Call', count: selectedContactIds.length })}
-               className="hover:scale-110 transition-transform"
-            >
-              <Video className="w-6 h-6 fill-white" />
-            </button>
-            <button
-               onClick={() => setActiveCall({ isVideo: false, title: 'Group Call', count: selectedContactIds.length })}
-               className="hover:scale-110 transition-transform"
-            >
-              <Phone className="w-5 h-5 fill-white" />
-            </button>
-          </div>
+          {/* The group call buttons (Video and Phone) have been removed from here as requested */}
         </div>
       )}
 
