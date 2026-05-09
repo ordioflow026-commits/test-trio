@@ -210,6 +210,22 @@ export default function ChatDetailScreen() {
     if (error) setMessages(prev => prev.filter(m => m.id !== tempId));
   };
 
+  const handleReaction = async (msg: Message) => {
+    if (!user || msg.deleted_for === user.id) return;
+    const reactToken = ' [REACT|❤️]';
+    let newContent = msg.content;
+    const hasReaction = newContent.endsWith(reactToken);
+    
+    if (hasReaction) {
+      newContent = newContent.replace(reactToken, '');
+    } else {
+      newContent = newContent + reactToken;
+    }
+    
+    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, content: newContent } : m));
+    await supabase.from('messages').update({ content: newContent }).eq('id', msg.id);
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0 || !user || !contactProfileId) return;
@@ -437,6 +453,14 @@ export default function ChatDetailScreen() {
                 const replyText = isReply ? replyMatch[2] : '';
                 const actualContent = isReply ? replyMatch[3] : msg.content;
                 
+                let displayContent = actualContent;
+                let reactionEmoji = null;
+                const reactMatch = displayContent.match(/(.*?) \[REACT\|(.*?)\]$/);
+                if (reactMatch) {
+                  displayContent = reactMatch[1];
+                  reactionEmoji = reactMatch[2];
+                }
+                
                 return (
                   <React.Fragment key={msg.id}>
                     {showDateSeparator && (
@@ -449,7 +473,7 @@ export default function ChatDetailScreen() {
                         </div>
                       )}
                       <div className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
-                        <div onContextMenu={(e) => { e.preventDefault(); if (!selectedMessageIds.includes(msg.id)) setSelectedMessageIds(prev => [...prev, msg.id]); }} className={`max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm text-white select-none relative ${isMe ? 'bg-[#00b4d8] rounded-br-none' : 'bg-slate-800/80 rounded-bl-none border border-slate-700/50'}`}>
+                        <div onDoubleClick={() => handleReaction(msg)} onContextMenu={(e) => { e.preventDefault(); if (!selectedMessageIds.includes(msg.id)) setSelectedMessageIds(prev => [...prev, msg.id]); }} className={`max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm text-white select-none relative ${isMe ? 'bg-[#00b4d8] rounded-br-none' : 'bg-slate-800/80 rounded-bl-none border border-slate-700/50'}`}>
                           {selectedMessageIds.length > 0 && <div className="absolute inset-0 z-10 cursor-pointer rounded-2xl" />}
                           
                           {/* 💡 Display Reply Box inside the bubble */}
@@ -460,21 +484,27 @@ export default function ChatDetailScreen() {
                             </div>
                           )}
 
-                          {actualContent.startsWith('Audio: ') ? (
-                            <div dir="ltr" style={{ minWidth: '200px', width: '100%', maxWidth: '240px' }}><audio controls preload="metadata" src={actualContent.replace('Audio: ', '')} style={{ display: 'block', width: '100%', minWidth: '200px', height: '54px', minHeight: '54px', flexShrink: 0 }} className="outline-none rounded-full bg-slate-100/10" /></div>
-                          ) : actualContent.startsWith('File: ') ? (
+                          {displayContent.startsWith('Audio: ') ? (
+                            <div dir="ltr" style={{ minWidth: '200px', width: '100%', maxWidth: '240px' }}><audio controls preload="metadata" src={displayContent.replace('Audio: ', '')} style={{ display: 'block', width: '100%', minWidth: '200px', height: '54px', minHeight: '54px', flexShrink: 0 }} className="outline-none rounded-full bg-slate-100/10" /></div>
+                          ) : displayContent.startsWith('File: ') ? (
                             <div className="flex flex-col gap-1 mt-1">
-                              {actualContent.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || actualContent.includes('#.jpg') ? (
-                                <img src={actualContent.replace('File: ', '')} className="max-w-[200px] rounded-lg cursor-pointer" alt="attachment" onClick={() => setFullScreenImage(actualContent.replace('File: ', ''))} />
+                              {displayContent.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || displayContent.includes('#.jpg') ? (
+                                <img src={displayContent.replace('File: ', '')} className="max-w-[200px] rounded-lg cursor-pointer" alt="attachment" onClick={() => setFullScreenImage(displayContent.replace('File: ', ''))} />
                               ) : (
-                                <a href={actualContent.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/20 rounded-xl hover:bg-black/30 transition-colors mt-1 relative z-20"><div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0"><FileText className="w-5 h-5 text-white" /></div><span className="text-sm font-medium text-white underline-offset-4 underline truncate max-w-[150px]">عرض الملف المرفق</span></a>
+                                <a href={displayContent.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/20 rounded-xl hover:bg-black/30 transition-colors mt-1 relative z-20"><div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0"><FileText className="w-5 h-5 text-white" /></div><span className="text-sm font-medium text-white underline-offset-4 underline truncate max-w-[150px]">عرض الملف المرفق</span></a>
                               )}
                             </div>
-                          ) : <p className="text-[15px]">{actualContent}</p>}
+                          ) : <p className="text-[15px]">{displayContent}</p>}
                           <div className="flex items-center justify-end gap-1 mt-1 relative z-0">
                             <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             {msg.status === 'read' ? <Check strokeWidth={3} className="w-[14px] h-[14px] text-[#00E5FF]" /> : <Check strokeWidth={3} className="w-[14px] h-[14px] text-white/70" />}
                           </div>
+
+                          {reactionEmoji && (
+                            <div className="absolute -bottom-2 -right-1.5 bg-slate-800 text-[13px] rounded-full px-1.5 py-0.5 shadow-md border border-slate-600 z-10 animate-in zoom-in duration-200">
+                              {reactionEmoji}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
