@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, FileText, MonitorUp, MessageCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, MicOff, FileText, MonitorUp, MessageCircle } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
@@ -14,7 +14,6 @@ import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
 type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'notes' | 'media' | 'camera' | 'screen_share' | 'document' | 'mic' | 'live';
 type ViewMode = 'sync' | 'free';
-// 💡 تمت إضافة القفل الأبيض
 type LockState = 'none' | 'green' | 'yellow' | 'red' | 'white';
 
 interface SlotData { type: ContentType; url?: string; lock?: LockState; }
@@ -38,6 +37,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const isAr = language === 'ar';
   const stateRef = useRef({ slots, currentSlot, viewMode });
   const hostWasPresent = useRef(false);
+
+  // 💡 حالات الاتصال الصوتي الجديد
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const audioContainerRef = useRef<HTMLDivElement>(null);
+  const zcRef = useRef<any>(null);
 
   useEffect(() => {
     stateRef.current = { slots, currentSlot, viewMode };
@@ -72,6 +76,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
   const handleExit = () => { 
     if (zpRef.current) { try { zpRef.current.destroy(); } catch (e) {} } 
+    if (zcRef.current) { try { zcRef.current.destroy(); } catch (e) {} } 
     onExit(); 
   };
 
@@ -83,6 +88,56 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         } catch (err) {}
     }
     handleExit();
+  };
+
+  // 💡 دالة تشغيل الاتصال الصوتي الجماعي
+  const toggleVoiceChat = () => {
+    if (isVoiceActive) {
+      if (zcRef.current) {
+        zcRef.current.destroy();
+        zcRef.current = null;
+      }
+      setIsVoiceActive(false);
+    } else {
+      setIsVoiceActive(true);
+      setTimeout(() => {
+        if (!audioContainerRef.current) return;
+        try {
+          const appID = Number(import.meta.env.VITE_ZEGO_APP_ID || 0);
+          const serverSecret = import.meta.env.VITE_ZEGO_SERVER_SECRET || '';
+          
+          if (!appID || !serverSecret) {
+            alert(isAr ? "حدث خطأ: معرّف Zego مفقود من النظام!" : "Zego App ID is missing!");
+            setIsVoiceActive(false);
+            return;
+          }
+
+          const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+            appID, serverSecret, `audio_room_${roomId}`, user?.id || Date.now().toString(), myName
+          );
+          
+          const zc = ZegoUIKitPrebuilt.create(kitToken);
+          zcRef.current = zc;
+          
+          zc.joinRoom({
+            container: audioContainerRef.current,
+            scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
+            showMyCameraToggleButton: false,
+            showAudioVideoSettingsButton: false,
+            showScreenSharingButton: false,
+            showTextChat: false,
+            showUserList: false,
+            turnOnCameraWhenJoining: false,
+            turnOnMicrophoneWhenJoining: true,
+            showPreJoinView: false,
+            layout: 'Floating',
+          });
+        } catch(err) {
+          console.error("Zego Audio Room Error:", err);
+          setIsVoiceActive(false);
+        }
+      }, 300);
+    }
   };
 
   useEffect(() => {
@@ -130,20 +185,17 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
              if (isHost) {
                  setCurrentSlot(c);
              } else {
-                 // 💡 منطق الزوار الذكي لمعالجة "الكواليس"
                  const currentSlots = s || slots;
                  const whiteIndexes = currentSlots.map((slot, idx) => slot.lock === 'white' ? idx : -1).filter(idx => idx !== -1);
                  
                  if (whiteIndexes.length > 0) {
                      if (whiteIndexes.includes(c)) {
-                         // إذا انتقل المضيف إلى شاشة بيضاء، اسحب الزوار إليها
                          setCurrentSlot(c);
                      } else {
-                         // إذا انتقل المضيف للكواليس (شاشة غير بيضاء)، أبقِ الزوار في شاشتهم البيضاء الحالية
                          setCurrentSlot(prev => whiteIndexes.includes(prev) ? prev : whiteIndexes[0]);
                      }
                  } else {
-                     setCurrentSlot(c); // السلوك الافتراضي إذا لم يكن هناك قفل أبيض
+                     setCurrentSlot(c);
                  }
              }
           }
@@ -211,15 +263,12 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
     setCurrentSlot(targetSlot);
     if (targetLock === 'yellow') {
-       // Local navigation
     } else {
-       // Global navigation
        broadcastState(targetSlot, slots, viewMode);
     }
     resetIdleTimer();
   };
 
-  // 💡 منع الزوار تماماً من التنقل إذا وجد قفل أبيض
   const getLeftTarget = () => {
     if (isHost) return currentSlot - 1;
     const hasWhiteLock = slots.some(s => s.lock === 'white');
@@ -246,7 +295,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
   const leftTarget = getLeftTarget();
   const rightTarget = getRightTarget();
-  
   const canGoLeft = leftTarget >= 0 && leftTarget <= 2;
   const canGoRight = rightTarget >= 0 && rightTarget <= 2;
 
@@ -264,9 +312,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     };
 
     const LockIndicator = () => {
-       if (!isHost) {
-           return null; // Guest UI clutter removed
-       }
+       if (!isHost) return null; 
 
        if (index === 2 && lockState === 'none' && slots[1].lock === 'none') return null;
        if (index === 0 && lockState === 'none' && slots[2].lock === 'none') return null;
@@ -303,39 +349,33 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
        return (
          <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-           {isHost ? (
-              <div className="flex items-start gap-3">
-                  <button 
-                     onClick={handleMainClick} 
-                     className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}
-                  >
-                    {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                  </button>
+           <div className="flex items-start gap-3">
+               <button 
+                  onClick={handleMainClick} 
+                  className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}
+               >
+                 {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+               </button>
 
-                  {isMenuOpen && viewMode !== 'sync' && (
-                      <div dir="ltr" className="flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[140px]">
-                          {availableLocks.map((l, i) => (
-                              <button
-                                  key={`${l}-${i}`}
-                                  onClick={() => setSlotLock(index, l)}
-                                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group"
-                              >
-                                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 ${lockColors[l]} group-hover:scale-110 transition-transform`}>
-                                      {l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                                  </div>
-                                  <span className="text-[10px] font-bold whitespace-nowrap text-slate-200">
-                                      {labels[l]}
-                                  </span>
-                              </button>
-                          ))}
-                      </div>
-                  )}
-              </div>
-           ) : (
-              <div className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md ${lockColors[lockState]}`}>
-                <Lock className="w-4 h-4" />
-              </div>
-           )}
+               {isMenuOpen && viewMode !== 'sync' && (
+                   <div dir="ltr" className="flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[140px]">
+                       {availableLocks.map((l, i) => (
+                           <button
+                               key={`${l}-${i}`}
+                               onClick={() => setSlotLock(index, l)}
+                               className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group"
+                           >
+                               <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 ${lockColors[l]} group-hover:scale-110 transition-transform`}>
+                                   {l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                               </div>
+                               <span className="text-[10px] font-bold whitespace-nowrap text-slate-200">
+                                   {labels[l]}
+                               </span>
+                           </button>
+                       ))}
+                   </div>
+               )}
+           </div>
          </div>
        );
     };
@@ -364,7 +404,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full pb-24">
-             {/* Internet */}
              <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-cyan-400 font-bold uppercase tracking-wider">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
               <div className="grid grid-cols-2 gap-4">
@@ -372,7 +411,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <button onClick={() => setShowYoutubeModal(index)} className="p-6 bg-black/20 border border-white/5 hover:border-red-500/40 rounded-2xl transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button>
               </div>
             </div>
-            {/* Education */}
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-purple-400 font-bold uppercase tracking-wider">{isAr ? 'الشرح والتعليم' : 'Education'}</h4>
               <div className="grid grid-cols-2 gap-3">
@@ -380,7 +418,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <button onClick={() => updateSlot(index, { type: 'notes' })} className="p-4 bg-black/20 border border-white/5 hover:border-blue-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><FileText className="w-6 h-6 text-blue-400 mb-2" /><span className="text-[10px] text-white block text-center font-bold">Notes</span></button>
               </div>
             </div>
-            {/* Files */}
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-emerald-400 font-bold uppercase tracking-wider">{isAr ? 'الملفات والعرض' : 'Files'}</h4>
               <div className="grid grid-cols-2 gap-4">
@@ -388,7 +425,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <button onClick={() => updateSlot(index, { type: 'document' })} className="p-6 bg-black/20 border border-white/5 hover:border-teal-500/40 rounded-2xl transition-all flex flex-col items-center justify-center"><FileText className="w-8 h-8 text-teal-400 mb-2" /><span className="text-xs text-white block text-center font-bold">Docs</span></button>
               </div>
             </div>
-            {/* Live Broadcast (Merged UI) */}
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-amber-400 font-bold uppercase tracking-wider">{isAr ? 'الاتصال الحي' : 'Live'}</h4>
               <button onClick={() => updateSlot(index, { type: 'live' })} className="w-full h-full p-4 bg-black/20 border border-white/5 hover:border-amber-500/40 rounded-2xl transition-all flex flex-col items-center justify-center">
@@ -417,7 +453,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         )}
         {slot.type === 'web' && (
           <div className="w-full h-full bg-slate-900 relative overflow-hidden">
-            {/* Intelligent Wake Shield: Captures touch when idle to wake UI, then steps aside */}
             {isIdle && (
               <div 
                 className="absolute inset-0 z-[70] bg-transparent pointer-events-auto" 
@@ -426,7 +461,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 onMouseMove={resetIdleTimer}
               />
             )}
-            
             {slot.url ? (
               <iframe src={slot.url} className="w-full h-full border-0 bg-white pointer-events-auto" sandbox="allow-same-origin allow-scripts allow-forms allow-popups" title="Web Browser" />
             ) : (
@@ -466,12 +500,24 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     <div className="fixed inset-0 z-50 bg-[#0A0E14] flex flex-col overflow-hidden font-sans" dir={dir}>
       <div className="absolute top-0 left-0 right-0 h-16 z-[100] flex items-center justify-between px-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
         <button onClick={handleExitClick} className="p-2 bg-red-500/20 text-red-400 rounded-full transition-all shadow-lg"><LogOut className="w-5 h-5" /></button>
-        <div className="flex justify-center"><button onClick={() => { if (!isHost) return; const m = viewMode === 'sync' ? 'free' : 'sync'; setViewMode(m); broadcastState(currentSlot, slots, m); }} disabled={!isHost} className={`flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm transition-all ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>{viewMode === 'sync' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}<span className="text-xs font-bold uppercase">{viewMode}</span></button></div>
-        <div className="flex items-center gap-3"><span className="text-white font-mono font-bold tracking-widest text-xs truncate max-w-[120px] uppercase opacity-70">{displayRoomName}</span><button onClick={async () => { if (navigator.share) { try { await navigator.share({ title: `انضم لغرفتي`, text: `Join my room "${displayRoomName}"\nhttps://app.com/room/${roomId}?name=${encodeURIComponent(displayRoomName)}` }); } catch(e){} } else { alert('Copied!'); } }} className="p-2.5 bg-blue-600 text-white rounded-full shadow-lg"><Share2 className="w-5 h-5" /></button></div>
+        
+        {/* 💡 أزرار التحكم العلوية (المزامنة + الصوت) */}
+        <div className="flex justify-center gap-3">
+          <button onClick={() => { if (!isHost) return; const m = viewMode === 'sync' ? 'free' : 'sync'; setViewMode(m); broadcastState(currentSlot, slots, m); }} disabled={!isHost} className={`flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm transition-all ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>{viewMode === 'sync' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}<span className="text-xs font-bold uppercase hidden sm:block">{viewMode}</span></button>
+          
+          <button 
+             onClick={toggleVoiceChat} 
+             className={`flex items-center gap-2 px-4 py-2 rounded-full border backdrop-blur-sm transition-all shadow-lg ${isVoiceActive ? 'border-red-500/50 bg-red-500/20 text-red-400 animate-pulse' : 'border-[#00b4d8]/50 bg-[#00b4d8]/20 text-[#00b4d8] hover:bg-[#00b4d8]/40'}`}
+           >
+             {isVoiceActive ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+             <span className="text-xs font-bold uppercase">{isAr ? 'صوت' : 'Voice'}</span>
+           </button>
+        </div>
+
+        <div className="flex items-center gap-3"><span className="text-white font-mono font-bold tracking-widest text-xs truncate max-w-[90px] uppercase opacity-70 hidden sm:block">{displayRoomName}</span><button onClick={async () => { if (navigator.share) { try { await navigator.share({ title: `انضم لغرفتي`, text: `Join my room "${displayRoomName}"\nhttps://app.com/room/${roomId}?name=${encodeURIComponent(displayRoomName)}` }); } catch(e){} } else { alert('Copied!'); } }} className="p-2.5 bg-blue-600 text-white rounded-full shadow-lg"><Share2 className="w-5 h-5" /></button></div>
       </div>
       
       <div className="flex-1 w-full flex flex-col relative" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
-          {/* Smart Edge Navigation Arrows Fix: Hide completely on idle */}
           {canGoLeft && (
             <div className={`absolute ${dir === 'rtl' ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 z-[90] flex items-center justify-center group pointer-events-none`}>
               <button onClick={() => { resetIdleTimer(); handleNavigation(leftTarget); }} onMouseEnter={resetIdleTimer} onTouchStart={resetIdleTimer} className={`p-3 bg-slate-900/60 border-2 border-[#00b4d8]/80 text-[#00b4d8] rounded-full transition-all duration-500 hover:bg-[#00b4d8]/80 hover:text-white hover:scale-110 pointer-events-auto shadow-[0_4px_12px_rgba(0,0,0,0.3)] backdrop-blur-md ${isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft className="w-8 h-8" /></button>
@@ -486,14 +532,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           <div className="flex-1 relative w-full overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
             <div dir="ltr" className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out w-[300%]" style={{ transform: `translateX(-${currentSlot * 33.333333}%)` }}>
                {slots.map((s, i) => (
-                  <div 
-                    key={i} 
-                    className={`w-1/3 h-full pt-16 flex-shrink-0 relative ${currentSlot === i ? 'z-50' : 'z-0'}`}
-                  >
-                     {/* The Magic Fix: A blocker shield for inactive screens */}
+                  <div key={i} className={`w-1/3 h-full pt-16 flex-shrink-0 relative ${currentSlot === i ? 'z-50' : 'z-0'}`}>
                      {currentSlot !== i && <div className="absolute inset-0 z-[999] bg-transparent cursor-default"></div>}
-                     
-                     {/* The Content */}
                      <div className={`w-full h-full ${currentSlot === i ? 'pointer-events-auto' : 'pointer-events-none'}`}>
                         {renderSlotContent(s, i)}
                      </div>
@@ -509,19 +549,23 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           </div>
       </div>
 
-      {/* Custom YouTube Modal */}
+      {/* 💡 نافذة الصوت المنبثقة (Live Audio) */}
+      <div className={`fixed bottom-28 ${dir === 'rtl' ? 'left-6' : 'right-6'} z-[90] w-[300px] h-[140px] bg-[#0f172a]/95 backdrop-blur-xl rounded-3xl overflow-hidden shadow-[0_10px_40px_rgba(0,180,216,0.3)] border border-[#00b4d8]/30 transition-all duration-500 ${isVoiceActive ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}>
+         <div className="bg-[#1e293b]/80 w-full h-10 flex items-center justify-between px-4 absolute top-0 left-0 z-10 pointer-events-none">
+            <div className="flex items-center gap-2">
+               <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+               <span className="text-xs text-[#00b4d8] font-bold uppercase">{isAr ? 'غرفة صوتية' : 'Live Audio'}</span>
+            </div>
+            <button onClick={toggleVoiceChat} className="text-slate-400 hover:text-red-400 transition-colors pointer-events-auto"><X className="w-5 h-5"/></button>
+         </div>
+         <div ref={audioContainerRef} className="w-full h-full pt-10 pointer-events-auto"></div>
+      </div>
+
       {showYoutubeModal !== null && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-[#0f172a] border border-slate-700/50 p-6 rounded-3xl shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold text-white mb-4">{isAr ? 'إضافة فيديو يوتيوب' : 'Add YouTube Video'}</h3>
-            <input
-              type="text"
-              value={youtubeInput}
-              onChange={(e) => setYoutubeInput(e.target.value)}
-              placeholder={isAr ? 'ضع رابط الفيديو هنا...' : 'Paste video link here...'}
-              className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none mb-6"
-              dir="ltr"
-            />
+            <input type="text" value={youtubeInput} onChange={(e) => setYoutubeInput(e.target.value)} placeholder={isAr ? 'ضع رابط الفيديو هنا...' : 'Paste video link here...'} className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none mb-6" dir="ltr" />
             <div className="flex justify-end gap-3">
               <button onClick={() => {setShowYoutubeModal(null); setYoutubeInput('');}} className="px-5 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800 transition-colors">{isAr ? 'إلغاء' : 'Cancel'}</button>
               <button onClick={() => { if(youtubeInput.trim()) { updateSlot(showYoutubeModal, { type: 'youtube', url: youtubeInput }); setShowYoutubeModal(null); setYoutubeInput(''); } }} className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold shadow-lg shadow-red-600/20 transition-all active:scale-95">{isAr ? 'إضافة' : 'Add'}</button>
@@ -530,66 +574,25 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         </div>
       )}
 
-      {/* Custom Web Browser Modal */}
       {showWebModal !== null && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-[#0f172a] border border-slate-700/50 p-6 rounded-3xl shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold text-white mb-4">{isAr ? 'تصفح موقع ويب' : 'Browse Website'}</h3>
-            <input
-              type="url"
-              value={webInput}
-              onChange={(e) => setWebInput(e.target.value)}
-              placeholder="https://example.com"
-              className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none mb-6"
-              dir="ltr"
-            />
+            <input type="url" value={webInput} onChange={(e) => setWebInput(e.target.value)} placeholder="https://example.com" className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none mb-6" dir="ltr" />
             <div className="flex justify-end gap-3">
               <button onClick={() => {setShowWebModal(null); setWebInput('');}} className="px-5 py-2.5 rounded-xl text-slate-300 hover:bg-slate-800 transition-colors">{isAr ? 'إلغاء' : 'Cancel'}</button>
-              <button onClick={() => { 
-                let url = webInput.trim(); 
-                if(url) { 
-                  if(!url.startsWith('http')) url = 'https://' + url; 
-                  updateSlot(showWebModal, { type: 'web', url: url }); 
-                  setShowWebModal(null); 
-                  setWebInput(''); 
-                } 
-              }} className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold shadow-lg shadow-cyan-600/20 transition-all active:scale-95">{isAr ? 'فتح الموقع' : 'Open'}</button>
+              <button onClick={() => { let url = webInput.trim(); if(url) { if(!url.startsWith('http')) url = 'https://' + url; updateSlot(showWebModal, { type: 'web', url: url }); setShowWebModal(null); setWebInput(''); } }} className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold shadow-lg shadow-cyan-600/20 transition-all active:scale-95">{isAr ? 'فتح الموقع' : 'Open'}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Floating Chat Button */}
-      <button 
-        onClick={() => {
-          setIsChatOpen(true);
-          setUnreadCount(0); // Reset unread messages when opened
-        }}
-        className={`fixed bottom-6 ${dir === 'rtl' ? 'left-6' : 'right-6'} z-[80] p-4 bg-cyan-600 hover:bg-cyan-500 rounded-full shadow-[0_4px_20px_rgba(0,180,216,0.4)] text-white transition-transform hover:scale-110 active:scale-95 flex items-center justify-center`}
-        title="الدردشة"
-      >
+      <button onClick={() => { setIsChatOpen(true); setUnreadCount(0); }} className={`fixed bottom-6 ${dir === 'rtl' ? 'left-6' : 'right-6'} z-[80] p-4 bg-cyan-600 hover:bg-cyan-500 rounded-full shadow-[0_4px_20px_rgba(0,180,216,0.4)] text-white transition-transform hover:scale-110 active:scale-95 flex items-center justify-center`} title="الدردشة">
         <MessageCircle className="w-6 h-6"/>
-        
-        {unreadCount > 0 && !isChatOpen && (
-          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-slate-900 animate-bounce shadow-lg">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-        )}
+        {unreadCount > 0 && !isChatOpen && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-slate-900 animate-bounce shadow-lg">{unreadCount > 9 ? '9+' : unreadCount}</span>}
       </button>
 
-      {/* Slide-out Chat */}
-      <RoomChat 
-        roomId={roomId} 
-        isHost={isHost} 
-        isOpen={isChatOpen} 
-        onClose={() => setIsChatOpen(false)}
-        onNewMessage={() => {
-          // Only increment if the chat drawer is currently closed
-          if (!isChatOpen) {
-            setUnreadCount(prev => prev + 1);
-          }
-        }}
-      />
+      <RoomChat roomId={roomId} isHost={isHost} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} onNewMessage={() => { if (!isChatOpen) { setUnreadCount(prev => prev + 1); } }} />
     </div>
   );
 }
