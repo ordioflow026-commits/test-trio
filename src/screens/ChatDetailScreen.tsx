@@ -52,7 +52,6 @@ export default function ChatDetailScreen() {
   const [inputKey, setInputKey] = useState(Date.now());
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
-  const [audioSpeeds, setAudioSpeeds] = useState<Record<string, number>>({});
   
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const typingChannelRef = useRef<any>(null);
@@ -486,22 +485,7 @@ export default function ChatDetailScreen() {
                           )}
 
                           {displayContent.startsWith('Audio: ') ? (
-                            <div className="flex items-center gap-2" dir="ltr" style={{ minWidth: '220px', width: '100%', maxWidth: '280px' }}>
-                              <audio id={`audio-${msg.id}`} controls preload="metadata" src={displayContent.replace('Audio: ', '')} style={{ display: 'block', width: '100%', height: '54px', minHeight: '54px', flexShrink: 1 }} className="outline-none rounded-full bg-slate-100/10" />
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const el = document.getElementById(`audio-${msg.id}`) as HTMLAudioElement;
-                                  const currentSpeed = audioSpeeds[msg.id] || 1;
-                                  const nextSpeed = currentSpeed === 1 ? 1.5 : currentSpeed === 1.5 ? 2 : 1;
-                                  setAudioSpeeds(prev => ({...prev, [msg.id]: nextSpeed}));
-                                  if (el) el.playbackRate = nextSpeed;
-                                }} 
-                                className="w-9 h-9 shrink-0 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white text-[11px] font-bold transition-colors"
-                              >
-                                {audioSpeeds[msg.id] || 1}x
-                              </button>
-                            </div>
+                            <div dir="ltr" style={{ minWidth: '200px', width: '100%', maxWidth: '240px' }}><audio controls preload="metadata" src={displayContent.replace('Audio: ', '')} style={{ display: 'block', width: '100%', minWidth: '200px', height: '54px', minHeight: '54px', flexShrink: 0 }} className="outline-none rounded-full bg-slate-100/10" /></div>
                           ) : displayContent.startsWith('File: ') ? (
                             <div className="flex flex-col gap-1 mt-1">
                               {displayContent.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) || displayContent.includes('#.jpg') ? (
