@@ -11,6 +11,7 @@ import RoomChat from '../components/RoomChat';
 import LiveMeeting from '../components/LiveMeeting';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
+import { ZegoExpressEngine } from 'zego-express-engine-webrtc';
 
 type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'notes' | 'media' | 'camera' | 'screen_share' | 'document' | 'mic' | 'live';
 type ViewMode = 'sync' | 'free';
@@ -42,9 +43,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const stateRef = useRef({ slots, currentSlot, viewMode });
   const hostWasPresent = useRef(false);
 
+  // 🛡️ Raw Engine States
   const [isVoiceActive, setIsVoiceActive] = useState(false);
-  const audioContainerRef = useRef<HTMLDivElement>(null);
-  const zcInstance = useRef<any>(null);
+  const zgRef = useRef<ZegoExpressEngine | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteAudioRefs = useRef<{ [streamId: string]: HTMLAudioElement }>({});
 
   const [isIdle, setIsIdle] = useState(false);
   const [openLockMenu, setOpenLockMenu] = useState<number | null>(null);
@@ -72,7 +75,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   useEffect(() => { resetIdleTimer(); return () => { if (idleTimerRef.current) clearTimeout(idleTimerRef.current); }; }, []);
 
   const handleExit = () => { 
-    if (zcInstance.current) { try { zcInstance.current.destroy(); } catch (e) {} } 
+    if (zgRef.current) {
+        if (localStreamRef.current) zgRef.current.destroyStream(localStreamRef.current);
+        zgRef.current.logoutRoom(`audio_${roomId}`);
+    }
+    Object.values(remoteAudioRefs.current).forEach(audio => audio.remove());
     onExit(); 
   };
 
@@ -83,55 +90,69 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     handleExit();
   };
 
-  // 💡 Hardware-Safe Audio Initialization
+  // 🎙️ Raw Engine Audio Toggle
   const toggleVoiceChat = async () => {
-    const newState = !isVoiceActive;
-    setIsVoiceActive(newState);
-
-    if (channelRef.current && user) {
-      try { await channelRef.current.track({ name: myName, id: user.id, isHost, hostRoomName: isHost ? roomName : undefined, isVoiceActive: newState }); } catch(e) {}
-    }
-
-    if (!newState) {
-      if (zcInstance.current) { try { zcInstance.current.destroy(); } catch (e) {} zcInstance.current = null; }
-    } else {
-      if (!audioContainerRef.current) return;
-      
-      try {
-        // Force browser to prompt/activate hardware instantly on user click!
-        try {
-           await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch(micError) {
-           console.error("Hardware Mic Error:", micError);
-           alert(isAr ? 'الرجاء السماح بالوصول للميكروفون.' : 'Please allow microphone access.');
-           setIsVoiceActive(false);
-           return;
+    if (isVoiceActive) {
+      if (zgRef.current) {
+        if (localStreamRef.current) {
+            zgRef.current.stopPublishingStream(`stream_${user?.id}`);
+            zgRef.current.destroyStream(localStreamRef.current);
         }
+        zgRef.current.logoutRoom(`audio_${roomId}`);
+        zgRef.current = null;
+      }
+      Object.values(remoteAudioRefs.current).forEach(audio => audio.remove());
+      remoteAudioRefs.current = {};
+      setIsVoiceActive(false);
 
+      if (channelRef.current && user) {
+        channelRef.current.track({ name: myName, id: user.id, isHost, hostRoomName: isHost ? roomName : undefined, isVoiceActive: false });
+      }
+    } else {
+      try {
         const appID = Number(import.meta.env.VITE_ZEGO_APP_ID);
         const serverSecret = import.meta.env.VITE_ZEGO_SERVER_SECRET;
-        if (!appID || !serverSecret) { alert(isAr ? 'بيانات Zego مفقودة' : 'Zego config missing'); setIsVoiceActive(false); return; }
+        if (!appID || !serverSecret) return;
 
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, `audio_${roomId}`, user?.id || Date.now().toString(), myName);
-        const zc = ZegoUIKitPrebuilt.create(kitToken);
-        zcInstance.current = zc;
-        
-        zc.joinRoom({
-          container: audioContainerRef.current,
-          scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
-          showMyCameraToggleButton: false,
-          showMyMicrophoneToggleButton: false,
-          showAudioVideoSettingsButton: false,
-          showScreenSharingButton: false,
-          showTextChat: false,
-          showUserList: false,
-          showPreJoinView: false,
-          showLeaveRoomConfirmDialog: false,
-          turnOnCameraWhenJoining: false,
-          turnOnMicrophoneWhenJoining: true,
-          layout: 'Floating',
+        const zg = new ZegoExpressEngine(appID, `wss://webliveroom${appID}-api.zego.im/ws`);
+        zgRef.current = zg;
+
+        zg.on('roomStreamUpdate', async (roomID, updateType, streamList) => {
+            if (updateType === 'ADD') {
+                for (const streamInfo of streamList) {
+                    const remoteStream = await zg.startPlayingStream(streamInfo.streamID);
+                    const audio = document.createElement('audio');
+                    audio.autoplay = true;
+                    audio.srcObject = remoteStream;
+                    document.body.appendChild(audio);
+                    remoteAudioRefs.current[streamInfo.streamID] = audio;
+                }
+            } else if (updateType === 'DELETE') {
+                for (const streamInfo of streamList) {
+                    zg.stopPlayingStream(streamInfo.streamID);
+                    const audio = remoteAudioRefs.current[streamInfo.streamID];
+                    if (audio) { audio.remove(); delete remoteAudioRefs.current[streamInfo.streamID]; }
+                }
+            }
         });
-      } catch (err) { setIsVoiceActive(false); }
+
+        await zg.loginRoom(`audio_${roomId}`, kitToken, { userID: user?.id || 'guest', userName: myName });
+        
+        const localStream = await zg.createStream({ camera: { audio: true, video: false } });
+        localStreamRef.current = localStream;
+        zg.startPublishingStream(`stream_${user?.id}`, localStream);
+
+        setIsVoiceActive(true);
+
+        if (channelRef.current && user) {
+           channelRef.current.track({ name: myName, id: user.id, isHost, hostRoomName: isHost ? roomName : undefined, isVoiceActive: true });
+        }
+      } catch (err) {
+        console.error("Raw Engine Mic Error:", err);
+        alert(isAr ? 'الرجاء السماح بصلاحية الميكروفون' : 'Please allow microphone permissions');
+        setIsVoiceActive(false);
+      }
     }
   };
 
@@ -273,12 +294,13 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                    </div>
                )}
            </div>
-        </div>
+         </div>
        );
     };
 
     if (slot.type === 'empty') return (<div className="flex flex-col items-center justify-center h-full relative group"><LockIndicator />{editable ? <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-28 h-28 rounded-full border border-[#00b4d8]/50 bg-[#00b4d8]/10 flex items-center justify-center hover:bg-[#00b4d8]/20 transition-all shadow-xl"><Plus className="w-12 h-12 text-[#00b4d8]" /></button> : <p className="text-[#00b4d8] font-mono tracking-widest uppercase text-sm">{t('waitingForHost') || 'WAITING...'}</p>}</div>);
     
+    // 💡 RESTORED: All Menu Options
     if (slot.type === 'menu') return (
         <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative group" dir={dir}>
           <LockIndicator />
@@ -289,16 +311,37 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full pb-24">
              <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-cyan-400 font-bold uppercase tracking-wider">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
-              <div className="grid grid-cols-2 gap-4"><button onClick={() => setShowWebModal(index)} className="p-6 bg-black/20 border border-white/5 hover:border-cyan-500/40 rounded-2xl transition-all"><Globe className="w-8 h-8 text-cyan-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Web</span></button><button onClick={() => setShowYoutubeModal(index)} className="p-6 bg-black/20 border border-white/5 hover:border-red-500/40 rounded-2xl transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button></div>
+              <div className="grid grid-cols-2 gap-4">
+                <button onClick={() => setShowWebModal(index)} className="p-6 bg-black/20 border border-white/5 hover:border-cyan-500/40 rounded-2xl transition-all"><Globe className="w-8 h-8 text-cyan-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Web</span></button>
+                <button onClick={() => setShowYoutubeModal(index)} className="p-6 bg-black/20 border border-white/5 hover:border-red-500/40 rounded-2xl transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button>
+              </div>
             </div>
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-purple-400 font-bold uppercase tracking-wider">{isAr ? 'الشرح والتعليم' : 'Education'}</h4>
-              <div className="grid grid-cols-2 gap-3"><button onClick={() => updateSlot(index, { type: 'whiteboard' })} className="p-4 bg-black/20 border border-white/5 hover:border-purple-500/40 rounded-2xl transition-all"><PenTool className="w-6 h-6 text-purple-400 mx-auto mb-2" /><span className="text-[10px] text-white block text-center font-bold">Board</span></button><button onClick={() => updateSlot(index, { type: 'notes' })} className="p-4 bg-black/20 border border-white/5 hover:border-blue-500/40 rounded-2xl transition-all"><FileText className="w-6 h-6 text-blue-400 mx-auto mb-2" /><span className="text-[10px] text-white block text-center font-bold">Notes</span></button></div>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => updateSlot(index, { type: 'whiteboard' })} className="p-4 bg-black/20 border border-white/5 hover:border-purple-500/40 rounded-2xl transition-all"><PenTool className="w-6 h-6 text-purple-400 mx-auto mb-2" /><span className="text-[10px] text-white block text-center font-bold">Board</span></button>
+                <button onClick={() => updateSlot(index, { type: 'notes' })} className="p-4 bg-black/20 border border-white/5 hover:border-blue-500/40 rounded-2xl transition-all"><FileText className="w-6 h-6 text-blue-400 mx-auto mb-2" /><span className="text-[10px] text-white block text-center font-bold">Notes</span></button>
+              </div>
+            </div>
+            <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
+              <h4 className="text-emerald-400 font-bold uppercase tracking-wider">{isAr ? 'الملفات والعرض' : 'Files'}</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <button onClick={() => updateSlot(index, { type: 'media' })} className="p-6 bg-black/20 border border-white/5 hover:border-emerald-500/40 rounded-2xl transition-all"><ImageIcon className="w-8 h-8 text-emerald-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Media</span></button>
+                <button onClick={() => updateSlot(index, { type: 'document' })} className="p-6 bg-black/20 border border-white/5 hover:border-teal-500/40 rounded-2xl transition-all"><FileText className="w-8 h-8 text-teal-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Docs</span></button>
+              </div>
+            </div>
+            <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
+              <h4 className="text-amber-400 font-bold uppercase tracking-wider">{isAr ? 'الاتصال الحي' : 'Live'}</h4>
+              <button onClick={() => updateSlot(index, { type: 'live' })} className="w-full h-full p-4 bg-black/20 border border-white/5 hover:border-amber-500/40 rounded-2xl transition-all flex flex-col items-center justify-center">
+                <Video className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                <span className="text-xs text-white block text-center font-bold">{isAr ? 'بث مباشر (صوت وصورة)' : 'Live Stream'}</span>
+              </button>
             </div>
           </div>
         </div>
     );
     
+    // 💡 RESTORED: All Components (Media, Docs, Live)
     return (
       <div className="flex flex-col items-center justify-center h-full w-full relative group">
         {!editable && lockState !== 'yellow' && <div className="absolute inset-0 z-[60] bg-transparent pointer-events-auto" />}
@@ -309,13 +352,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {slot.type === 'whiteboard' && <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}><Whiteboard roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} /></div>}
         {slot.type === 'media' && <div className="w-full h-full bg-black relative overflow-hidden"><SyncMediaViewer url={slot.url} canInteract={canInteractInside} isLocalOnly={!editable} onUploadSuccess={(url) => updateSlot(index, { type: 'media', url })} roomId={roomId} isHost={isHost} slotIndex={index} viewMode={viewMode} /></div>}
         {slot.type === 'notes' && <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}><Notebook roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} /></div>}
+        {slot.type === 'document' && <div className={`w-full h-full p-4 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}><UniversalViewer roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable} /></div>}
+        {(slot.type === 'live' || slot.type === 'camera' || slot.type === 'mic' || slot.type === 'screen_share') && <div className={`w-full h-full p-2 ${canInteractInside ? 'pointer-events-auto' : 'pointer-events-none'}`}><LiveMeeting roomId={roomId as string} userName={typeof window !== 'undefined' ? (localStorage.getItem('chat_user_name') || myName) : myName} /></div>}
       </div>
     );
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-[#0A0E14] flex flex-col overflow-hidden font-sans" dir={dir}>
-      {/* CSS للترددات الصوتية */}
       <style>{`
         @keyframes soundwave { 0%, 100% { height: 4px; } 50% { height: 16px; } }
         .animate-soundwave-1 { animation: soundwave 0.6s ease-in-out infinite; }
@@ -357,7 +401,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             </div>
           </div>
 
-          {/* 💡 الشريط السفلي الجمالي */}
           <div className="h-[90px] w-full bg-[#1e293b]/90 backdrop-blur-xl border-t border-slate-700/50 flex items-center px-4 relative z-30">
               <div className="flex items-center gap-5 w-full overflow-x-auto no-scrollbar pb-1">
                   
@@ -380,11 +423,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                   ))}
               </div>
           </div>
-      </div>
-
-      {/* الصندوق المخفي لتجنب حجب الشاشة */}
-      <div className="fixed top-[-9999px] left-[-9999px] w-[1px] h-[1px] opacity-0 overflow-hidden pointer-events-none z-[-1]">
-         <div ref={audioContainerRef} className="w-full h-full"></div>
       </div>
 
       {showYoutubeModal !== null && (
