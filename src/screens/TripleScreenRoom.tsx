@@ -41,7 +41,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   // 💡 حالات الاتصال الصوتي الجديد
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const audioContainerRef = useRef<HTMLDivElement>(null);
-  const zcRef = useRef<any>(null);
+  const zcInstance = useRef<any>(null);
 
   useEffect(() => {
     stateRef.current = { slots, currentSlot, viewMode };
@@ -76,7 +76,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
   const handleExit = () => { 
     if (zpRef.current) { try { zpRef.current.destroy(); } catch (e) {} } 
-    if (zcRef.current) { try { zcRef.current.destroy(); } catch (e) {} } 
+    if (zcInstance.current) { try { zcInstance.current.destroy(); } catch (e) {} } 
     onExit(); 
   };
 
@@ -90,35 +90,23 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     handleExit();
   };
 
-  // 💡 دالة تشغيل الاتصال الصوتي الجماعي
-  const toggleVoiceChat = () => {
+  // 💡 Stable Voice Chat Toggle
+  const toggleVoiceChat = async () => {
     if (isVoiceActive) {
-      if (zcRef.current) {
-        zcRef.current.destroy();
-        zcRef.current = null;
-      }
+      if (zcInstance.current) { try { zcInstance.current.destroy(); } catch (e) {} zcInstance.current = null; }
       setIsVoiceActive(false);
     } else {
       setIsVoiceActive(true);
-      setTimeout(() => {
+      setTimeout(async () => {
         if (!audioContainerRef.current) return;
         try {
-          const appID = Number(import.meta.env.VITE_ZEGO_APP_ID || 0);
-          const serverSecret = import.meta.env.VITE_ZEGO_SERVER_SECRET || '';
-          
-          if (!appID || !serverSecret) {
-            alert(isAr ? "حدث خطأ: معرّف Zego مفقود من النظام!" : "Zego App ID is missing!");
-            setIsVoiceActive(false);
-            return;
-          }
+          const appID = Number(import.meta.env.VITE_ZEGO_APP_ID);
+          const serverSecret = import.meta.env.VITE_ZEGO_SERVER_SECRET;
+          if (!appID || !serverSecret) return;
 
-          const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-            appID, serverSecret, `audio_room_${roomId}`, user?.id || Date.now().toString(), myName
-          );
-          
+          const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, `audio_${roomId}`, user?.id || Date.now().toString(), myName);
           const zc = ZegoUIKitPrebuilt.create(kitToken);
-          zcRef.current = zc;
-          
+          zcInstance.current = zc;
           zc.joinRoom({
             container: audioContainerRef.current,
             scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
@@ -132,11 +120,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             showPreJoinView: false,
             layout: 'Floating',
           });
-        } catch(err) {
-          console.error("Zego Audio Room Error:", err);
-          setIsVoiceActive(false);
-        }
-      }, 300);
+        } catch (err) { setIsVoiceActive(false); }
+      }, 500);
     }
   };
 
@@ -549,16 +534,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           </div>
       </div>
 
-      {/* 💡 نافذة الصوت المنبثقة (Live Audio) */}
-      <div className={`fixed bottom-28 ${dir === 'rtl' ? 'left-6' : 'right-6'} z-[90] w-[300px] h-[140px] bg-[#0f172a]/95 backdrop-blur-xl rounded-3xl overflow-hidden shadow-[0_10px_40px_rgba(0,180,216,0.3)] border border-[#00b4d8]/30 transition-all duration-500 ${isVoiceActive ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95 pointer-events-none'}`}>
-         <div className="bg-[#1e293b]/80 w-full h-10 flex items-center justify-between px-4 absolute top-0 left-0 z-10 pointer-events-none">
-            <div className="flex items-center gap-2">
-               <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-               <span className="text-xs text-[#00b4d8] font-bold uppercase">{isAr ? 'غرفة صوتية' : 'Live Audio'}</span>
-            </div>
-            <button onClick={toggleVoiceChat} className="text-slate-400 hover:text-red-400 transition-colors pointer-events-auto"><X className="w-5 h-5"/></button>
-         </div>
-         <div ref={audioContainerRef} className="w-full h-full pt-10 pointer-events-auto"></div>
+      {/* 💡 Hidden Audio Container for Zego */}
+      <div className={`fixed bottom-28 right-6 z-[90] w-[200px] h-[100px] bg-[#0f172a]/95 rounded-3xl border border-[#00b4d8]/30 transition-all ${isVoiceActive ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
+         <div ref={audioContainerRef} className="w-full h-full"></div>
+         {!isVoiceActive && <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">Voice Off</div>}
       </div>
 
       {showYoutubeModal !== null && (
