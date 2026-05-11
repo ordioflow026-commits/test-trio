@@ -19,7 +19,6 @@ type LockState = 'none' | 'green' | 'yellow' | 'red' | 'white';
 interface SlotData { type: ContentType; url?: string; lock?: LockState; }
 interface Props { onExit: () => void; isHost?: boolean; roomId?: string; roomName?: string; onNameSync?: (id: string, name: string) => void; }
 
-// 🎵 مكون الترددات الصوتية الجمالي
 const SoundWave = ({ color = "bg-[#00b4d8]" }: { color?: string }) => (
   <div className="flex items-center gap-[3px] h-4">
     <div className={`w-1 rounded-full ${color} animate-soundwave-1`}></div>
@@ -43,7 +42,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const stateRef = useRef({ slots, currentSlot, viewMode });
   const hostWasPresent = useRef(false);
 
-  // 🎤 حالات الصوت والخلفية
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const audioContainerRef = useRef<HTMLDivElement>(null);
   const zcInstance = useRef<any>(null);
@@ -85,12 +83,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     handleExit();
   };
 
-  // 💡 دالة تشغيل الصوت الخفية والآمنة
+  // 💡 Hardware-Safe Audio Initialization
   const toggleVoiceChat = async () => {
     const newState = !isVoiceActive;
     setIsVoiceActive(newState);
 
-    // تحديث حالة الحضور في قاعدة البيانات ليراها الجميع
     if (channelRef.current && user) {
       try { await channelRef.current.track({ name: myName, id: user.id, isHost, hostRoomName: isHost ? roomName : undefined, isVoiceActive: newState }); } catch(e) {}
     }
@@ -98,34 +95,43 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (!newState) {
       if (zcInstance.current) { try { zcInstance.current.destroy(); } catch (e) {} zcInstance.current = null; }
     } else {
-      setTimeout(async () => {
-        if (!audioContainerRef.current) return;
+      if (!audioContainerRef.current) return;
+      
+      try {
+        // Force browser to prompt/activate hardware instantly on user click!
         try {
-          const appID = Number(import.meta.env.VITE_ZEGO_APP_ID);
-          const serverSecret = import.meta.env.VITE_ZEGO_SERVER_SECRET;
-          if (!appID || !serverSecret) { alert(isAr ? 'بيانات Zego مفقودة' : 'Zego config missing'); setIsVoiceActive(false); return; }
+           await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch(micError) {
+           console.error("Hardware Mic Error:", micError);
+           alert(isAr ? 'الرجاء السماح بالوصول للميكروفون.' : 'Please allow microphone access.');
+           setIsVoiceActive(false);
+           return;
+        }
 
-          const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, `audio_${roomId}`, user?.id || Date.now().toString(), myName);
-          const zc = ZegoUIKitPrebuilt.create(kitToken);
-          zcInstance.current = zc;
-          
-          zc.joinRoom({
-            container: audioContainerRef.current,
-            scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
-            showMyCameraToggleButton: false,
-            showMyMicrophoneToggleButton: false,
-            showAudioVideoSettingsButton: false,
-            showScreenSharingButton: false,
-            showTextChat: false,
-            showUserList: false,
-            showPreJoinView: false,
-            showLeaveRoomConfirmDialog: false,
-            turnOnCameraWhenJoining: false,
-            turnOnMicrophoneWhenJoining: true,
-            layout: 'Floating',
-          });
-        } catch (err) { setIsVoiceActive(false); }
-      }, 100);
+        const appID = Number(import.meta.env.VITE_ZEGO_APP_ID);
+        const serverSecret = import.meta.env.VITE_ZEGO_SERVER_SECRET;
+        if (!appID || !serverSecret) { alert(isAr ? 'بيانات Zego مفقودة' : 'Zego config missing'); setIsVoiceActive(false); return; }
+
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, `audio_${roomId}`, user?.id || Date.now().toString(), myName);
+        const zc = ZegoUIKitPrebuilt.create(kitToken);
+        zcInstance.current = zc;
+        
+        zc.joinRoom({
+          container: audioContainerRef.current,
+          scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
+          showMyCameraToggleButton: false,
+          showMyMicrophoneToggleButton: false,
+          showAudioVideoSettingsButton: false,
+          showScreenSharingButton: false,
+          showTextChat: false,
+          showUserList: false,
+          showPreJoinView: false,
+          showLeaveRoomConfirmDialog: false,
+          turnOnCameraWhenJoining: false,
+          turnOnMicrophoneWhenJoining: true,
+          layout: 'Floating',
+        });
+      } catch (err) { setIsVoiceActive(false); }
     }
   };
 
@@ -267,7 +273,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                    </div>
                )}
            </div>
-         </div>
+        </div>
        );
     };
 
@@ -351,7 +357,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             </div>
           </div>
 
-          {/* 💡 شريط المستخدمين بالأسفل مع مؤشر التحدث الجمالي */}
+          {/* 💡 الشريط السفلي الجمالي */}
           <div className="h-[90px] w-full bg-[#1e293b]/90 backdrop-blur-xl border-t border-slate-700/50 flex items-center px-4 relative z-30">
               <div className="flex items-center gap-5 w-full overflow-x-auto no-scrollbar pb-1">
                   
@@ -376,7 +382,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           </div>
       </div>
 
-      {/* 💡 صندوق Zego مخفي تماماً 100% ولا يحجب الشاشة */}
+      {/* الصندوق المخفي لتجنب حجب الشاشة */}
       <div className="fixed top-[-9999px] left-[-9999px] w-[1px] h-[1px] opacity-0 overflow-hidden pointer-events-none z-[-1]">
          <div ref={audioContainerRef} className="w-full h-full"></div>
       </div>
