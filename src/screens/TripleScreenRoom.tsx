@@ -41,6 +41,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const stateRef = useRef({ slots, currentSlot, viewMode });
   const hostWasPresent = useRef(false);
 
+  // 🛡️ Raw Engine Control
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const zgRef = useRef<ZegoExpressEngine | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -57,7 +58,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const idleTimerRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
 
-  const canInteract = isHost || viewMode === 'free';
   const myName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'User');
   const myInitial = myName.charAt(0).toUpperCase();
 
@@ -83,13 +83,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     } else {
       try {
         const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-
         const appID = Number(import.meta.env.VITE_ZEGO_APP_ID);
         const serverSecret = import.meta.env.VITE_ZEGO_SERVER_SECRET;
         if (!appID || !serverSecret) throw new Error("Missing Zego Config");
 
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, `audio_${roomId}`, user?.id || Date.now().toString(), myName);
-        
         const zg = new ZegoExpressEngine(appID, `wss://webliveroom${appID}-api.zego.im/ws`);
         zgRef.current = zg;
 
@@ -115,7 +113,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         });
 
         await zg.loginRoom(`audio_${roomId}`, kitToken, { userID: user?.id || 'u', userName: myName });
-        
         const localStream = await zg.createStream({ custom: { audio: { source: mediaStream } } });
         localStreamRef.current = localStream;
         zg.startPublishingStream(`stream_${user?.id}`, localStream);
@@ -124,7 +121,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         updatePresence(true);
       } catch (err) {
         console.error("Mic Access Failed:", err);
-        alert(isAr ? 'تعذر الوصول للميكروفون، يرجى منح الصلاحيات.' : 'Mic access failed. Please grant permissions.');
+        alert(isAr ? 'تعذر الوصول للميكروفون.' : 'Mic access failed.');
         setIsVoiceActive(false);
       }
     }
@@ -140,48 +137,144 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (roomId && user) {
       const channel = supabase.channel(`room_${roomId}`, { config: { presence: { key: user.id } } });
       channelRef.current = channel;
+
       channel.on('presence', { event: 'sync' }, () => {
           const presenceState = channel.presenceState();
           const activeUsers: any[] = [];
+          let hostFound = false;
+          
           Object.keys(presenceState).forEach((key) => {
             const userData = presenceState[key][0] as any;
+            if (userData.isHost) hostFound = true;
             if (key !== user.id) activeUsers.push({ id: key, name: userData.name || 'Guest', isVoiceActive: !!userData.isVoiceActive });
+            if (!isHost && userData.isHost && userData.hostRoomName && userData.hostRoomName !== displayRoomName) {
+               setDisplayRoomName(userData.hostRoomName);
+               if (onNameSync && roomId) onNameSync(roomId, userData.hostRoomName);
+            }
           });
           setParticipants(activeUsers);
       }).subscribe(async (status) => {
          if (status === 'SUBSCRIBED') await updatePresence(isVoiceActive);
       });
+      
+      channel.on('broadcast', { event: 'room_state' }, (payload) => {
+          const { slots: s, currentSlot: c, viewMode: m, senderId } = payload.payload;
+          if (senderId === user.id) return; 
+          if (s) setSlots(s);
+          if (m) setViewMode(m);
+          if (c !== undefined) {
+             if (isHost) setCurrentSlot(c);
+             else {
+                 const currentSlots = s || slots;
+                 const whiteIndexes = currentSlots.map((slot, idx) => slot.lock === 'white' ? idx : -1).filter(idx => idx !== -1);
+                 if (whiteIndexes.length > 0) setCurrentSlot(prev => whiteIndexes.includes(c) ? c : (whiteIndexes.includes(prev) ? prev : whiteIndexes[0]));
+                 else setCurrentSlot(c);
+             }
+          }
+      });
+      
       return () => { supabase.removeChannel(channel); };
     }
-  }, [roomId, user, isVoiceActive]);
+  }, [roomId, user, isVoiceActive, displayRoomName]);
+
+  const broadcastState = async (slotIndex: number, newSlots: SlotData[], mode: ViewMode) => {
+    if (channelRef.current) { try { await channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots: newSlots, currentSlot: slotIndex, viewMode: mode, senderId: user?.id } }); } catch (err) {} }
+  };
 
   const updateSlot = (index: number, data: SlotData) => {
-    const newSlots = [...slots];
-    newSlots[index] = { ...data, lock: slots[index].lock };
-    setSlots(newSlots);
-    if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots: newSlots, currentSlot, viewMode, senderId: user?.id } });
+    if (!canEditSlot(index)) return;
+    const newSlots = [...slots]; newSlots[index] = { ...data, lock: slots[index].lock }; setSlots(newSlots);
+    broadcastState(currentSlot, newSlots, viewMode);
   };
 
   const setSlotLock = (index: number, lock: LockState) => {
     if (!isHost) return;
     const newSlots = [...slots]; newSlots[index].lock = lock; setSlots(newSlots);
-    if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots: newSlots, currentSlot, viewMode, senderId: user?.id } });
-    setOpenLockMenu(null);
+    broadcastState(currentSlot, newSlots, viewMode); setOpenLockMenu(null);
   };
 
-  const renderSlotContent = (slot: SlotData, index: number) => {
-    const editable = isHost || (viewMode === 'free' && slot.lock === 'none');
-    const lockState = slot.lock || 'none';
-    
-    if (slot.type === 'empty') return (
-      <div className="flex flex-col items-center justify-center h-full">
-        {editable ? <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-cyan-500/50 bg-cyan-500/10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-all"><Plus className="w-10 h-10"/></button> : <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار المضيف...' : 'Waiting for Host...'}</span>}
-      </div>
-    );
+  const canEditSlot = (index: number) => {
+    if (isHost) return true;
+    if (viewMode === 'sync') return false;
+    return (slots[index].lock || 'none') === 'none';
+  };
 
-    // 💡 استرجاع تصميم القائمة الجميل مع الفئات وزر الإنترنت
+  // 💡 RESTORED: Advanced Visitor Navigation Logic
+  const handleNavigation = (targetSlot: number) => {
+    if (targetSlot === currentSlot) return;
+    const targetLock = slots[targetSlot].lock || 'none';
+    if (isHost) { setCurrentSlot(targetSlot); broadcastState(targetSlot, slots, viewMode); resetIdleTimer(); return; }
+    if (viewMode === 'sync') return;
+    if (targetLock === 'red' || targetLock === 'white') return; 
+    setCurrentSlot(targetSlot);
+    if (targetLock !== 'yellow') broadcastState(targetSlot, slots, viewMode);
+    resetIdleTimer();
+  };
+
+  const getLeftTarget = () => {
+    if (isHost) return currentSlot - 1;
+    if (slots.some(s => s.lock === 'white') || viewMode === 'sync') return -1; 
+    for (let i = currentSlot - 1; i >= 0; i--) { if (slots[i].lock !== 'red') return i; }
+    return -1;
+  };
+
+  const getRightTarget = () => {
+    if (isHost) return currentSlot + 1;
+    if (slots.some(s => s.lock === 'white') || viewMode === 'sync') return -1;
+    for (let i = currentSlot + 1; i <= 2; i++) { if (slots[i].lock !== 'red') return i; }
+    return -1;
+  };
+
+  const leftTarget = getLeftTarget(); const rightTarget = getRightTarget();
+  const canGoLeft = leftTarget >= 0 && leftTarget <= 2; const canGoRight = rightTarget >= 0 && rightTarget <= 2;
+
+  const renderSlotContent = (slot: SlotData, index: number) => {
+    const editable = canEditSlot(index);
+    const lockState = slot.lock || 'none';
+    const canInteractInside = editable || (!isHost && lockState === 'yellow'); // 💡 RESTORED: Advanced interaction
+    
+    // 💡 RESTORED: The Full LockIndicator Menu
+    const lockColors = {
+      'none': 'bg-slate-900/60 border-[#00b4d8]/40 text-white/50 hover:bg-[#00b4d8]/20 hover:text-white hover:border-[#00b4d8] shadow-[0_4px_12px_rgba(0,0,0,0.3)]',
+      'green': 'bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.3)]',
+      'yellow': 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.3)]',
+      'red': 'bg-red-500/20 border-red-500/50 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.3)]',
+      'white': 'bg-white/20 border-white/50 text-white shadow-[0_0_15px_rgba(255,255,255,0.4)]'
+    };
+
+    const LockIndicator = () => {
+       if (!isHost || (index === 2 && lockState === 'none' && slots[1].lock === 'none') || (index === 0 && lockState === 'none' && slots[2].lock === 'none')) return null; 
+       const isMenuOpen = openLockMenu === index;
+       const labels: Record<LockState, string> = dir === 'rtl' ? { none: 'إلغاء القفل', green: 'مرن وتفاعلي', yellow: 'تنبيه للمتابعة', red: 'إجبار المشاهدة', white: 'وضع الكواليس' } : { none: 'Unlock All', green: 'Flexible Mode', yellow: 'Stay Alert', red: 'Force View', white: 'Backstage Mode' };
+       const baseColors: LockState[] = ['green', 'yellow', 'red', 'white'];
+       const availableLocks: LockState[] = lockState === 'none' ? baseColors : baseColors.map(color => color === lockState ? 'none' : color);
+
+       return (
+         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+           <div className="flex items-start gap-3">
+               <button onClick={() => { if (viewMode === 'sync') { setSlotLock(index, lockState === 'white' ? 'none' : 'white'); setOpenLockMenu(null); } else setOpenLockMenu(isMenuOpen ? null : index); }} className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}>
+                 {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+               </button>
+               {isMenuOpen && viewMode !== 'sync' && (
+                   <div dir="ltr" className="flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[140px]">
+                       {availableLocks.map((l, i) => (
+                           <button key={`${l}-${i}`} onClick={() => setSlotLock(index, l)} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group">
+                               <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 ${lockColors[l]} group-hover:scale-110 transition-transform`}>{l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}</div>
+                               <span className="text-[10px] font-bold whitespace-nowrap text-slate-200">{labels[l]}</span>
+                           </button>
+                       ))}
+                   </div>
+               )}
+           </div>
+         </div>
+       );
+    };
+
+    if (slot.type === 'empty') return (<div className="flex flex-col items-center justify-center h-full relative group"><LockIndicator />{editable ? <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-28 h-28 rounded-full border border-[#00b4d8]/50 bg-[#00b4d8]/10 flex items-center justify-center hover:bg-[#00b4d8]/20 transition-all shadow-xl"><Plus className="w-12 h-12 text-[#00b4d8]" /></button> : <p className="text-[#00b4d8] font-mono tracking-widest uppercase text-sm">{t('waitingForHost') || 'WAITING...'}</p>}</div>);
+
     if (slot.type === 'menu') return (
         <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative group pointer-events-auto" dir={dir}>
+          <LockIndicator />
           <div className="flex justify-center items-center w-full mb-8 pt-10 relative">
             <h3 className="text-3xl font-extrabold text-white">{isAr ? 'إضافة محتوى' : 'Add Content'}</h3>
             <button onClick={() => updateSlot(index, { type: 'empty' })} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-0 p-4 bg-slate-800 rounded-2xl text-slate-400 hover:text-red-400 transition-all`}><X className="w-6 h-6" /></button>
@@ -220,21 +313,17 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     );
 
     return (
-      <div className="w-full h-full relative pointer-events-auto">
-        {editable && <button onClick={() => updateSlot(index, { type: 'empty' })} className="absolute top-4 left-1/2 -translate-x-1/2 z-50 p-2 bg-red-500/20 text-red-400 rounded-full border border-red-500/50 hover:bg-red-500 hover:text-white transition-colors"><X className="w-5 h-5"/></button>}
-        
-        {isHost && (
-           <button onClick={() => setSlotLock(index, lockState === 'none' ? 'red' : 'none')} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 rounded-full border transition-all ${lockState !== 'none' ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'}`} title={isAr ? "قفل الشاشة" : "Lock Screen"}>
-              {lockState !== 'none' ? <Lock className="w-5 h-5"/> : <Unlock className="w-5 h-5"/>}
-           </button>
-        )}
+      <div className="w-full h-full relative pointer-events-auto group">
+        {!editable && lockState !== 'yellow' && <div className="absolute inset-0 z-[60] bg-transparent pointer-events-auto" />}
+        <LockIndicator />
+        {editable && <button onClick={() => updateSlot(index, { type: 'empty' })} className={`absolute top-4 left-1/2 -translate-x-1/2 z-50 p-2 bg-red-500/20 text-red-400 rounded-full border border-red-500/50 hover:bg-red-500 hover:text-white transition-all duration-500 ${isIdle && !openLockMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><X className="w-5 h-5"/></button>}
 
         {slot.type === 'web' && <div className="w-full h-full bg-slate-900 relative overflow-hidden">{slot.url ? <iframe src={slot.url} className="w-full h-full border-0 bg-white pointer-events-auto" sandbox="allow-same-origin allow-scripts allow-forms allow-popups" /> : <div className="w-full h-full flex flex-col items-center justify-center pointer-events-none"><Globe className="w-20 h-20 text-cyan-500/50 mb-6 animate-pulse" /><h2 className="text-2xl text-white font-bold">{isAr ? 'في انتظار الرابط...' : 'Waiting for URL...'}</h2></div>}</div>}
-        {slot.type === 'youtube' && <SyncYouTubePlayer videoId={slot.url} roomId={roomId as string} isHost={isHost} canInteract={editable} isActive={currentSlot === index}/>}
-        {slot.type === 'whiteboard' && <Whiteboard roomId={roomId} canInteract={editable}/>}
-        {slot.type === 'media' && <SyncMediaViewer url={slot.url} roomId={roomId} isHost={isHost} canInteract={editable} onUploadSuccess={(url) => updateSlot(index, { type: 'media', url })}/>}
-        {slot.type === 'notes' && <Notebook roomId={roomId} canInteract={editable}/>}
-        {slot.type === 'document' && <UniversalViewer roomId={roomId} canInteract={editable}/>}
+        {slot.type === 'youtube' && <SyncYouTubePlayer videoId={slot.url} roomId={roomId as string} isHost={isHost} canInteract={canInteractInside} isActive={currentSlot === index}/>}
+        {slot.type === 'whiteboard' && <Whiteboard roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable}/>}
+        {slot.type === 'media' && <SyncMediaViewer url={slot.url} roomId={roomId} isHost={isHost} canInteract={canInteractInside} isLocalOnly={!editable} onUploadSuccess={(url) => updateSlot(index, { type: 'media', url })}/>}
+        {slot.type === 'notes' && <Notebook roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable}/>}
+        {slot.type === 'document' && <UniversalViewer roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable}/>}
         {slot.type === 'live' && <LiveMeeting roomId={roomId as string} userName={myName}/>}
       </div>
     );
@@ -275,7 +364,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         <button onClick={async () => { if (navigator.share) { try { await navigator.share({ title: `انضم لغرفتي`, text: `Join my room "${displayRoomName}"\nhttps://app.com/room/${roomId}?name=${encodeURIComponent(displayRoomName)}` }); } catch(e){} } else { alert('Copied!'); } }} className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-600/30 transition-all"><Share2 className="w-5 h-5"/></button>
       </div>
 
-      <div className="flex-1 relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]">
+      <div className="flex-1 relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
         <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out w-[300%]" style={{ transform: `translateX(-${currentSlot * 33.333333}%)` }}>
           {slots.map((s, i) => (
             <div key={i} className="w-1/3 h-full pt-4 pointer-events-none">
@@ -285,8 +374,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             </div>
           ))}
         </div>
-        {currentSlot > 0 && <button onClick={() => setCurrentSlot(currentSlot - 1)} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-colors shadow-lg"><ChevronLeft/></button>}
-        {currentSlot < 2 && <button onClick={() => setCurrentSlot(currentSlot + 1)} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-colors shadow-lg"><ChevronRight/></button>}
+        {canGoLeft && <button onClick={() => { resetIdleTimer(); handleNavigation(leftTarget); }} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-all duration-500 shadow-lg ${isIdle ? 'opacity-0' : 'opacity-100'}`}><ChevronLeft/></button>}
+        {canGoRight && <button onClick={() => { resetIdleTimer(); handleNavigation(rightTarget); }} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-all duration-500 shadow-lg ${isIdle ? 'opacity-0' : 'opacity-100'}`}><ChevronRight/></button>}
       </div>
 
       <div className="h-[90px] bg-slate-900/90 border-t border-slate-700 p-4 flex items-center gap-4 overflow-x-auto no-scrollbar pointer-events-auto">
