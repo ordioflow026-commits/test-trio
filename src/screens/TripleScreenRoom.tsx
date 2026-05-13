@@ -41,7 +41,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const stateRef = useRef({ slots, currentSlot, viewMode });
   const hostWasPresent = useRef(false);
 
-  // 🛡️ Raw Engine Control
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const zgRef = useRef<ZegoExpressEngine | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -82,12 +81,17 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       remoteAudioRefs.current = {};
     } else {
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        const appID = Number(import.meta.env.VITE_ZEGO_APP_ID);
-        const serverSecret = import.meta.env.VITE_ZEGO_SERVER_SECRET;
-        if (!appID || !serverSecret) throw new Error("Missing Zego Config");
+        // 1. Force browser permission prompt
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        
+        // 2. Hardcoded Zego Credentials (from CallScreen.tsx)
+        const appID = 21954096;
+        const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
 
-        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, `audio_${roomId}`, user?.id || Date.now().toString(), myName);
+        // 3. Sanitize User ID (Zego rejects hyphens/special chars)
+        const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+        
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, `audio_${roomId}`, safeUserId, myName);
         const zg = new ZegoExpressEngine(appID, `wss://webliveroom${appID}-api.zego.im/ws`);
         zgRef.current = zg;
 
@@ -112,16 +116,18 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           }
         });
 
-        await zg.loginRoom(`audio_${roomId}`, kitToken, { userID: user?.id || 'u', userName: myName });
-        const localStream = await zg.createStream({ custom: { audio: { source: mediaStream } } });
+        await zg.loginRoom(`audio_${roomId}`, kitToken, { userID: safeUserId, userName: myName });
+        
+        // 4. Create internal Zego stream natively
+        const localStream = await zg.createStream({ camera: { audio: true, video: false } });
         localStreamRef.current = localStream;
-        zg.startPublishingStream(`stream_${user?.id}`, localStream);
+        zg.startPublishingStream(`stream_${safeUserId}`, localStream);
         
         setIsVoiceActive(true);
         updatePresence(true);
       } catch (err) {
         console.error("Mic Access Failed:", err);
-        alert(isAr ? 'تعذر الوصول للميكروفون.' : 'Mic access failed.');
+        alert(isAr ? 'تعذر الوصول للميكروفون أو حدث خطأ في الاتصال.' : 'Mic access failed or connection error.');
         setIsVoiceActive(false);
       }
     }
@@ -199,7 +205,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     return (slots[index].lock || 'none') === 'none';
   };
 
-  // 💡 RESTORED: Advanced Visitor Navigation Logic
   const handleNavigation = (targetSlot: number) => {
     if (targetSlot === currentSlot) return;
     const targetLock = slots[targetSlot].lock || 'none';
@@ -231,9 +236,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const renderSlotContent = (slot: SlotData, index: number) => {
     const editable = canEditSlot(index);
     const lockState = slot.lock || 'none';
-    const canInteractInside = editable || (!isHost && lockState === 'yellow'); // 💡 RESTORED: Advanced interaction
+    const canInteractInside = editable || (!isHost && lockState === 'yellow');
     
-    // 💡 RESTORED: The Full LockIndicator Menu
     const lockColors = {
       'none': 'bg-slate-900/60 border-[#00b4d8]/40 text-white/50 hover:bg-[#00b4d8]/20 hover:text-white hover:border-[#00b4d8] shadow-[0_4px_12px_rgba(0,0,0,0.3)]',
       'green': 'bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.3)]',
@@ -317,6 +321,12 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {!editable && lockState !== 'yellow' && <div className="absolute inset-0 z-[60] bg-transparent pointer-events-auto" />}
         <LockIndicator />
         {editable && <button onClick={() => updateSlot(index, { type: 'empty' })} className={`absolute top-4 left-1/2 -translate-x-1/2 z-50 p-2 bg-red-500/20 text-red-400 rounded-full border border-red-500/50 hover:bg-red-500 hover:text-white transition-all duration-500 ${isIdle && !openLockMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><X className="w-5 h-5"/></button>}
+        
+        {isHost && (
+           <button onClick={() => setSlotLock(index, lockState === 'none' ? 'red' : 'none')} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 rounded-full border transition-all ${lockState !== 'none' ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'}`} title={isAr ? "قفل الشاشة" : "Lock Screen"}>
+              {lockState !== 'none' ? <Lock className="w-5 h-5"/> : <Unlock className="w-5 h-5"/>}
+           </button>
+        )}
 
         {slot.type === 'web' && <div className="w-full h-full bg-slate-900 relative overflow-hidden">{slot.url ? <iframe src={slot.url} className="w-full h-full border-0 bg-white pointer-events-auto" sandbox="allow-same-origin allow-scripts allow-forms allow-popups" /> : <div className="w-full h-full flex flex-col items-center justify-center pointer-events-none"><Globe className="w-20 h-20 text-cyan-500/50 mb-6 animate-pulse" /><h2 className="text-2xl text-white font-bold">{isAr ? 'في انتظار الرابط...' : 'Waiting for URL...'}</h2></div>}</div>}
         {slot.type === 'youtube' && <SyncYouTubePlayer videoId={slot.url} roomId={roomId as string} isHost={isHost} canInteract={canInteractInside} isActive={currentSlot === index}/>}
