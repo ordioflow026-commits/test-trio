@@ -229,18 +229,26 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     const LockIndicator = () => {
        if (!isHost) return null; 
        const isMenuOpen = openLockMenu === index;
-       const availableLocks: LockState[] = viewMode === 'sync' ? ['white'] : ['green', 'yellow', 'red', 'white'];
+       const labels: Record<LockState, string> = dir === 'rtl' ? { none: 'إلغاء القفل', green: 'مرن وتفاعلي', yellow: 'تنبيه للمتابعة', red: 'إجبار المشاهدة', white: 'وضع الكواليس' } : { none: 'Unlock All', green: 'Flexible Mode', yellow: 'Stay Alert', red: 'Force View', white: 'Backstage Mode' };
+       
+       let availableLocks: LockState[] = viewMode === 'sync' ? ['white'] : ['green', 'yellow', 'red', 'white'];
+       if (lockState !== 'none') {
+           availableLocks = ['none', ...availableLocks.filter(l => l !== lockState)];
+       }
 
        return (
-         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-           <button onClick={() => setOpenLockMenu(isMenuOpen ? null : index)} className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md ${lockColors[lockState]}`}>
+         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+           <button onClick={() => { if (viewMode === 'sync') { setSlotLock(index, lockState === 'white' ? 'none' : 'white'); } else { setOpenLockMenu(isMenuOpen ? null : index); } }} className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 shadow-lg ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}>
              {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
            </button>
-           {isMenuOpen && (
-               <div dir="ltr" className="absolute top-10 left-0 flex flex-col gap-2 p-2 bg-[#0f172a] border border-slate-700 rounded-2xl z-[100] animate-in fade-in zoom-in duration-200">
+           {isMenuOpen && viewMode !== 'sync' && (
+               <div dir={dir} className={`absolute top-10 ${dir === 'rtl' ? 'right-0' : 'left-0'} flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[160px] z-[100]`}>
                    {availableLocks.map(l => (
-                       <button key={l} onClick={() => setSlotLock(index, l === lockState ? 'none' : l)} className={`w-8 h-8 rounded-full border flex items-center justify-center transition-transform hover:scale-110 ${lockColors[l]}`}>
-                           <Lock className="w-3 h-3" />
+                       <button key={l} onClick={() => setSlotLock(index, l)} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group">
+                           <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${lockColors[l]}`}>
+                               {l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                           </div>
+                           <span className="text-[11px] font-bold whitespace-nowrap text-slate-200">{labels[l]}</span>
                        </button>
                    ))}
                </div>
@@ -249,12 +257,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        );
     };
 
-    if (slot.type === 'empty') return (
-        <div className="flex flex-col items-center justify-center h-full relative">
-            <LockIndicator />
-            {editable ? <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-cyan-500/50 bg-cyan-500/10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-all"><Plus className="w-10 h-10"/></button> : <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار المضيف...' : 'Waiting...'}</span>}
-        </div>
-    );
+    if (slot.type === 'empty') return (<div className="flex flex-col items-center justify-center h-full relative"><LockIndicator />{editable ? <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-cyan-500/50 bg-cyan-500/10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-all"><Plus className="w-10 h-10"/></button> : <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار المضيف...' : 'Waiting...'}</span>}</div>);
 
     if (slot.type === 'menu') return (
         <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative bg-[#0A0E14] pointer-events-auto" dir={dir}>
