@@ -55,6 +55,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [unreadCount, setUnreadCount] = useState(0);
   const idleTimerRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const myName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'User');
   const myInitial = myName.charAt(0).toUpperCase();
@@ -194,6 +195,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (isHost) { setCurrentSlot(targetSlot); broadcastState(targetSlot, slots, viewMode); resetIdleTimer(); return; }
     if (viewMode === 'sync' || targetLock === 'red' || targetLock === 'white') return; 
     setCurrentSlot(targetSlot);
+    if (targetLock !== 'yellow') broadcastState(targetSlot, slots, viewMode);
     resetIdleTimer();
   };
 
@@ -213,6 +215,13 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     return -1;
   };
 
+  const scrollParticipants = (dir: 'l' | 'r') => {
+    if (scrollContainerRef.current) {
+      const amount = 150;
+      scrollContainerRef.current.scrollBy({ left: dir === 'r' ? amount : -amount, behavior: 'smooth' });
+    }
+  };
+
   const renderSlotContent = (slot: SlotData, index: number) => {
     const editable = canEditSlot(index);
     const lockState = slot.lock || 'none';
@@ -227,6 +236,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     };
 
     const LockIndicator = () => {
+       // 💡 الظهور التسلسلي الذكي: يظهر في الوسط أولاً، ثم اليمين، ثم اليسار
        if (!isHost || (index === 2 && lockState === 'none' && slots[1].lock === 'none') || (index === 0 && lockState === 'none' && slots[2].lock === 'none')) return null; 
        
        const isMenuOpen = openLockMenu === index;
@@ -291,7 +301,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             </div>
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-amber-400 font-bold uppercase tracking-wider">{isAr ? 'الاتصال الحي' : 'Live'}</h4>
-              <button onClick={() => updateSlot(index, { type: 'live' })} className="w-full h-full p-4 bg-black/20 border border-white/5 rounded-2xl hover:border-amber-500 transition-all flex flex-col items-center justify-center">
+              <button onClick={() => updateSlot(index, { type: 'live' })} className="w-full h-full p-4 bg-black/20 border border-white/5 hover:border-amber-500/40 rounded-2xl transition-all flex flex-col items-center justify-center">
                 <Video className="w-8 h-8 text-amber-400 mx-auto mb-2" />
                 <span className="text-xs text-white block text-center font-bold">{isAr ? 'بث مباشر' : 'Live Stream'}</span>
               </button>
@@ -357,23 +367,33 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {getRightTarget() !== -1 && <button onClick={() => { resetIdleTimer(); handleNavigation(getRightTarget()); }} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-all duration-500 shadow-lg ${isIdle && !openLockMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight/></button>}
       </div>
 
-      <div className={`h-[90px] bg-slate-900/90 border-t border-slate-700 p-4 flex items-center gap-4 overflow-x-auto no-scrollbar pointer-events-auto transition-transform duration-500 ${isIdle && !openLockMenu ? 'translate-y-full absolute bottom-0 w-full' : 'translate-y-0 relative'}`}>
-        <div className={`shrink-0 flex flex-col items-center gap-1 p-2 rounded-2xl border-2 transition-all ${isVoiceActive ? 'border-green-400 bg-green-400/5' : 'border-cyan-500 bg-cyan-500/5'}`}>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${isVoiceActive ? 'bg-green-400 text-slate-900' : 'bg-cyan-500 text-white shadow-lg'}`}>{myInitial}</div>
-          <span className="text-[10px] text-white font-bold">{myName} (أنت)</span>
-        </div>
-        {participants.map(p => (
-          <div key={p.id} className={`shrink-0 flex flex-col items-center gap-1 p-2 rounded-2xl border-2 transition-all ${p.isVoiceActive ? 'border-green-400 bg-green-400/5' : 'border-slate-700 bg-slate-800'}`}>
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${p.isVoiceActive ? 'bg-green-400 text-slate-900' : 'bg-slate-700 text-slate-300'}`}>{p.name[0].toUpperCase()}</div>
-            <span className="text-[10px] text-white font-medium">{p.name}</span>
+      {/* 💡 الشريط السفلي الجديد: تمرير المستخدمين + أيقونة الدردشة بمسافة فاصلة */}
+      <div className={`h-[95px] bg-slate-900/95 border-t border-slate-700/50 p-3 flex items-center gap-2 overflow-hidden pointer-events-auto transition-all duration-500 ${isIdle && !openLockMenu ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
+        <div className="relative flex items-center w-full px-8">
+          <button onClick={() => scrollParticipants('l')} className="absolute left-0 z-10 p-1 bg-slate-800 rounded-full text-white/50 hover:text-white"><ChevronLeft className="w-5 h-5"/></button>
+          <div ref={scrollContainerRef} className="flex-1 flex items-center gap-4 overflow-x-auto no-scrollbar py-2">
+            <div className={`shrink-0 flex flex-col items-center gap-1 p-2 rounded-2xl border-2 transition-all ${isVoiceActive ? 'border-green-400 bg-green-400/5' : 'border-cyan-500 bg-cyan-500/5'}`}>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${isVoiceActive ? 'bg-green-400 text-slate-900' : 'bg-cyan-500 text-white shadow-lg'}`}>{myInitial}</div>
+              <span className="text-[10px] text-white font-bold">{myName} (أنت)</span>
+            </div>
+            {participants.map(p => (
+              <div key={p.id} className={`shrink-0 flex flex-col items-center gap-1 p-2 rounded-2xl border-2 transition-all ${p.isVoiceActive ? 'border-green-400 bg-green-400/5' : 'border-slate-700 bg-slate-800'}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${p.isVoiceActive ? 'bg-green-400 text-slate-900' : 'bg-slate-700 text-slate-300'}`}>{p.name[0].toUpperCase()}</div>
+                <span className="text-[10px] text-white font-medium">{p.name}</span>
+              </div>
+            ))}
           </div>
-        ))}
+          <button onClick={() => scrollParticipants('r')} className="absolute right-10 z-10 p-1 bg-slate-800 rounded-full text-white/50 hover:text-white"><ChevronRight className="w-5 h-5"/></button>
+          
+          {/* 💡 أيقونة الدردشة في مكانها الجديد بمسافة فاصلة */}
+          <div className={`shrink-0 ${dir === 'rtl' ? 'mr-10' : 'ml-10'} relative`}>
+            <button onClick={() => { setIsChatOpen(true); setUnreadCount(0); }} className="w-12 h-12 bg-cyan-600 hover:bg-cyan-500 rounded-2xl flex items-center justify-center text-white shadow-lg transition-transform active:scale-95">
+              <MessageCircle className="w-6 h-6"/>
+              {unreadCount > 0 && !isChatOpen && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-900 animate-bounce">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+            </button>
+          </div>
+        </div>
       </div>
-
-      <button onClick={() => { setIsChatOpen(true); setUnreadCount(0); }} className={`fixed bottom-28 ${dir === 'rtl' ? 'left-4' : 'right-4'} z-[80] p-4 bg-cyan-600 hover:bg-cyan-500 rounded-full shadow-lg text-white transition-all duration-500 hover:scale-110 active:scale-95 ${isIdle && !openLockMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} title={isAr ? "الدردشة" : "Chat"}>
-        <MessageCircle className="w-6 h-6"/>
-        {unreadCount > 0 && !isChatOpen && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-slate-900 animate-bounce">{unreadCount > 9 ? '9+' : unreadCount}</span>}
-      </button>
 
       <RoomChat roomId={roomId} isHost={isHost} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} onNewMessage={() => { if (!isChatOpen) setUnreadCount(prev => prev + 1); }} />
 
