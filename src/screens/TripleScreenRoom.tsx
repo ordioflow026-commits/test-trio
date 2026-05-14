@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, MicOff, FileText, MonitorUp, MessageCircle, Hand } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, MicOff, FileText, MonitorUp, MessageCircle, Hand, Check } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
@@ -53,7 +53,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [webInput, setWebInput] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [knockToast, setKnockToast] = useState<string | null>(null);
+  const [knockRequest, setKnockRequest] = useState<{ userName: string, userId: string, slotIndex: number } | null>(null);
   const idleTimerRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
 
@@ -163,7 +163,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                   if (whiteIndexes.length > 0) setCurrentSlot(prev => whiteIndexes.includes(c) ? c : (whiteIndexes.includes(prev) ? prev : whiteIndexes[0]));
                   else setCurrentSlot(c);
               } else {
-                  // 💡 المضيف يتبع تحركات الزوار وتعديلاتهم فوراً إذا كانت الغرفة مفتوحة
                   const currentViewMode = m || viewMode;
                   if (currentViewMode === 'free') {
                       setCurrentSlot(c);
@@ -174,9 +173,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
       channel.on('broadcast', { event: 'room_knock' }, (payload) => {
           if (isHost) {
-              const { userName, slotIndex } = payload.payload;
-              setKnockToast(`${userName} ${isAr ? 'يطلب الدخول للشاشة' : 'requests entry to screen'} ${slotIndex + 1}`);
-              setTimeout(() => setKnockToast(null), 5000);
+              setKnockRequest(payload.payload);
+              setTimeout(() => setKnockRequest(null), 15000); // تختفي بعد 15 ثانية إن لم يُرد
           }
       });
 
@@ -188,8 +186,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (channelRef.current) { try { await channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots: newSlots, currentSlot: slotIndex, viewMode: mode, senderId: user?.id } }); } catch (err) {} }
   };
 
+  const canEditSlot = (index: number) => {
+    if (isHost) return true;
+    if (viewMode === 'sync') return false;
+    return (slots[index].lock || 'none') === 'none';
+  };
+
   const updateSlot = (index: number, data: SlotData) => {
-    if (!canEditSlot(index)) return;
+    if (!canEditSlot(index)) return; 
     const newSlots = [...slots]; newSlots[index] = { ...data, lock: slots[index].lock }; setSlots(newSlots);
     broadcastState(currentSlot, newSlots, viewMode);
   };
@@ -200,7 +204,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (lock === 'black' && !newSlots[index].allowedUsers) newSlots[index].allowedUsers = [];
     setSlots(newSlots);
     broadcastState(currentSlot, newSlots, viewMode);
-    if (lock !== 'black') setOpenLockMenu(null);
+    setOpenLockMenu(null); // القائمة تغلق دائماً الآن لأن إدارة الزوار منفصلة
   };
 
   const toggleUserAccess = (index: number, userId: string) => {
@@ -216,18 +220,23 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     broadcastState(currentSlot, newSlots, viewMode);
   };
 
-  const sendKnock = async (index: number) => {
-    if (channelRef.current && user) {
-        await channelRef.current.send({ type: 'broadcast', event: 'room_knock', payload: { userName: myName, slotIndex: index } });
-        alert(isAr ? 'تم إرسال طلبك للمضيف' : 'Request sent to host');
+  const handleAcceptKnock = () => {
+    if (!knockRequest) return;
+    const newSlots = [...slots];
+    const currentAllowed = newSlots[knockRequest.slotIndex].allowedUsers || [];
+    if (!currentAllowed.includes(knockRequest.userId)) {
+        newSlots[knockRequest.slotIndex].allowedUsers = [...currentAllowed, knockRequest.userId];
+        setSlots(newSlots);
+        broadcastState(currentSlot, newSlots, viewMode);
     }
+    setKnockRequest(null);
   };
 
-  // 💡 التحقق من الصلاحية: في وضع الغرفة المفتوحة، يمكن لأي شخص التعديل طالما لا يوجد قفل
-  const canEditSlot = (index: number) => {
-    if (isHost) return true;
-    if (viewMode === 'sync') return false;
-    return (slots[index].lock || 'none') === 'none';
+  const sendKnock = async (index: number) => {
+    if (channelRef.current && user) {
+        await channelRef.current.send({ type: 'broadcast', event: 'room_knock', payload: { userName: myName, userId: user.id, slotIndex: index } });
+        alert(isAr ? 'تم إرسال طلبك للمضيف. يرجى الانتظار.' : 'Request sent to host. Please wait.');
+    }
   };
 
   const handleNavigation = (targetSlot: number) => {
@@ -240,7 +249,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (targetLock === 'black' && !(slots[targetSlot].allowedUsers || []).includes(user?.id || '')) return;
 
     setCurrentSlot(targetSlot);
-    // 💡 يبث الزائر تحركه للجميع (بمن فيهم المضيف) إذا كانت الغرفة مفتوحة
     if (targetLock !== 'yellow') broadcastState(targetSlot, slots, viewMode);
     resetIdleTimer();
   };
@@ -281,10 +289,9 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       'yellow': 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400',
       'red': 'bg-red-500/20 border-red-500/50 text-red-400',
       'white': 'bg-white/20 border-white/50 text-white',
-      'black': 'bg-black/90 border-slate-600 text-slate-300'
+      'black': 'bg-black/90 border-slate-600 text-slate-300 shadow-xl'
     };
 
-    // 💡 الأقفال تظهر حصرياً للمضيف فقط مهما كان وضع الغرفة
     const LockIndicator = () => {
        if (!isHost || (index === 2 && lockState === 'none' && slots[1].lock === 'none') || (index === 0 && lockState === 'none' && slots[2].lock === 'none')) return null; 
        const isMenuOpen = openLockMenu === index;
@@ -298,35 +305,42 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
              {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
            </button>
            {isMenuOpen && (
-               <div dir={dir} className={`absolute top-10 ${dir === 'rtl' ? 'right-0' : 'left-0'} flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[170px] z-[100]`}>
-                   {/* 💡 Lock Options always visible at top */}
-                   <div className="flex flex-col gap-1">
-                       {availableLocks.map(l => (
-                           <button key={l} onClick={() => setSlotLock(index, l)} className={`flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group ${l === 'black' && lockState === 'black' ? 'bg-white/5 ring-1 ring-slate-600' : ''}`}>
-                               <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${lockColors[l]}`}>{l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}</div>
-                               <span className="text-[11px] font-bold whitespace-nowrap text-slate-200">{labels[l]}</span>
-                           </button>
-                       ))}
-                   </div>
-                   {/* 💡 Whitelist management integrated at bottom */}
-                   {lockState === 'black' && (
-                       <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-700">
-                          <span className="text-[10px] text-slate-400 font-bold px-1 uppercase tracking-wider">{isAr ? 'إدارة الوصول:' : 'Access Control:'}</span>
-                          <div className="max-h-[150px] overflow-y-auto no-scrollbar">
-                              {participants.length === 0 && <span className="text-[9px] text-slate-500 px-1 italic">{isAr ? 'لا يوجد طلاب حالياً' : 'No students found'}</span>}
-                              {participants.map(p => (
-                                  <label key={p.id} className="flex items-center gap-2 text-xs text-slate-200 p-1.5 hover:bg-white/10 rounded-lg cursor-pointer transition-colors">
-                                      <input type="checkbox" checked={(slot.allowedUsers || []).includes(p.id)} onChange={() => toggleUserAccess(index, p.id)} className="accent-cyan-500 w-3.5 h-3.5 rounded border-slate-600 bg-slate-800" />
-                                      <span className="truncate flex-1">{p.name}</span>
-                                  </label>
-                              ))}
-                          </div>
-                       </div>
-                   )}
+               <div dir={dir} className={`absolute top-10 ${dir === 'rtl' ? 'right-0' : 'left-0'} flex flex-col gap-1 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[150px] z-[100]`}>
+                   {availableLocks.map(l => (
+                       <button key={l} onClick={() => setSlotLock(index, l)} className={`flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group ${l === 'black' && lockState === 'black' ? 'bg-white/5 ring-1 ring-slate-600' : ''}`}>
+                           <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${lockColors[l]}`}>{l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}</div>
+                           <span className="text-[11px] font-bold whitespace-nowrap text-slate-200">{labels[l]}</span>
+                       </button>
+                   ))}
                </div>
            )}
          </div>
        );
+    };
+
+    // 💡 لوحة الإدارة الزجاجية المستقلة للقفل الأسود
+    const BlackLockPanel = () => {
+        if (!isHost || lockState !== 'black') return null;
+        return (
+            <div className={`absolute bottom-8 ${dir === 'rtl' ? 'left-8' : 'right-8'} z-[70] w-56 bg-[#0f172a]/80 backdrop-blur-md border border-slate-700/50 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] transition-all duration-500 overflow-hidden ${isIdle ? 'opacity-0 pointer-events-none translate-y-6' : 'opacity-100 translate-y-0'}`}>
+                <div className="bg-slate-800/80 p-3 border-b border-slate-700/50 flex items-center justify-between">
+                   <span className="text-xs text-slate-300 font-bold uppercase tracking-wider">{isAr ? 'الزوار المسموح لهم' : 'Allowed Visitors'}</span>
+                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
+                </div>
+                <div className="max-h-[180px] overflow-y-auto no-scrollbar p-2 flex flex-col gap-1">
+                    {participants.length === 0 && <span className="text-xs text-slate-500 italic text-center py-4">{isAr ? 'لا يوجد زوار' : 'No visitors'}</span>}
+                    {participants.map(p => (
+                        <label key={p.id} className="flex items-center gap-3 text-sm text-slate-200 p-2.5 hover:bg-white/10 rounded-xl cursor-pointer transition-all active:scale-95 group">
+                            <div className="relative flex items-center justify-center">
+                                <input type="checkbox" checked={(slot.allowedUsers || []).includes(p.id)} onChange={() => toggleUserAccess(index, p.id)} className="peer appearance-none w-5 h-5 border-2 border-slate-500 rounded bg-slate-800 checked:bg-cyan-500 checked:border-cyan-500 transition-colors" />
+                                <Check className="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
+                            </div>
+                            <span className="truncate flex-1 group-hover:text-white transition-colors">{p.name}</span>
+                        </label>
+                    ))}
+                </div>
+            </div>
+        );
     };
 
     if (!isAllowedInBlack) {
@@ -337,7 +351,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <p className="text-slate-500 text-xs mb-8">{isAr ? 'بانتظار موافقة المضيف...' : 'Waiting for host approval...'}</p>
                 <button onClick={() => sendKnock(index)} className="px-6 py-3 bg-slate-800 border border-slate-600 hover:bg-slate-700 hover:border-cyan-500 rounded-2xl text-white font-bold flex items-center gap-3 transition-all shadow-lg active:scale-95 group">
                     <Hand className="w-5 h-5 text-amber-400 group-hover:-translate-y-1 transition-transform" />
-                    {isAr ? 'طلب دخول' : 'Request Entry'}
+                    {isAr ? 'طلب دخول للمضيف' : 'Request Entry'}
                 </button>
             </div>
         );
@@ -347,7 +361,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         return (
             <div className="flex flex-col items-center justify-center h-full relative group">
                 <LockIndicator />
-                {/* 💡 الزوار لديهم صلاحية إضافة المحتوى في الغرفة المفتوحة */}
                 {editable ? (
                     <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-cyan-500/50 bg-cyan-500/10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-all shadow-xl">
                         <Plus className="w-10 h-10"/>
@@ -355,6 +368,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 ) : (
                     <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار المضيف...' : 'Waiting...'}</span>
                 )}
+                <BlackLockPanel />
             </div>
         );
     }
@@ -365,6 +379,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <div className="flex flex-col items-center justify-center h-full relative group">
                     <LockIndicator />
                     <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار إضافة محتوى...' : 'Waiting for content...'}</span>
+                    <BlackLockPanel />
                 </div>
             );
         }
@@ -376,45 +391,45 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <h3 className="text-3xl font-extrabold text-white">{isAr ? 'إضافة محتوى' : 'Add Content'}</h3>
                 <button onClick={() => updateSlot(index, { type: 'empty' })} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-0 p-4 bg-slate-800 rounded-2xl text-slate-400 hover:text-red-400 transition-all`}><X className="w-6 h-6" /></button>
               </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full pb-20">
-             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
-              <h4 className="text-cyan-400 font-bold uppercase">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => setShowWebModal(index)} className="p-6 bg-black/20 border border-white/5 rounded-2xl hover:border-cyan-500 transition-all"><Globe className="w-8 h-8 text-cyan-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Web</span></button>
-                <button onClick={() => setShowYoutubeModal(index)} className="p-6 bg-black/20 border border-white/5 rounded-2xl hover:border-red-500 transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full pb-20">
+                 <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
+                  <h4 className="text-cyan-400 font-bold uppercase">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button onClick={() => setShowWebModal(index)} className="p-6 bg-black/20 border border-white/5 rounded-2xl hover:border-cyan-500 transition-all"><Globe className="w-8 h-8 text-cyan-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Web</span></button>
+                    <button onClick={() => setShowYoutubeModal(index)} className="p-6 bg-black/20 border border-white/5 rounded-2xl hover:border-red-500 transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button>
+                  </div>
+                </div>
+                <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
+                  <h4 className="text-purple-400 font-bold uppercase">{isAr ? 'الشرح والتعليم' : 'Education'}</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => updateSlot(index, { type: 'whiteboard' })} className="p-4 bg-black/20 border border-white/5 rounded-2xl hover:border-purple-500 transition-all"><PenTool className="w-6 h-6 text-purple-400 mx-auto mb-2" /><span className="text-[10px] text-white block text-center font-bold">Board</span></button>
+                    <button onClick={() => updateSlot(index, { type: 'notes' })} className="p-4 bg-black/20 border border-white/5 rounded-2xl hover:border-blue-500 transition-all"><FileText className="w-6 h-6 text-blue-400 mx-auto mb-2" /><span className="text-[10px] text-white block text-center font-bold">Notes</span></button>
+                  </div>
+                </div>
+                <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
+                  <h4 className="text-emerald-400 font-bold uppercase tracking-wider">{isAr ? 'الملفات والعرض' : 'Files'}</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button onClick={() => updateSlot(index, { type: 'media' })} className="p-6 bg-black/20 border border-white/5 rounded-2xl hover:border-emerald-500 transition-all"><ImageIcon className="w-8 h-8 text-emerald-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Media</span></button>
+                    <button onClick={() => updateSlot(index, { type: 'document' })} className="p-6 bg-black/20 border border-white/5 rounded-2xl hover:border-teal-500 transition-all"><BookOpen className="w-8 h-8 text-teal-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Docs</span></button>
+                  </div>
+                </div>
+                <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
+                  <h4 className="text-amber-400 font-bold uppercase tracking-wider">{isAr ? 'الاتصال الحي' : 'Live'}</h4>
+                  <button onClick={() => updateSlot(index, { type: 'live' })} className="w-full h-full p-4 bg-black/20 border border-white/5 hover:border-amber-500/40 rounded-2xl transition-all flex flex-col items-center justify-center">
+                    <Video className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                    <span className="text-xs text-white block text-center font-bold">{isAr ? 'بث مباشر' : 'Live Stream'}</span>
+                  </button>
+                </div>
               </div>
+              <BlackLockPanel />
             </div>
-            <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
-              <h4 className="text-purple-400 font-bold uppercase">{isAr ? 'الشرح والتعليم' : 'Education'}</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => updateSlot(index, { type: 'whiteboard' })} className="p-4 bg-black/20 border border-white/5 rounded-2xl hover:border-purple-500 transition-all"><PenTool className="w-6 h-6 text-purple-400 mx-auto mb-2" /><span className="text-[10px] text-white block text-center font-bold">Board</span></button>
-                <button onClick={() => updateSlot(index, { type: 'notes' })} className="p-4 bg-black/20 border border-white/5 rounded-2xl hover:border-blue-500 transition-all"><FileText className="w-6 h-6 text-blue-400 mx-auto mb-2" /><span className="text-[10px] text-white block text-center font-bold">Notes</span></button>
-              </div>
-            </div>
-            <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
-              <h4 className="text-emerald-400 font-bold uppercase tracking-wider">{isAr ? 'الملفات والعرض' : 'Files'}</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => updateSlot(index, { type: 'media' })} className="p-6 bg-black/20 border border-white/5 rounded-2xl hover:border-emerald-500 transition-all"><ImageIcon className="w-8 h-8 text-emerald-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Media</span></button>
-                <button onClick={() => updateSlot(index, { type: 'document' })} className="p-6 bg-black/20 border border-white/5 rounded-2xl hover:border-teal-500 transition-all"><BookOpen className="w-8 h-8 text-teal-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Docs</span></button>
-              </div>
-            </div>
-            <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
-              <h4 className="text-amber-400 font-bold uppercase tracking-wider">{isAr ? 'الاتصال الحي' : 'Live'}</h4>
-              <button onClick={() => updateSlot(index, { type: 'live' })} className="w-full h-full p-4 bg-black/20 border border-white/5 hover:border-amber-500/40 rounded-2xl transition-all flex flex-col items-center justify-center">
-                <Video className="w-8 h-8 text-amber-400 mx-auto mb-2" />
-                <span className="text-xs text-white block text-center font-bold">{isAr ? 'بث مباشر' : 'Live Stream'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-    );
+        );
     }
 
     return (
       <div className="w-full h-full relative pointer-events-auto group">
         {!isHost && lockState === 'red' && <div className="absolute inset-0 z-[60] bg-transparent pointer-events-auto" />}
         <LockIndicator />
-        {/* 💡 علامة الإغلاق (X) تظهر لأي شخص لديه صلاحية التعديل (المضيف والزوار في الغرفة المفتوحة) */}
         {editable && <button onClick={() => updateSlot(index, { type: 'empty' })} className={`absolute top-4 left-1/2 -translate-x-1/2 z-50 p-2 bg-red-500/20 text-red-400 rounded-full border border-red-500/50 hover:bg-red-500 hover:text-white transition-all duration-500 ${isIdle && !openLockMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><X className="w-5 h-5"/></button>}
         
         {slot.type === 'web' && <div className="w-full h-full bg-slate-900 relative overflow-hidden">{slot.url ? <iframe src={slot.url} className="w-full h-full border-0 bg-white" /> : <div className="w-full h-full flex flex-col items-center justify-center"><Globe className="w-20 h-20 text-cyan-500/50 mb-6 animate-pulse" /><h2 className="text-2xl text-white font-bold">{isAr ? 'في انتظار الرابط...' : 'Waiting...'}</h2></div>}</div>}
@@ -424,6 +439,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {slot.type === 'notes' && <Notebook roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable}/>}
         {slot.type === 'document' && <UniversalViewer roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable}/>}
         {slot.type === 'live' && <LiveMeeting roomId={roomId as string} userName={myName}/>}
+        
+        <BlackLockPanel />
       </div>
     );
   };
@@ -438,9 +455,17 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         .animate-soundwave-4 { animation: soundwave 0.8s ease-in-out infinite 0.3s; }
       `}</style>
 
-      {knockToast && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[200] bg-cyan-600 text-white px-6 py-3 rounded-full font-bold shadow-[0_0_20px_rgba(8,145,178,0.5)] flex items-center gap-3 animate-in slide-in-from-top duration-300">
-          <Hand className="w-5 h-5 animate-bounce" /> {knockToast}
+      {/* 💡 إشعار طرق الباب التفاعلي للمضيف */}
+      {knockRequest && isHost && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[200] bg-slate-900/95 border border-slate-700 text-white px-4 py-3 rounded-3xl shadow-[0_10px_40px_rgba(8,145,178,0.3)] flex items-center gap-4 animate-in slide-in-from-top duration-300">
+          <div className="flex items-center gap-2">
+            <Hand className="w-5 h-5 text-amber-400 animate-bounce" />
+            <span className="text-sm font-bold">{knockRequest.userName} <span className="text-slate-400 font-normal">{isAr ? 'يطلب الدخول' : 'requests entry'}</span></span>
+          </div>
+          <div className="flex items-center gap-2 border-l border-slate-700 pl-4 ml-2">
+            <button onClick={handleAcceptKnock} className="p-2 bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white rounded-xl transition-colors shadow-sm" title={isAr ? "قبول" : "Accept"}><Check className="w-5 h-5"/></button>
+            <button onClick={() => setKnockRequest(null)} className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-xl transition-colors shadow-sm" title={isAr ? "رفض" : "Reject"}><X className="w-5 h-5"/></button>
+          </div>
         </div>
       )}
 
