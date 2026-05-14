@@ -155,11 +155,20 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           if (senderId === user.id) return; 
           if (s) setSlots(s);
           if (m) setViewMode(m);
-          if (c !== undefined && !isHost) {
+          if (c !== undefined) {
               const currentSlots = s || slots;
               const whiteIndexes = currentSlots.map((slot, idx) => slot.lock === 'white' ? idx : -1).filter(idx => idx !== -1);
-              if (whiteIndexes.length > 0) setCurrentSlot(prev => whiteIndexes.includes(c) ? c : (whiteIndexes.includes(prev) ? prev : whiteIndexes[0]));
-              else setCurrentSlot(c);
+              
+              if (!isHost) {
+                  if (whiteIndexes.length > 0) setCurrentSlot(prev => whiteIndexes.includes(c) ? c : (whiteIndexes.includes(prev) ? prev : whiteIndexes[0]));
+                  else setCurrentSlot(c);
+              } else {
+                  // 💡 المضيف يتبع تحركات الزوار وتعديلاتهم فوراً إذا كانت الغرفة مفتوحة
+                  const currentViewMode = m || viewMode;
+                  if (currentViewMode === 'free') {
+                      setCurrentSlot(c);
+                  }
+              }
           }
       });
 
@@ -173,7 +182,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
       return () => { supabase.removeChannel(channel); };
     }
-  }, [roomId, user, isVoiceActive, displayRoomName]);
+  }, [roomId, user, isVoiceActive, displayRoomName, viewMode]);
 
   const broadcastState = async (slotIndex: number, newSlots: SlotData[], mode: ViewMode) => {
     if (channelRef.current) { try { await channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots: newSlots, currentSlot: slotIndex, viewMode: mode, senderId: user?.id } }); } catch (err) {} }
@@ -214,6 +223,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     }
   };
 
+  // 💡 التحقق من الصلاحية: في وضع الغرفة المفتوحة، يمكن لأي شخص التعديل طالما لا يوجد قفل
   const canEditSlot = (index: number) => {
     if (isHost) return true;
     if (viewMode === 'sync') return false;
@@ -223,11 +233,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const handleNavigation = (targetSlot: number) => {
     if (targetSlot === currentSlot) return;
     const targetLock = slots[targetSlot].lock || 'none';
+    
     if (isHost) { setCurrentSlot(targetSlot); broadcastState(targetSlot, slots, viewMode); resetIdleTimer(); return; }
+    
     if (viewMode === 'sync' || targetLock === 'red' || targetLock === 'white') return; 
     if (targetLock === 'black' && !(slots[targetSlot].allowedUsers || []).includes(user?.id || '')) return;
 
     setCurrentSlot(targetSlot);
+    // 💡 يبث الزائر تحركه للجميع (بمن فيهم المضيف) إذا كانت الغرفة مفتوحة
     if (targetLock !== 'yellow') broadcastState(targetSlot, slots, viewMode);
     resetIdleTimer();
   };
@@ -271,6 +284,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       'black': 'bg-black/90 border-slate-600 text-slate-300'
     };
 
+    // 💡 الأقفال تظهر حصرياً للمضيف فقط مهما كان وضع الغرفة
     const LockIndicator = () => {
        if (!isHost || (index === 2 && lockState === 'none' && slots[1].lock === 'none') || (index === 0 && lockState === 'none' && slots[2].lock === 'none')) return null; 
        const isMenuOpen = openLockMenu === index;
@@ -329,15 +343,39 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         );
     }
 
-    if (slot.type === 'empty') return (<div className="flex flex-col items-center justify-center h-full relative group"><LockIndicator />{editable ? <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-cyan-500/50 bg-cyan-500/10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-all shadow-xl"><Plus className="w-10 h-10"/></button> : <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار المضيف...' : 'Waiting...'}</span>}</div>);
+    if (slot.type === 'empty') {
+        return (
+            <div className="flex flex-col items-center justify-center h-full relative group">
+                <LockIndicator />
+                {/* 💡 الزوار لديهم صلاحية إضافة المحتوى في الغرفة المفتوحة */}
+                {editable ? (
+                    <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-cyan-500/50 bg-cyan-500/10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-all shadow-xl">
+                        <Plus className="w-10 h-10"/>
+                    </button>
+                ) : (
+                    <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار المضيف...' : 'Waiting...'}</span>
+                )}
+            </div>
+        );
+    }
 
-    if (slot.type === 'menu') return (
-        <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative bg-[#0A0E14] pointer-events-auto" dir={dir}>
-          <LockIndicator />
-          <div className="flex justify-center items-center w-full mb-8 pt-10 relative">
-            <h3 className="text-3xl font-extrabold text-white">{isAr ? 'إضافة محتوى' : 'Add Content'}</h3>
-            <button onClick={() => updateSlot(index, { type: 'empty' })} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-0 p-4 bg-slate-800 rounded-2xl text-slate-400 hover:text-red-400 transition-all`}><X className="w-6 h-6" /></button>
-          </div>
+    if (slot.type === 'menu') {
+        if (!editable) {
+            return (
+                <div className="flex flex-col items-center justify-center h-full relative group">
+                    <LockIndicator />
+                    <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار إضافة محتوى...' : 'Waiting for content...'}</span>
+                </div>
+            );
+        }
+        
+        return (
+            <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative bg-[#0A0E14] pointer-events-auto" dir={dir}>
+              <LockIndicator />
+              <div className="flex justify-center items-center w-full mb-8 pt-10 relative">
+                <h3 className="text-3xl font-extrabold text-white">{isAr ? 'إضافة محتوى' : 'Add Content'}</h3>
+                <button onClick={() => updateSlot(index, { type: 'empty' })} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-0 p-4 bg-slate-800 rounded-2xl text-slate-400 hover:text-red-400 transition-all`}><X className="w-6 h-6" /></button>
+              </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full pb-20">
              <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
               <h4 className="text-cyan-400 font-bold uppercase">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
@@ -370,12 +408,15 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           </div>
         </div>
     );
+    }
 
     return (
       <div className="w-full h-full relative pointer-events-auto group">
-        {!editable && lockState === 'red' && <div className="absolute inset-0 z-[60] bg-transparent pointer-events-auto" />}
+        {!isHost && lockState === 'red' && <div className="absolute inset-0 z-[60] bg-transparent pointer-events-auto" />}
         <LockIndicator />
+        {/* 💡 علامة الإغلاق (X) تظهر لأي شخص لديه صلاحية التعديل (المضيف والزوار في الغرفة المفتوحة) */}
         {editable && <button onClick={() => updateSlot(index, { type: 'empty' })} className={`absolute top-4 left-1/2 -translate-x-1/2 z-50 p-2 bg-red-500/20 text-red-400 rounded-full border border-red-500/50 hover:bg-red-500 hover:text-white transition-all duration-500 ${isIdle && !openLockMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><X className="w-5 h-5"/></button>}
+        
         {slot.type === 'web' && <div className="w-full h-full bg-slate-900 relative overflow-hidden">{slot.url ? <iframe src={slot.url} className="w-full h-full border-0 bg-white" /> : <div className="w-full h-full flex flex-col items-center justify-center"><Globe className="w-20 h-20 text-cyan-500/50 mb-6 animate-pulse" /><h2 className="text-2xl text-white font-bold">{isAr ? 'في انتظار الرابط...' : 'Waiting...'}</h2></div>}</div>}
         {slot.type === 'youtube' && <SyncYouTubePlayer videoId={slot.url} roomId={roomId as string} isHost={isHost} canInteract={canInteractInside} isActive={currentSlot === index}/>}
         {slot.type === 'whiteboard' && <Whiteboard roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable}/>}
