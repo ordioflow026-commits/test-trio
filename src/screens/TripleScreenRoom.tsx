@@ -198,8 +198,9 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     resetIdleTimer();
   };
 
+  // 💡 تم إصلاح نطاق حدود الأسهم للمضيف (الخطأ المنطقي)
   const getLeftTarget = () => {
-    if (isHost) return currentSlot - 1;
+    if (isHost) return currentSlot > 0 ? currentSlot - 1 : -1;
     if (viewMode === 'sync') return -1; 
     if (slots[currentSlot].lock === 'red') return -1;
     for (let i = currentSlot - 1; i >= 0; i--) { if (slots[i].lock !== 'red' && slots[i].lock !== 'white') return i; }
@@ -207,7 +208,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   };
 
   const getRightTarget = () => {
-    if (isHost) return currentSlot + 1;
+    if (isHost) return currentSlot < 2 ? currentSlot + 1 : -1;
     if (viewMode === 'sync') return -1;
     if (slots[currentSlot].lock === 'red') return -1;
     for (let i = currentSlot + 1; i <= 2; i++) { if (slots[i].lock !== 'red' && slots[i].lock !== 'white') return i; }
@@ -228,29 +229,22 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     };
 
     const LockIndicator = () => {
-       // 💡 الظهور التسلسلي الذكي: يظهر في الوسط أولاً، ثم اليمين، ثم اليسار
        if (!isHost || (index === 2 && lockState === 'none' && slots[1].lock === 'none') || (index === 0 && lockState === 'none' && slots[2].lock === 'none')) return null; 
-       
        const isMenuOpen = openLockMenu === index;
-       const labels: Record<LockState, string> = dir === 'rtl' ? { none: 'إلغاء القفل', green: 'مرن وتفاعلي', yellow: 'تنبيه للمتابعة', red: 'إجبار المشاهدة', white: 'وضع الكواليس' } : { none: 'Unlock All', green: 'Flexible Mode', yellow: 'Stay Alert', red: 'Force View', white: 'Backstage Mode' };
-       
+       const labels: Record<LockState, string> = dir === 'rtl' ? { none: 'إلغاء القفل', green: 'مرن وتفاعلي', yellow: 'تنبيه للمتابعة', red: 'إجبار المشاهدة', white: 'وضع الكواليس' } : { none: 'Unlock', green: 'Flexible', yellow: 'Alert', red: 'Force View', white: 'Backstage' };
        let availableLocks: LockState[] = viewMode === 'sync' ? ['white'] : ['green', 'yellow', 'red', 'white'];
-       if (lockState !== 'none') {
-           availableLocks = ['none', ...availableLocks.filter(l => l !== lockState)];
-       }
+       if (lockState !== 'none') availableLocks = ['none', ...availableLocks.filter(l => l !== lockState)];
 
        return (
          <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-           <button onClick={() => { if (viewMode === 'sync') { setSlotLock(index, lockState === 'white' ? 'none' : 'white'); } else { setOpenLockMenu(isMenuOpen ? null : index); } }} className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 shadow-lg ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}>
+           <button onClick={() => { if (viewMode === 'sync') setSlotLock(index, lockState === 'white' ? 'none' : 'white'); else setOpenLockMenu(isMenuOpen ? null : index); }} className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 shadow-lg ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}>
              {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
            </button>
            {isMenuOpen && viewMode !== 'sync' && (
-               <div dir={dir} className={`absolute top-10 ${dir === 'rtl' ? 'right-0' : 'left-0'} flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[160px] z-[100]`}>
+               <div dir={dir} className={`absolute top-10 ${dir === 'rtl' ? 'right-0' : 'left-0'} flex flex-col gap-2 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[150px] z-[100]`}>
                    {availableLocks.map(l => (
                        <button key={l} onClick={() => setSlotLock(index, l)} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group">
-                           <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${lockColors[l]}`}>
-                               {l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                           </div>
+                           <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${lockColors[l]}`}>{l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}</div>
                            <span className="text-[11px] font-bold whitespace-nowrap text-slate-200">{labels[l]}</span>
                        </button>
                    ))}
@@ -260,7 +254,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        );
     };
 
-    if (slot.type === 'empty') return (<div className="flex flex-col items-center justify-center h-full relative group"><LockIndicator />{editable ? <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-cyan-500/50 bg-cyan-500/10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-all shadow-xl"><Plus className="w-10 h-10"/></button> : <p className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار المضيف...' : 'Waiting...'}</p>}</div>);
+    if (slot.type === 'empty') return (<div className="flex flex-col items-center justify-center h-full relative group"><LockIndicator />{editable ? <button onClick={() => updateSlot(index, { type: 'menu' })} className="w-24 h-24 rounded-full border-2 border-cyan-500/50 bg-cyan-500/10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-all shadow-xl"><Plus className="w-10 h-10"/></button> : <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار المضيف...' : 'Waiting...'}</span>}</div>);
 
     if (slot.type === 'menu') return (
         <div className="flex flex-col items-center justify-start h-full w-full max-w-5xl mx-auto p-4 overflow-y-auto relative bg-[#0A0E14] pointer-events-auto" dir={dir}>
@@ -332,7 +326,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         <button onClick={onExit} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-colors"><LogOut className="w-5 h-5"/></button>
         <div className="flex items-center gap-3">
           {isHost && (
-            <button onClick={() => { const m = viewMode === 'sync' ? 'free' : 'sync'; setViewMode(m); if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots, currentSlot, viewMode: m, senderId: user?.id } }); }} className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'}`}>
+            <button onClick={() => { const m = viewMode === 'sync' ? 'free' : 'sync'; setViewMode(m); if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots, currentSlot, viewMode: m, senderId: user?.id } }); }} className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>
               {viewMode === 'sync' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
               <span className="text-xs font-bold uppercase hidden sm:block">{viewMode}</span>
             </button>
@@ -359,7 +353,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {getRightTarget() !== -1 && <button onClick={() => { resetIdleTimer(); handleNavigation(getRightTarget()); }} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-all duration-500 shadow-lg ${isIdle && !openLockMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight/></button>}
       </div>
 
-      {/* 💡 الشريط السفلي المحسن: لا أسهم تمرير، وتصميم الدردشة الدائري السابقمع المسافة الفاصلة */}
       <div className={`h-[95px] bg-slate-900/95 border-t border-slate-700/50 p-3 flex items-center overflow-hidden pointer-events-auto transition-all duration-500 ${isIdle && !openLockMenu ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
           <div className="flex-1 flex items-center gap-4 overflow-x-auto no-scrollbar py-2 px-2">
             <div className={`shrink-0 flex flex-col items-center gap-1 p-2 rounded-2xl border-2 transition-all ${isVoiceActive ? 'border-green-400 bg-green-400/5' : 'border-cyan-500 bg-cyan-500/5'}`}>
@@ -374,7 +367,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             ))}
           </div>
           
-          {/* 💡 أيقونة الدردشة الدائرية السابقة بمسافة فاصلة */}
           <div className={`shrink-0 ${dir === 'rtl' ? 'mr-10' : 'ml-10'} relative px-2`}>
             <button onClick={() => { setIsChatOpen(true); setUnreadCount(0); }} className="w-14 h-14 bg-cyan-600 hover:bg-cyan-500 rounded-full flex items-center justify-center text-white shadow-[0_0_20px_rgba(8,145,178,0.4)] transition-all hover:scale-110 active:scale-95 border-2 border-cyan-400/30">
               <MessageCircle className="w-7 h-7"/>
