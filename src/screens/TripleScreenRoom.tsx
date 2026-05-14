@@ -55,7 +55,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [unreadCount, setUnreadCount] = useState(0);
   const idleTimerRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const myName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'User');
   const myInitial = myName.charAt(0).toUpperCase();
@@ -215,13 +214,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     return -1;
   };
 
-  const scrollParticipants = (dir: 'l' | 'r') => {
-    if (scrollContainerRef.current) {
-      const amount = 150;
-      scrollContainerRef.current.scrollBy({ left: dir === 'r' ? amount : -amount, behavior: 'smooth' });
-    }
-  };
-
   const renderSlotContent = (slot: SlotData, index: number) => {
     const editable = canEditSlot(index);
     const lockState = slot.lock || 'none';
@@ -279,14 +271,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full pb-20">
              <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
-              <h4 className="text-cyan-400 font-bold uppercase">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
+              <h4 className="text-cyan-400 font-bold uppercase tracking-wider">{isAr ? 'الإنترنت والمشاهدة' : 'Internet'}</h4>
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => setShowWebModal(index)} className="p-6 bg-black/20 border border-white/5 rounded-2xl hover:border-cyan-500 transition-all"><Globe className="w-8 h-8 text-cyan-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">Web</span></button>
                 <button onClick={() => setShowYoutubeModal(index)} className="p-6 bg-black/20 border border-white/5 rounded-2xl hover:border-red-500 transition-all"><Youtube className="w-8 h-8 text-red-400 mx-auto mb-2" /><span className="text-xs text-white block text-center font-bold">YouTube</span></button>
               </div>
             </div>
             <div className="bg-slate-900/80 border border-white/5 rounded-[32px] p-6 flex flex-col gap-4">
-              <h4 className="text-purple-400 font-bold uppercase">{isAr ? 'الشرح والتعليم' : 'Education'}</h4>
+              <h4 className="text-purple-400 font-bold uppercase tracking-wider">{isAr ? 'الشرح والتعليم' : 'Education'}</h4>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => updateSlot(index, { type: 'whiteboard' })} className="p-4 bg-black/20 border border-white/5 rounded-2xl hover:border-purple-500 transition-all"><PenTool className="w-6 h-6 text-purple-400 mx-auto mb-2" /><span className="text-[10px] text-white block text-center font-bold">Board</span></button>
                 <button onClick={() => updateSlot(index, { type: 'notes' })} className="p-4 bg-black/20 border border-white/5 rounded-2xl hover:border-blue-500 transition-all"><FileText className="w-6 h-6 text-blue-400 mx-auto mb-2" /><span className="text-[10px] text-white block text-center font-bold">Notes</span></button>
@@ -340,7 +332,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         <button onClick={onExit} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-colors"><LogOut className="w-5 h-5"/></button>
         <div className="flex items-center gap-3">
           {isHost && (
-            <button onClick={() => { const m = viewMode === 'sync' ? 'free' : 'sync'; setViewMode(m); if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots, currentSlot, viewMode: m, senderId: user?.id } }); }} className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'}`}>
+            <button onClick={() => { const m = viewMode === 'sync' ? 'free' : 'sync'; setViewMode(m); if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'room_state', payload: { slots, currentSlot, viewMode: m, senderId: user?.id } }); }} className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${viewMode === 'sync' ? 'border-red-500/50 bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'}`}>
               {viewMode === 'sync' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
               <span className="text-xs font-bold uppercase hidden sm:block">{viewMode}</span>
             </button>
@@ -356,7 +348,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       <div className="flex-1 relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>
         <div className="absolute top-0 left-0 h-full flex transition-transform duration-700 ease-in-out w-[300%]" style={{ transform: `translateX(-${currentSlot * 33.333333}%)` }}>
           {slots.map((s, i) => (
-            <div key={i} className="w-1/3 h-full pt-4 pointer-events-none">
+            <div key={i} className={`w-1/3 h-full pt-4 pointer-events-none`}>
                 <div className="w-full h-full pointer-events-auto">
                    {renderSlotContent(s, i)}
                 </div>
@@ -367,11 +359,9 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {getRightTarget() !== -1 && <button onClick={() => { resetIdleTimer(); handleNavigation(getRightTarget()); }} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-all duration-500 shadow-lg ${isIdle && !openLockMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight/></button>}
       </div>
 
-      {/* 💡 الشريط السفلي الجديد: تمرير المستخدمين + أيقونة الدردشة بمسافة فاصلة */}
-      <div className={`h-[95px] bg-slate-900/95 border-t border-slate-700/50 p-3 flex items-center gap-2 overflow-hidden pointer-events-auto transition-all duration-500 ${isIdle && !openLockMenu ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
-        <div className="relative flex items-center w-full px-8">
-          <button onClick={() => scrollParticipants('l')} className="absolute left-0 z-10 p-1 bg-slate-800 rounded-full text-white/50 hover:text-white"><ChevronLeft className="w-5 h-5"/></button>
-          <div ref={scrollContainerRef} className="flex-1 flex items-center gap-4 overflow-x-auto no-scrollbar py-2">
+      {/* 💡 الشريط السفلي المحسن: لا أسهم تمرير، وتصميم الدردشة الدائري السابقمع المسافة الفاصلة */}
+      <div className={`h-[95px] bg-slate-900/95 border-t border-slate-700/50 p-3 flex items-center overflow-hidden pointer-events-auto transition-all duration-500 ${isIdle && !openLockMenu ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
+          <div className="flex-1 flex items-center gap-4 overflow-x-auto no-scrollbar py-2 px-2">
             <div className={`shrink-0 flex flex-col items-center gap-1 p-2 rounded-2xl border-2 transition-all ${isVoiceActive ? 'border-green-400 bg-green-400/5' : 'border-cyan-500 bg-cyan-500/5'}`}>
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${isVoiceActive ? 'bg-green-400 text-slate-900' : 'bg-cyan-500 text-white shadow-lg'}`}>{myInitial}</div>
               <span className="text-[10px] text-white font-bold">{myName} (أنت)</span>
@@ -383,16 +373,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
               </div>
             ))}
           </div>
-          <button onClick={() => scrollParticipants('r')} className="absolute right-10 z-10 p-1 bg-slate-800 rounded-full text-white/50 hover:text-white"><ChevronRight className="w-5 h-5"/></button>
           
-          {/* 💡 أيقونة الدردشة في مكانها الجديد بمسافة فاصلة */}
-          <div className={`shrink-0 ${dir === 'rtl' ? 'mr-10' : 'ml-10'} relative`}>
-            <button onClick={() => { setIsChatOpen(true); setUnreadCount(0); }} className="w-12 h-12 bg-cyan-600 hover:bg-cyan-500 rounded-2xl flex items-center justify-center text-white shadow-lg transition-transform active:scale-95">
-              <MessageCircle className="w-6 h-6"/>
-              {unreadCount > 0 && !isChatOpen && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-900 animate-bounce">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+          {/* 💡 أيقونة الدردشة الدائرية السابقة بمسافة فاصلة */}
+          <div className={`shrink-0 ${dir === 'rtl' ? 'mr-10' : 'ml-10'} relative px-2`}>
+            <button onClick={() => { setIsChatOpen(true); setUnreadCount(0); }} className="w-14 h-14 bg-cyan-600 hover:bg-cyan-500 rounded-full flex items-center justify-center text-white shadow-[0_0_20px_rgba(8,145,178,0.4)] transition-all hover:scale-110 active:scale-95 border-2 border-cyan-400/30">
+              <MessageCircle className="w-7 h-7"/>
+              {unreadCount > 0 && !isChatOpen && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-slate-900 animate-bounce shadow-lg">{unreadCount > 9 ? '9+' : unreadCount}</span>}
             </button>
           </div>
-        </div>
       </div>
 
       <RoomChat roomId={roomId} isHost={isHost} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} onNewMessage={() => { if (!isChatOpen) setUnreadCount(prev => prev + 1); }} />
