@@ -69,6 +69,7 @@ export default function MainScreen() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null); // 💡 New State for actual file
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,33 +113,57 @@ export default function MainScreen() {
      localStorage.setItem('trio_notifications', JSON.stringify(updated));
   };
 
-  // 💡 Profile Handlers
+  // 💡 Robust Profile Handlers with Supabase Storage
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => { setAvatarUrl(reader.result as string); };
-      reader.readAsDataURL(file);
+      setAvatarFile(file); // Save file to state
+      setAvatarUrl(URL.createObjectURL(file)); // Show instant local preview
     }
   };
 
   const handleSaveProfile = async () => {
     setIsSavingProfile(true);
     try {
-      // 1. Update Local Storage & State
+      let finalAvatarUrl = avatarUrl;
+
+      // 1. Upload Avatar to Supabase Storage if a new file was selected
+      if (avatarFile && user?.id) {
+        const fileExt = avatarFile.name.split('.').pop();
+        const fileName = `avatar_${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('chat-attachments') // Using existing bucket
+          .upload(`${user.id}/${fileName}`, avatarFile);
+          
+        if (!uploadError) {
+          const { data } = supabase.storage.from('chat-attachments').getPublicUrl(`${user.id}/${fileName}`);
+          finalAvatarUrl = data.publicUrl;
+        }
+      }
+
+      // 2. Update Supabase Database (Profiles Table)
+      if (user?.id) {
+        await supabase.from('profiles').update({ 
+          name: editName,
+          avatar_url: finalAvatarUrl // Optional: if column exists
+        }).eq('id', user.id);
+      }
+
+      // 3. Update Local Storage & State with the short URL
       setUserData(prev => ({ ...prev, fullName: editName }));
+      setAvatarUrl(finalAvatarUrl);
+      setAvatarFile(null); // Clear pending file
+
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
         const parsed = JSON.parse(storedUser);
         parsed.fullName = editName;
-        parsed.avatar = avatarUrl;
+        parsed.avatar = finalAvatarUrl; // Save short URL instead of huge base64
         localStorage.setItem('user', JSON.stringify(parsed));
         if (setUser) setUser(parsed); // Sync context
       }
-      // 2. Update Supabase Database
-      if (user?.id) {
-        await supabase.from('profiles').update({ name: editName }).eq('id', user.id);
-      }
+      
       setIsEditingProfile(false);
     } catch (err) {
       console.error("Failed to save profile", err);
@@ -229,7 +254,6 @@ export default function MainScreen() {
           </div>
         )}
 
-        {/* 💡 Updated Profile Tab with Edit Mode & Avatar Upload */}
         {activeMainTab === 'profile' && (
           <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-transparent to-slate-900/50 animate-in fade-in duration-300">
             <div className="w-full max-w-sm bg-slate-800/40 p-8 rounded-[32px] border border-slate-700/50 shadow-2xl flex flex-col items-center relative backdrop-blur-sm">
@@ -239,7 +263,7 @@ export default function MainScreen() {
                    <Edit3 className="w-5 h-5" />
                  </button>
               ) : (
-                 <button onClick={() => { setIsEditingProfile(false); setAvatarUrl(JSON.parse(localStorage.getItem('user') || '{}').avatar || null); }} className={`absolute top-6 ${dir === 'rtl' ? 'left-6' : 'right-6'} p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700/50 rounded-full transition-colors`} title={isAr ? "إلغاء" : "Cancel"}>
+                 <button onClick={() => { setIsEditingProfile(false); setAvatarFile(null); setAvatarUrl(JSON.parse(localStorage.getItem('user') || '{}').avatar || null); }} className={`absolute top-6 ${dir === 'rtl' ? 'left-6' : 'right-6'} p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700/50 rounded-full transition-colors`} title={isAr ? "إلغاء" : "Cancel"}>
                    <X className="w-5 h-5" />
                  </button>
               )}
@@ -272,7 +296,7 @@ export default function MainScreen() {
                   <p className="text-lg text-blue-400 font-medium tracking-wider" dir="ltr">{userData.phone}</p>
                 </>
               ) : (
-                <div className="w-full space-y-4 w-full">
+                <div className="w-full space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-400 px-1">{isAr ? 'الاسم الكامل' : 'Full Name'}</label>
                     <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-slate-900/50 border border-slate-600 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all" />
