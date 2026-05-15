@@ -90,9 +90,8 @@ export default function MainScreen() {
   const { isSelectionMode, selectedContactIds, clearSelection } = useSelection();
   const { user } = useUser();
   const [userData, setUserData] = useState({ fullName: 'Guest', phone: '' });
-  const [hasNotifications, setHasNotifications] = useState(true);
-  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-  const [isFirstLogin, setIsFirstLogin] = useState(true);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
 
   const [activeCall, setActiveCall] = useState<{ isVideo: boolean; title: string; count: number } | null>(null);
 
@@ -128,24 +127,34 @@ export default function MainScreen() {
         console.error('Failed to parse user data', e);
       }
     }
-    
-    const hasSeenWelcome = sessionStorage.getItem('hasSeenWelcome');
-    if (hasSeenWelcome) {
-      setIsFirstLogin(false);
-      setHasNotifications(false);
-    }
   }, []);
 
-  const handleBellClick = () => {
-    if (isFirstLogin) {
-      setShowWelcomeModal(!showWelcomeModal);
-      setIsFirstLogin(false);
-      setHasNotifications(false);
-      sessionStorage.setItem('hasSeenWelcome', 'true');
-    } else {
-      setActiveMainTab('notifications');
-      setShowWelcomeModal(false);
+  useEffect(() => {
+    const savedNotifs = localStorage.getItem('trio_notifications');
+    let currentNotifs = savedNotifs ? JSON.parse(savedNotifs) : [];
+
+    const welcomeAdded = localStorage.getItem('trio_welcome_added');
+    if (!welcomeAdded) {
+      const welcomeMessage = {
+        id: 'welcome_' + Date.now(),
+        text: 'مرحباً بك في التطبيق! يسعدنا انضمامك إلينا، يمكنك الآن البدء بإنشاء غرفتك الخاصة أو الانضمام لغرف الآخرين.',
+        read: false,
+        date: new Date().toISOString()
+      };
+      currentNotifs = [welcomeMessage, ...currentNotifs];
+      localStorage.setItem('trio_welcome_added', 'true');
+      localStorage.setItem('trio_notifications', JSON.stringify(currentNotifs));
     }
+    setNotifications(currentNotifs);
+  }, []);
+
+  const toggleNotifications = () => {
+     setIsNotifOpen(!isNotifOpen);
+     if (!isNotifOpen) {
+        const updated = notifications.map(n => ({ ...n, read: true }));
+        setNotifications(updated);
+        localStorage.setItem('trio_notifications', JSON.stringify(updated));
+     }
   };
 
   return (
@@ -175,35 +184,37 @@ export default function MainScreen() {
             
             <div className="relative">
               <button
-                onClick={handleBellClick}
+                onClick={toggleNotifications}
                 className={`relative p-3 rounded-full transition-all duration-300 border ${
-                  activeMainTab === 'notifications'
+                  isNotifOpen
                     ? 'bg-blue-700 border-blue-500 text-white shadow-[0_0_15px_rgba(29,78,216,0.5)]'
                     : 'border-blue-500/50 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20'
                 }`}
               >
                 <Bell className="w-6 h-6" />
-                {hasNotifications && (
+                {notifications.some(n => !n.read) && (
                   <span className={`absolute top-2.5 ${dir === 'rtl' ? 'left-2.5' : 'right-2.5'} w-2.5 h-2.5 bg-red-500 border-2 border-[#0F172A] rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]`}></span>
                 )}
               </button>
               
-              {showWelcomeModal && (
-                <div className="absolute top-16 left-1/2 transform -translate-x-1/2 mt-2 w-64 bg-slate-800 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.6)] border border-slate-700/50 p-4 z-50 animate-in fade-in slide-in-from-top-4">
-                  <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-slate-800 border-l border-t border-slate-700/50 rotate-45"></div>
-                  <div className="flex items-center gap-3 mb-2 relative z-10">
-                    <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center border border-blue-500/30">
-                      <span className="text-xl">👋</span>
-                    </div>
-                    <div>
-                      {/* 💡 التحديث: ترجمة النصوص الثابتة */}
-                      <h3 className="font-bold text-white tracking-tight">{t('notifications') || 'Notification'}</h3>
-                      <p className="text-[10px] text-slate-400">{t('justNow') || 'Just now'}</p>
-                    </div>
+              {isNotifOpen && (
+                <div className="absolute top-16 left-1/2 transform -translate-x-1/2 mt-2 w-80 bg-[#0f172a] rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.6)] border border-slate-700/50 z-50 animate-in fade-in slide-in-from-top-4 overflow-hidden">
+                  <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-[#0f172a] border-l border-t border-slate-700/50 rotate-45"></div>
+                  <div className="p-4 border-b border-slate-700 bg-slate-800/50 relative z-10">
+                    <span className="font-bold text-white">{t('notifications') || 'Notifications'}</span>
                   </div>
-                  <p className="text-sm border-t border-slate-700/50 pt-3 text-slate-200 mt-2 font-medium relative z-10">
-                    {t('welcomeBack') || 'Welcome back'}, <span className="text-blue-400">{userData.fullName}</span>!
-                  </p>
+                  <div className="max-h-72 overflow-y-auto relative z-10" dir={dir}>
+                    {notifications.length === 0 ? (
+                      <div className="p-6 text-center text-slate-500 text-sm">لا توجد إشعارات</div>
+                    ) : (
+                      notifications.map(n => (
+                        <div key={n.id} className="p-4 border-b border-slate-700/50 hover:bg-white/5 flex gap-3 text-start">
+                           <div className="w-2 h-2 mt-1.5 rounded-full shrink-0 bg-cyan-500"></div>
+                           <p className="text-slate-200 text-sm leading-relaxed">{n.text}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
             </div>
