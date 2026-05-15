@@ -179,18 +179,25 @@ export default function MainScreen() {
       <header className="bg-[#0F172A]/90 backdrop-blur-xl border-b border-slate-800/80 sticky top-0 z-20 shadow-lg shadow-black/20">
         <div className="flex items-center justify-between h-20 px-4 w-full">
           <div className="w-24 sm:w-32 flex items-center gap-2">
-            <svg viewBox="0 0 100 100" className="w-8 h-8 drop-shadow-[0_0_8px_rgba(0,229,255,0.6)]" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg viewBox="0 0 100 100" className="w-8 h-8 sm:w-9 sm:h-9 drop-shadow-[0_0_10px_rgba(0,229,255,0.5)]" xmlns="http://www.w3.org/2000/svg">
               <defs>
-                <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <linearGradient id="trioGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor="#00E5FF" />
                   <stop offset="100%" stopColor="#2563EB" />
                 </linearGradient>
+                <path id="trio-loop" d="M 42 44 L 42 16 A 8 8 0 0 1 58 16 L 58 53.24 Z" />
+                <clipPath id="trio-clip"><rect x="50" y="0" width="50" height="100" /></clipPath>
               </defs>
-              <circle cx="50" cy="50" r="42" stroke="url(#logoGradient)" strokeWidth="5.5" />
-              <g stroke="url(#logoGradient)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" />
-                <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" transform="rotate(120 50 50)" />
-                <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" transform="rotate(240 50 50)" />
+              <circle cx="50" cy="50" r="42" stroke="url(#trioGradient)" strokeWidth="3.5" fill="none" />
+              <g fill="none" strokeLinejoin="round">
+                <use href="#trio-loop" stroke="#0F172A" strokeWidth="9" />
+                <use href="#trio-loop" stroke="url(#trioGradient)" strokeWidth="4.5" />
+                <use href="#trio-loop" transform="rotate(120 50 50)" stroke="#0F172A" strokeWidth="9" />
+                <use href="#trio-loop" transform="rotate(120 50 50)" stroke="url(#trioGradient)" strokeWidth="4.5" />
+                <use href="#trio-loop" transform="rotate(240 50 50)" stroke="#0F172A" strokeWidth="9" />
+                <use href="#trio-loop" transform="rotate(240 50 50)" stroke="url(#trioGradient)" strokeWidth="4.5" />
+                <use href="#trio-loop" clipPath="url(#trio-clip)" stroke="#0F172A" strokeWidth="9" />
+                <use href="#trio-loop" clipPath="url(#trio-clip)" stroke="url(#trioGradient)" strokeWidth="4.5" />
               </g>
             </svg>
             <span className="text-sm font-bold text-white tracking-wide hidden sm:block">TrioSync</span>
