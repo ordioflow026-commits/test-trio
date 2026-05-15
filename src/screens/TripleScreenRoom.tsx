@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, MicOff, FileText, MonitorUp, MessageCircle, Hand, Check, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, MicOff, FileText, MonitorUp, MessageCircle, Hand, Check, Loader2, Users } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
@@ -47,6 +47,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
   const [isIdle, setIsIdle] = useState(false);
   const [openLockMenu, setOpenLockMenu] = useState<number | null>(null);
+  const [openWhitelistMenu, setOpenWhitelistMenu] = useState<number | null>(null);
   const [showYoutubeModal, setShowYoutubeModal] = useState<number | null>(null);
   const [youtubeInput, setYoutubeInput] = useState('');
   const [showWebModal, setShowWebModal] = useState<number | null>(null);
@@ -54,7 +55,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [knockRequest, setKnockRequest] = useState<{ userName: string, userId: string, slotIndex: number } | null>(null);
-  const [knockingSlot, setKnockingSlot] = useState<number | null>(null); // حالة جديدة للزر
+  const [knockingSlot, setKnockingSlot] = useState<number | null>(null); 
   const idleTimerRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
 
@@ -206,6 +207,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     setSlots(newSlots);
     broadcastState(currentSlot, newSlots, viewMode);
     setOpenLockMenu(null); 
+    if (lock !== 'black') setOpenWhitelistMenu(null);
   };
 
   const toggleUserAccess = (index: number, userId: string) => {
@@ -233,12 +235,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     setKnockRequest(null);
   };
 
-  // 💡 تحديث دالة طرق الباب لإزالة Alert واستخدام UI سلس
   const sendKnock = async (index: number) => {
     if (channelRef.current && user) {
         setKnockingSlot(index);
         await channelRef.current.send({ type: 'broadcast', event: 'room_knock', payload: { userName: myName, userId: user.id, slotIndex: index } });
-        setTimeout(() => setKnockingSlot(null), 15000); // إخفاء علامة التحميل بعد 15 ثانية إن لم يرد المضيف
+        setTimeout(() => setKnockingSlot(null), 15000); 
     }
   };
 
@@ -298,54 +299,66 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     const LockIndicator = () => {
        if (!isHost || (index === 2 && lockState === 'none' && slots[1].lock === 'none') || (index === 0 && lockState === 'none' && slots[2].lock === 'none')) return null; 
        const isMenuOpen = openLockMenu === index;
+       const isWhitelistMenuOpen = openWhitelistMenu === index;
        const labels: Record<LockState, string> = dir === 'rtl' ? { none: 'إلغاء القفل', green: 'مرن وتفاعلي', yellow: 'تنبيه للمتابعة', red: 'إجبار المشاهدة', white: 'وضع الكواليس', black: 'غرفة خاصة' } : { none: 'Unlock', green: 'Flexible', yellow: 'Alert', red: 'Force View', white: 'Backstage', black: 'Private Room' };
        let baseLocks: LockState[] = viewMode === 'sync' ? ['white', 'black'] : ['green', 'yellow', 'red', 'white', 'black'];
        let availableLocks: LockState[] = lockState === 'none' ? baseLocks : ['none', ...baseLocks.filter(l => l !== lockState)];
 
        return (
-         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-           <button onClick={() => setOpenLockMenu(isMenuOpen ? null : index)} className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 shadow-lg ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}>
-             {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-           </button>
-           {isMenuOpen && (
-               <div dir={dir} className={`absolute top-10 ${dir === 'rtl' ? 'right-0' : 'left-0'} flex flex-col gap-1 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[150px] z-[100]`}>
-                   {availableLocks.map(l => (
-                       <button key={l} onClick={() => setSlotLock(index, l)} className={`flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group ${l === 'black' && lockState === 'black' ? 'bg-white/5 ring-1 ring-slate-600' : ''}`}>
-                           <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${lockColors[l]}`}>{l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}</div>
-                           <span className="text-[11px] font-bold whitespace-nowrap text-slate-200">{labels[l]}</span>
-                       </button>
-                   ))}
+         <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen && !isWhitelistMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'} flex items-start gap-2`}>
+           
+           {/* الزر الرئيسي للقفل */}
+           <div className="relative">
+               <button onClick={() => { setOpenLockMenu(isMenuOpen ? null : index); setOpenWhitelistMenu(null); }} className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 shadow-lg ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}>
+                 {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+               </button>
+               {isMenuOpen && (
+                   <div dir={dir} className={`absolute top-10 ${dir === 'rtl' ? 'right-0' : 'left-0'} flex flex-col gap-1 p-2 bg-[#0f172a]/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 min-w-[150px] z-[100]`}>
+                       {availableLocks.map(l => (
+                           <button key={l} onClick={() => setSlotLock(index, l)} className={`flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group ${l === 'black' && lockState === 'black' ? 'bg-white/5 ring-1 ring-slate-600' : ''}`}>
+                               <div className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${lockColors[l]}`}>{l === 'none' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}</div>
+                               <span className="text-[11px] font-bold whitespace-nowrap text-slate-200">{labels[l]}</span>
+                           </button>
+                       ))}
+                   </div>
+               )}
+           </div>
+
+           {/* زر إدارة الزوار (يظهر فقط إذا كان القفل أسود) */}
+           {lockState === 'black' && (
+               <div className="relative">
+                   <button onClick={() => { setOpenWhitelistMenu(isWhitelistMenuOpen ? null : index); setOpenLockMenu(null); }} className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 shadow-lg bg-black/90 border-slate-600 text-slate-300 ${isWhitelistMenuOpen ? 'ring-2 ring-cyan-500' : ''}`} title={isAr ? "إدارة الزوار" : "Manage Visitors"}>
+                       <Users className="w-4 h-4" />
+                       {(slot.allowedUsers || []).length > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border border-black animate-pulse"></span>}
+                   </button>
+
+                   {isWhitelistMenuOpen && (
+                       <div dir={dir} className={`absolute top-10 ${dir === 'rtl' ? 'right-0' : 'left-0'} w-56 bg-[#0f172a]/95 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-[100] animate-in fade-in zoom-in duration-200 overflow-hidden`}>
+                            <div className="bg-slate-800/80 p-3 border-b border-slate-700/50 flex items-center justify-between">
+                               <span className="text-xs text-slate-300 font-bold uppercase tracking-wider">{isAr ? 'المسموح لهم بالدخول' : 'Allowed Visitors'}</span>
+                               <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
+                            </div>
+                            <div className="max-h-[180px] overflow-y-auto no-scrollbar p-2 flex flex-col gap-1">
+                                {participants.length === 0 && <span className="text-xs text-slate-500 italic text-center py-4">{isAr ? 'لا يوجد زوار' : 'No visitors'}</span>}
+                                {participants.map(p => (
+                                    <label key={p.id} className="flex items-center gap-3 text-sm text-slate-200 p-2.5 hover:bg-white/10 rounded-xl cursor-pointer transition-all active:scale-95 group">
+                                        <div className="relative flex items-center justify-center">
+                                            <input type="checkbox" checked={(slot.allowedUsers || []).includes(p.id)} onChange={() => toggleUserAccess(index, p.id)} className="peer appearance-none w-5 h-5 border-2 border-slate-500 rounded bg-slate-800 checked:bg-cyan-500 checked:border-cyan-500 transition-colors" />
+                                            <Check className="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
+                                        </div>
+                                        <span className="truncate flex-1 group-hover:text-white transition-colors">{p.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                       </div>
+                   )}
                </div>
            )}
+
          </div>
        );
     };
 
-    const BlackLockPanel = () => {
-        if (!isHost || lockState !== 'black') return null;
-        return (
-            <div className={`absolute bottom-8 ${dir === 'rtl' ? 'left-8' : 'right-8'} z-[70] w-56 bg-[#0f172a]/80 backdrop-blur-md border border-slate-700/50 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] transition-all duration-500 overflow-hidden ${isIdle ? 'opacity-0 pointer-events-none translate-y-6' : 'opacity-100 translate-y-0'}`}>
-                <div className="bg-slate-800/80 p-3 border-b border-slate-700/50 flex items-center justify-between">
-                   <span className="text-xs text-slate-300 font-bold uppercase tracking-wider">{isAr ? 'الزوار المسموح لهم' : 'Allowed Visitors'}</span>
-                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
-                </div>
-                <div className="max-h-[180px] overflow-y-auto no-scrollbar p-2 flex flex-col gap-1">
-                    {participants.length === 0 && <span className="text-xs text-slate-500 italic text-center py-4">{isAr ? 'لا يوجد زوار' : 'No visitors'}</span>}
-                    {participants.map(p => (
-                        <label key={p.id} className="flex items-center gap-3 text-sm text-slate-200 p-2.5 hover:bg-white/10 rounded-xl cursor-pointer transition-all active:scale-95 group">
-                            <div className="relative flex items-center justify-center">
-                                <input type="checkbox" checked={(slot.allowedUsers || []).includes(p.id)} onChange={() => toggleUserAccess(index, p.id)} className="peer appearance-none w-5 h-5 border-2 border-slate-500 rounded bg-slate-800 checked:bg-cyan-500 checked:border-cyan-500 transition-colors" />
-                                <Check className="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
-                            </div>
-                            <span className="truncate flex-1 group-hover:text-white transition-colors">{p.name}</span>
-                        </label>
-                    ))}
-                </div>
-            </div>
-        );
-    };
-
-    // 💡 تحسين شاشة المنع وحالة الزر
     if (!isAllowedInBlack) {
         const isKnocking = knockingSlot === index;
         return (
@@ -381,7 +394,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 ) : (
                     <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار المضيف...' : 'Waiting...'}</span>
                 )}
-                <BlackLockPanel />
             </div>
         );
     }
@@ -392,7 +404,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                 <div className="flex flex-col items-center justify-center h-full relative group">
                     <LockIndicator />
                     <span className="text-cyan-500/50 font-bold">{isAr ? 'في انتظار إضافة محتوى...' : 'Waiting for content...'}</span>
-                    <BlackLockPanel />
                 </div>
             );
         }
@@ -434,7 +445,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                   </button>
                 </div>
               </div>
-              <BlackLockPanel />
             </div>
         );
     }
@@ -452,8 +462,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         {slot.type === 'notes' && <Notebook roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable}/>}
         {slot.type === 'document' && <UniversalViewer roomId={roomId} canInteract={canInteractInside} isLocalOnly={!editable}/>}
         {slot.type === 'live' && <LiveMeeting roomId={roomId as string} userName={myName}/>}
-        
-        <BlackLockPanel />
       </div>
     );
   };
@@ -468,7 +476,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         .animate-soundwave-4 { animation: soundwave 0.8s ease-in-out infinite 0.3s; }
       `}</style>
 
-      {/* 💡 إشعار طرق الباب التفاعلي للمضيف */}
       {knockRequest && isHost && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[200] bg-slate-900/95 border border-slate-700 text-white px-4 py-3 rounded-3xl shadow-[0_10px_40px_rgba(8,145,178,0.3)] flex items-center gap-4 animate-in slide-in-from-top duration-300">
           <div className="flex items-center gap-2">
@@ -482,7 +489,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         </div>
       )}
 
-      <div className={`h-16 flex items-center justify-between px-4 bg-black/40 backdrop-blur-md z-[100] pointer-events-auto border-b border-white/5 transition-all duration-500 ${isIdle && !openLockMenu ? 'opacity-30' : 'opacity-100'}`}>
+      <div className={`h-16 flex items-center justify-between px-4 bg-black/40 backdrop-blur-md z-[100] pointer-events-auto border-b border-white/5 transition-all duration-500 ${isIdle && !openLockMenu && !openWhitelistMenu ? 'opacity-30' : 'opacity-100'}`}>
         <button onClick={onExit} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-colors"><LogOut className="w-5 h-5"/></button>
         <div className="flex items-center gap-3">
           {isHost && (
@@ -509,11 +516,11 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             </div>
           ))}
         </div>
-        {getLeftTarget() !== -1 && <button onClick={() => { resetIdleTimer(); handleNavigation(getLeftTarget()); }} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-all duration-500 shadow-lg ${isIdle && !openLockMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft/></button>}
-        {getRightTarget() !== -1 && <button onClick={() => { resetIdleTimer(); handleNavigation(getRightTarget()); }} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-all duration-500 shadow-lg ${isIdle && !openLockMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight/></button>}
+        {getLeftTarget() !== -1 && <button onClick={() => { resetIdleTimer(); handleNavigation(getLeftTarget()); }} className={`absolute ${dir === 'rtl' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-all duration-500 shadow-lg ${isIdle && !openLockMenu && !openWhitelistMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronLeft/></button>}
+        {getRightTarget() !== -1 && <button onClick={() => { resetIdleTimer(); handleNavigation(getRightTarget()); }} className={`absolute ${dir === 'rtl' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full pointer-events-auto z-50 transition-all duration-500 shadow-lg ${isIdle && !openLockMenu && !openWhitelistMenu ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}><ChevronRight/></button>}
       </div>
 
-      <div className={`h-[95px] bg-slate-900/95 border-t border-slate-700/50 p-3 flex items-center overflow-hidden pointer-events-auto transition-all duration-500 ${isIdle && !openLockMenu ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
+      <div className={`h-[95px] bg-slate-900/95 border-t border-slate-700/50 p-3 flex items-center overflow-hidden pointer-events-auto transition-all duration-500 ${isIdle && !openLockMenu && !openWhitelistMenu ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
           <div className="flex-1 flex items-center gap-4 overflow-x-auto no-scrollbar py-2 px-2">
             <div className={`shrink-0 flex flex-col items-center gap-1 p-2 rounded-2xl border-2 transition-all ${isVoiceActive ? 'border-green-400 bg-green-400/5' : 'border-cyan-500 bg-cyan-500/5'}`}>
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${isVoiceActive ? 'bg-green-400 text-slate-900' : 'bg-cyan-500 text-white shadow-lg'}`}>{myInitial}</div>
