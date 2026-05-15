@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, MicOff, FileText, MonitorUp, MessageCircle, Hand, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Globe, Youtube, PenTool, Image as ImageIcon, X, Lock, Unlock, LogOut, Video, Share2, Layers, BookOpen, FolderOpen, Camera, Mic, MicOff, FileText, MonitorUp, MessageCircle, Hand, Check, Loader2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import Whiteboard from '../components/Whiteboard';
@@ -54,6 +54,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [knockRequest, setKnockRequest] = useState<{ userName: string, userId: string, slotIndex: number } | null>(null);
+  const [knockingSlot, setKnockingSlot] = useState<number | null>(null); // حالة جديدة للزر
   const idleTimerRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
 
@@ -174,7 +175,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       channel.on('broadcast', { event: 'room_knock' }, (payload) => {
           if (isHost) {
               setKnockRequest(payload.payload);
-              setTimeout(() => setKnockRequest(null), 15000); // تختفي بعد 15 ثانية إن لم يُرد
+              setTimeout(() => setKnockRequest(null), 15000);
           }
       });
 
@@ -204,7 +205,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (lock === 'black' && !newSlots[index].allowedUsers) newSlots[index].allowedUsers = [];
     setSlots(newSlots);
     broadcastState(currentSlot, newSlots, viewMode);
-    setOpenLockMenu(null); // القائمة تغلق دائماً الآن لأن إدارة الزوار منفصلة
+    setOpenLockMenu(null); 
   };
 
   const toggleUserAccess = (index: number, userId: string) => {
@@ -232,10 +233,12 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     setKnockRequest(null);
   };
 
+  // 💡 تحديث دالة طرق الباب لإزالة Alert واستخدام UI سلس
   const sendKnock = async (index: number) => {
     if (channelRef.current && user) {
+        setKnockingSlot(index);
         await channelRef.current.send({ type: 'broadcast', event: 'room_knock', payload: { userName: myName, userId: user.id, slotIndex: index } });
-        alert(isAr ? 'تم إرسال طلبك للمضيف. يرجى الانتظار.' : 'Request sent to host. Please wait.');
+        setTimeout(() => setKnockingSlot(null), 15000); // إخفاء علامة التحميل بعد 15 ثانية إن لم يرد المضيف
     }
   };
 
@@ -318,7 +321,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        );
     };
 
-    // 💡 لوحة الإدارة الزجاجية المستقلة للقفل الأسود
     const BlackLockPanel = () => {
         if (!isHost || lockState !== 'black') return null;
         return (
@@ -343,15 +345,26 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         );
     };
 
+    // 💡 تحسين شاشة المنع وحالة الزر
     if (!isAllowedInBlack) {
+        const isKnocking = knockingSlot === index;
         return (
             <div className="w-full h-full bg-black flex flex-col items-center justify-center z-50 pointer-events-auto border-2 border-slate-800 rounded-3xl">
                 <Lock className="w-16 h-16 text-slate-700 mb-6" />
                 <h2 className="text-2xl text-white font-bold mb-2">{isAr ? 'جلسة خاصة' : 'Private Session'}</h2>
                 <p className="text-slate-500 text-xs mb-8">{isAr ? 'بانتظار موافقة المضيف...' : 'Waiting for host approval...'}</p>
-                <button onClick={() => sendKnock(index)} className="px-6 py-3 bg-slate-800 border border-slate-600 hover:bg-slate-700 hover:border-cyan-500 rounded-2xl text-white font-bold flex items-center gap-3 transition-all shadow-lg active:scale-95 group">
-                    <Hand className="w-5 h-5 text-amber-400 group-hover:-translate-y-1 transition-transform" />
-                    {isAr ? 'طلب دخول للمضيف' : 'Request Entry'}
+                <button onClick={() => sendKnock(index)} disabled={isKnocking} className="px-6 py-3 bg-slate-800 border border-slate-600 hover:bg-slate-700 hover:border-cyan-500 rounded-2xl text-white font-bold flex items-center gap-3 transition-all shadow-lg active:scale-95 group disabled:opacity-80 disabled:active:scale-100 disabled:hover:border-slate-600 disabled:cursor-not-allowed">
+                    {isKnocking ? (
+                        <>
+                            <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
+                            {isAr ? 'جاري انتظار المضيف...' : 'Waiting for host...'}
+                        </>
+                    ) : (
+                        <>
+                            <Hand className="w-5 h-5 text-amber-400 group-hover:-translate-y-1 transition-transform" />
+                            {isAr ? 'طلب دخول للمضيف' : 'Request Entry'}
+                        </>
+                    )}
                 </button>
             </div>
         );
