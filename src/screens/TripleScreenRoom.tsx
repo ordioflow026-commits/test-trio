@@ -79,7 +79,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       }
       setIsVoiceActive(false);
       updatePresence(false);
-      Object.values(remoteAudioRefs.current).forEach(audio => { audio.srcObject = null; audio.remove(); });
+      Object.values(remoteAudioRefs.current).forEach((audio: any) => { audio.srcObject = null; audio.remove(); });
       remoteAudioRefs.current = {};
     } else {
       try {
