@@ -136,7 +136,20 @@ export default function LoginScreen() {
       {/* Header */}
       <div className="p-6 flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <img src="/trio_sync_logo.svg" alt="TrioSync Logo" className="w-10 h-10 rounded-xl shadow-lg shadow-blue-500/20" />
+          <svg viewBox="0 0 100 100" className="w-10 h-10 drop-shadow-[0_0_10px_rgba(0,229,255,0.6)]" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="logoGradientLogin" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00E5FF" />
+                <stop offset="100%" stopColor="#2563EB" />
+              </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="42" stroke="url(#logoGradientLogin)" strokeWidth="5.5" />
+            <g stroke="url(#logoGradientLogin)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" />
+              <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" transform="rotate(120 50 50)" />
+              <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" transform="rotate(240 50 50)" />
+            </g>
+          </svg>
           <span className="text-xl font-bold text-white tracking-wide">TrioSync</span>
         </div>
         <button
