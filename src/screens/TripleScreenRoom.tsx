@@ -159,11 +159,14 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           if (m) setViewMode(m);
           if (c !== undefined) {
               const currentSlots = s || slots;
-              const whiteIndexes = currentSlots.map((slot, idx) => slot.lock === 'white' ? idx : -1).filter(idx => idx !== -1);
               
               if (!isHost) {
-                  if (whiteIndexes.length > 0) setCurrentSlot(prev => whiteIndexes.includes(c) ? c : (whiteIndexes.includes(prev) ? prev : whiteIndexes[0]));
-                  else setCurrentSlot(c);
+                  // Privacy check: ignore slot changes to black/white locked screens if not allowed
+                  const targetLock = currentSlots[c].lock || 'none';
+                  const isAllowed = targetLock !== 'white' && (targetLock !== 'black' || (currentSlots[c].allowedUsers || []).includes(user.id));
+                  if (isAllowed) {
+                      setCurrentSlot(c);
+                  }
               } else {
                   const currentViewMode = m || viewMode;
                   if (currentViewMode === 'free') {
@@ -230,7 +233,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (!currentAllowed.includes(knockRequest.userId)) {
         newSlots[knockRequest.slotIndex].allowedUsers = [...currentAllowed, knockRequest.userId];
         setSlots(newSlots);
-        broadcastState(currentSlot, newSlots, viewMode);
+        broadcastState(knockRequest.slotIndex, newSlots, viewMode); // 💡 قبول الزائر يدخله فوراً
     }
     setKnockRequest(null);
   };
