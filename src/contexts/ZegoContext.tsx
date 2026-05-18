@@ -48,7 +48,6 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
       const zp = ZegoUIKitPrebuilt.create(kitToken);
       zp.addPlugins({ ZIM });
 
-      // 💡 دالة إيقاف الرنين
       const stopRingtone = () => {
         const audio = document.getElementById('trio-ringtone') as HTMLAudioElement;
         if (audio) {
@@ -64,7 +63,6 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
         },
         
         onIncomingCallReceived: (callID: string, caller: any, callType: number) => {
-          // 💡 إجبار تشغيل الرنين
           let audio = document.getElementById('trio-ringtone') as HTMLAudioElement;
           if (!audio) {
             audio = new Audio('https://storage.zego.im/demo/20220622/incomingCall.mp3');
@@ -79,37 +77,74 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
             elements.forEach(el => {
               if (el.textContent === 'Incoming call...') {
                 const isVideo = callType === 1;
+                
+                // 💡 English always, 'Incoming' removed, dots removed
                 const forcedEnglishText = isVideo ? 'VIDEO CALL' : 'VOICE CALL';
                 
-                const phoneSVG = `<svg viewBox="0 0 24 24" fill="none" class="w-12 h-12 text-white/90 drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]" xmlns="http://www.w3.org/2000/svg"><path d="M11 5L15 9M11 5V21M11 5L7 9M11 21L7 17M11 21L15 17" stroke="url(#app_icon_gradient)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>`;
-                const videoSVG = `<svg viewBox="0 0 24 24" fill="none" class="w-12 h-12 text-white/90 drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]" xmlns="http://www.w3.org/2000/svg"><path d="M15 10L19.5528 7.72361C19.8273 7.58635 20.1332 7.69755 20.2631 7.9621C20.2974 8.03217 20.3116 8.10904 20.3045 8.18579L19.7891 13.8055C19.7431 14.3013 19.3486 14.6853 18.8509 14.7176L15.3562 14.9427C15.1328 14.9571 14.9221 14.8519 14.8211 14.6501V11.2332C14.8211 10.9701 14.881 10.7077 15 10Z" stroke="url(#app_icon_gradient)" strokeWidth="1.5"/><path d="M12 18H4C2.89543 18 2 17.1046 2 16V8C2 6.89543 2.89543 6 4 6H12C13.1046 6 14 6.89543 14 8V16C14 17.1046 13.1046 18 12 18Z" stroke="url(#app_icon_gradient)" strokeWidth="1.5"/><path d="M7 15V9" stroke="url(#app_icon_gradient)" strokeWidth="1.5" strokeLinecap="round"/><path d="M9 12V10M5 12V10" stroke="url(#app_icon_gradient)" strokeWidth="1.5" strokeLinecap="round"/></svg>`;
+                // 💡 3D REALISTIC SVG - Video Camera with Depth
+                const realisticVideoSVG = `
+                  <svg viewBox="0 0 100 100" class="w-12 h-12" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)) contrast(1.1);">
+                    <defs>
+                      <linearGradient id="real_cam_gradient" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+                        <stop offset="100%" stop-color="#a3e635" stop-opacity="0.9" />
+                      </linearGradient>
+                      <radialGradient id="real_lens_gradient" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#2563EB" />
+                        <stop offset="70%" stop-color="#00E5FF" />
+                        <stop offset="100%" stop-color="#0F172A" />
+                      </radialGradient>
+                    </defs>
+                    <rect x="15" y="25" width="55" height="50" rx="8" fill="url(#real_cam_gradient)" stroke="#0F172A" strokeWidth="1"/>
+                    <circle cx="35" cy="50" r="15" fill="url(#real_lens_gradient)" stroke="#ffffff" strokeWidth="2.5"/>
+                    <circle cx="35" cy="50" r="10" fill="#a3e635" opacity="0.3"/>
+                    <rect x="25" y="15" width="35" height="10" rx="4" fill="url(#real_cam_gradient)" stroke="#0F172A" strokeWidth="1"/>
+                    <path d="M 70 40 L 85 30 L 85 70 L 70 60 Z" fill="url(#real_cam_gradient)" stroke="#0F172A" strokeWidth="1" strokeLinejoin="round"/>
+                    <ellipse cx="85" cy="50" r="6" ry="18" fill="url(#real_cam_gradient)" stroke="#0F172A" strokeWidth="1"/>
+                  </svg>`;
 
-                const finalIconSVG = isVideo ? videoSVG : phoneSVG;
+                // 💡 3D REALISTIC SVG - Phone Handset with Depth
+                const realisticPhoneSVG = `
+                  <svg viewBox="0 0 100 100" class="w-12 h-12" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)) contrast(1.1);">
+                    <defs>
+                      <linearGradient id="real_phone_gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+                        <stop offset="100%" stop-color="#d1d5db" stop-opacity="0.9" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M 15 25 C 15 15, 85 15, 85 25 L 85 75 C 85 85, 15 85, 15 75 Z" fill="url(#real_phone_gradient)" stroke="#0F172A" strokeWidth="1.5"/>
+                    <ellipse cx="50" cy="72" r="15" ry="8" fill="#d1d5db" stroke="#0F172A" strokeWidth="1.5"/>
+                    <circle cx="50" cy="72" r="2.5" fill="#0F172A"/>
+                    <ellipse cx="50" cy="28" r="15" ry="8" fill="#d1d5db" stroke="#0F172A" strokeWidth="1.5"/>
+                    <circle cx="50" cy="28" r="3" fill="#0F172A"/>
+                    <g stroke="#2563EB" strokeWidth="3" fill="none" transform="scale(0.35) translate(100,80)">
+                      <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" />
+                      <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" transform="rotate(120 50 50)" />
+                      <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" transform="rotate(240 50 50)" />
+                    </g>
+                  </svg>`;
+
+                const finalIconSVG = isVideo ? realisticVideoSVG : realisticPhoneSVG;
                 
+                // 💡 Oversized Glowing UI Injection with Depth
                 el.innerHTML = `
-                  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; margin-top: 10px; font-family: sans-serif; width: 100%;">
-                    <div style="background: linear-gradient(135deg, #00E5FF 0%, #2563EB 100%); width: 85px; height: 85px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 38px; box-shadow: 0 0 25px rgba(0, 229, 255, 0.6), inset 0 2px 4px rgba(255,255,255,0.3); animation: pulseZegoPulse 2s infinite ease-in-out;">
+                  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; margin-top: 12px; font-family: sans-serif; width: 100%;">
+                    
+                    <div style="background: linear-gradient(135deg, #00E5FF 0%, #2563EB 100%); width: 85px; height: 85px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 25px rgba(0, 229, 255, 0.7), inset 0 3px 5px rgba(0,0,0,0.3); animation: zegoRealisticPulse 2s infinite ease-in-out; border: 3px solid rgba(255,255,255,0.4);">
                       ${finalIconSVG}
                     </div>
+
                     <span style="font-size: 32px; font-weight: 900; color: #ffffff; letter-spacing: 1px; text-shadow: 0 4px 12px rgba(0,0,0,0.6); text-align: center; display: block; margin-top: 4px; line-height: 1.2;">
                       ${forcedEnglishText}
                     </span>
                   </div>
                   <style>
-                    @keyframes pulseZegoPulse {
+                    @keyframes zegoRealisticPulse {
                       0% { transform: scale(1); box-shadow: 0 0 20px rgba(0, 229, 255, 0.5); }
                       50% { transform: scale(1.06); box-shadow: 0 0 35px rgba(0, 229, 255, 0.8); }
                       100% { transform: scale(1); box-shadow: 0 0 20px rgba(0, 229, 255, 0.5); }
                     }
                   </style>
-                  <svg width="0" height="0">
-                    <defs>
-                      <linearGradient id="app_icon_gradient" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
-                        <stop offset="100%" stop-color="#ffffff" stop-opacity="0.6" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
                 `;
               }
             });
@@ -121,7 +156,6 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
           setTimeout(updateTextSafely, 800);
         },
         
-        // 💡 إيقاف الرنين عند انتهاء أو قبول أو رفض المكالمة
         onIncomingCallCanceled: stopRingtone,
         onIncomingCallAcceptButtonPressed: stopRingtone,
         onIncomingCallDeclineButtonPressed: stopRingtone,
