@@ -81,56 +81,23 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
                 // 💡 English always, 'Incoming' removed, dots removed
                 const forcedEnglishText = isVideo ? 'VIDEO CALL' : 'VOICE CALL';
                 
-                // 💡 3D REALISTIC SVG - Video Camera with Depth
-                const realisticVideoSVG = `
-                  <svg viewBox="0 0 100 100" class="w-12 h-12" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)) contrast(1.1);">
-                    <defs>
-                      <linearGradient id="real_cam_gradient" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
-                        <stop offset="100%" stop-color="#a3e635" stop-opacity="0.9" />
-                      </linearGradient>
-                      <radialGradient id="real_lens_gradient" cx="50%" cy="50%" r="50%">
-                        <stop offset="0%" stop-color="#2563EB" />
-                        <stop offset="70%" stop-color="#00E5FF" />
-                        <stop offset="100%" stop-color="#0F172A" />
-                      </radialGradient>
-                    </defs>
-                    <rect x="15" y="25" width="55" height="50" rx="8" fill="url(#real_cam_gradient)" stroke="#0F172A" strokeWidth="1"/>
-                    <circle cx="35" cy="50" r="15" fill="url(#real_lens_gradient)" stroke="#ffffff" strokeWidth="2.5"/>
-                    <circle cx="35" cy="50" r="10" fill="#a3e635" opacity="0.3"/>
-                    <rect x="25" y="15" width="35" height="10" rx="4" fill="url(#real_cam_gradient)" stroke="#0F172A" strokeWidth="1"/>
-                    <path d="M 70 40 L 85 30 L 85 70 L 70 60 Z" fill="url(#real_cam_gradient)" stroke="#0F172A" strokeWidth="1" strokeLinejoin="round"/>
-                    <ellipse cx="85" cy="50" r="6" ry="18" fill="url(#real_cam_gradient)" stroke="#0F172A" strokeWidth="1"/>
+                // 💡 STANDARD, UNIVERSAL UI ICONS (Solid and recognizable)
+                const standardVideoSVG = `
+                  <svg viewBox="0 0 24 24" fill="currentColor" class="w-12 h-12 text-white" style="filter: drop-shadow(0 0 10px rgba(255,255,255,0.6));" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
                   </svg>`;
 
-                // 💡 3D REALISTIC SVG - Phone Handset with Depth
-                const realisticPhoneSVG = `
-                  <svg viewBox="0 0 100 100" class="w-12 h-12" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)) contrast(1.1);">
-                    <defs>
-                      <linearGradient id="real_phone_gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
-                        <stop offset="100%" stop-color="#d1d5db" stop-opacity="0.9" />
-                      </linearGradient>
-                    </defs>
-                    <path d="M 15 25 C 15 15, 85 15, 85 25 L 85 75 C 85 85, 15 85, 15 75 Z" fill="url(#real_phone_gradient)" stroke="#0F172A" strokeWidth="1.5"/>
-                    <ellipse cx="50" cy="72" r="15" ry="8" fill="#d1d5db" stroke="#0F172A" strokeWidth="1.5"/>
-                    <circle cx="50" cy="72" r="2.5" fill="#0F172A"/>
-                    <ellipse cx="50" cy="28" r="15" ry="8" fill="#d1d5db" stroke="#0F172A" strokeWidth="1.5"/>
-                    <circle cx="50" cy="28" r="3" fill="#0F172A"/>
-                    <g stroke="#2563EB" strokeWidth="3" fill="none" transform="scale(0.35) translate(100,80)">
-                      <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" />
-                      <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" transform="rotate(120 50 50)" />
-                      <path d="M 43 55 L 43 22 A 7 7 0 0 1 57 22 L 57 45" transform="rotate(240 50 50)" />
-                    </g>
+                const standardPhoneSVG = `
+                  <svg viewBox="0 0 24 24" fill="currentColor" class="w-12 h-12 text-white" style="filter: drop-shadow(0 0 10px rgba(255,255,255,0.6));" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
                   </svg>`;
 
-                const finalIconSVG = isVideo ? realisticVideoSVG : realisticPhoneSVG;
+                const finalIconSVG = isVideo ? standardVideoSVG : standardPhoneSVG;
                 
-                // 💡 Oversized Glowing UI Injection with Depth
                 el.innerHTML = `
-                  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; margin-top: 12px; font-family: sans-serif; width: 100%;">
+                  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; margin-top: 10px; font-family: sans-serif; width: 100%;">
                     
-                    <div style="background: linear-gradient(135deg, #00E5FF 0%, #2563EB 100%); width: 85px; height: 85px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 25px rgba(0, 229, 255, 0.7), inset 0 3px 5px rgba(0,0,0,0.3); animation: zegoRealisticPulse 2s infinite ease-in-out; border: 3px solid rgba(255,255,255,0.4);">
+                    <div style="background: linear-gradient(135deg, #00E5FF 0%, #2563EB 100%); width: 85px; height: 85px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 25px rgba(0, 229, 255, 0.7); animation: zegoPulseClean 2s infinite ease-in-out;">
                       ${finalIconSVG}
                     </div>
 
@@ -139,7 +106,7 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
                     </span>
                   </div>
                   <style>
-                    @keyframes zegoRealisticPulse {
+                    @keyframes zegoPulseClean {
                       0% { transform: scale(1); box-shadow: 0 0 20px rgba(0, 229, 255, 0.5); }
                       50% { transform: scale(1.06); box-shadow: 0 0 35px rgba(0, 229, 255, 0.8); }
                       100% { transform: scale(1); box-shadow: 0 0 20px rgba(0, 229, 255, 0.5); }
