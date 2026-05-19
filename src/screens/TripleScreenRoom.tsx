@@ -79,34 +79,32 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       setIsVoiceActive(false);
       updatePresence(false);
     } else {
+      const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
       try {
-        await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        
+        // 💡 THE MAGIC FIX: Intercept hardware request to completely block camera activation (green dot)
+        navigator.mediaDevices.getUserMedia = async (constraints) => {
+          return await originalGetUserMedia({ audio: true, video: false });
+        };
+
         const appID = 21954096;
         const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
         
-        // 💡 CRITICAL FIX 1: Unique UserID to prevent 1002011 collision with the global ring listener
-        const baseId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
-        const uniqueAudioUserId = `${baseId}_mic`; 
+        // Unique ID avoids conflicts with the global ring listener
+        const uniqueAudioUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 10) + '_audio'; 
         const safeRoomId = `audio_${(roomId || 'room').replace(/[^a-zA-Z0-9]/g, '')}`;
 
+        // Correctly generating and using kitToken for UIKit solves Error 1002011
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, safeRoomId, uniqueAudioUserId, myName);
         const zp = ZegoUIKitPrebuilt.create(kitToken);
         zgRef.current = zp;
 
-        // 💡 CRITICAL FIX 2: Do NOT use display:none, WebRTC fails to mount
         let hiddenDiv = document.getElementById(`zego-hidden-${roomId}`);
         if (!hiddenDiv) {
           hiddenDiv = document.createElement('div');
           hiddenDiv.id = `zego-hidden-${roomId}`;
-          hiddenDiv.style.position = 'fixed';
-          hiddenDiv.style.top = '-10000px';
-          hiddenDiv.style.left = '-10000px';
-          hiddenDiv.style.width = '1px';
-          hiddenDiv.style.height = '1px';
-          hiddenDiv.style.overflow = 'hidden';
-          hiddenDiv.style.opacity = '0';
-          hiddenDiv.style.pointerEvents = 'none';
+          hiddenDiv.style.position = 'absolute';
+          hiddenDiv.style.top = '-9999px';
+          hiddenDiv.style.visibility = 'hidden';
           document.body.appendChild(hiddenDiv);
         }
 
@@ -117,13 +115,19 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           turnOnCameraWhenJoining: false,
           showPreJoinView: false,
           showLeavingView: false,
+          showCameraToggleButton: false,
         });
 
         setIsVoiceActive(true);
         updatePresence(true);
+
+        // Safely restore normal camera operations after Zego boots up
+        setTimeout(() => { navigator.mediaDevices.getUserMedia = originalGetUserMedia; }, 3000);
+
       } catch (err: any) {
+        navigator.mediaDevices.getUserMedia = originalGetUserMedia;
         console.error("Mic Access Failed:", err);
-        alert(isAr ? 'خطأ في الاتصال: ' + (err.message || '1002011') : 'Mic error: ' + err.message);
+        alert(isAr ? 'حدث خطأ في الاتصال: ' + err.message : 'Connection Error: ' + err.message);
         setIsVoiceActive(false);
       }
     }
