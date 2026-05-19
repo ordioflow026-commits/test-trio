@@ -40,7 +40,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const stateRef = useRef({ slots, currentSlot, viewMode });
 
   const [isVoiceActive, setIsVoiceActive] = useState(false);
-  // 💡 Changed to standard 'any' for UIKit
   const zgRef = useRef<any>(null);
 
   const [isIdle, setIsIdle] = useState(false);
@@ -68,11 +67,10 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     idleTimerRef.current = setTimeout(() => setIsIdle(true), 3000); 
   };
 
-  // 💡 Ultra-stable invisible Zego UIKit audio logic
   const toggleVoiceChat = async () => {
     if (isVoiceActive) {
       if (zgRef.current) {
-        zgRef.current.destroy();
+        try { zgRef.current.destroy(); } catch(e) {}
         zgRef.current = null;
       }
       const hiddenDiv = document.getElementById(`zego-hidden-${roomId}`);
@@ -82,23 +80,33 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
       updatePresence(false);
     } else {
       try {
-        // Ask for permission cleanly
         await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         
         const appID = 21954096;
-        const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
-        const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, `audio_${roomId}`, safeUserId, myName);
+        const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
         
+        // 💡 CRITICAL FIX 1: Unique UserID to prevent 1002011 collision with the global ring listener
+        const baseId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
+        const uniqueAudioUserId = `${baseId}_mic`; 
+        const safeRoomId = `audio_${(roomId || 'room').replace(/[^a-zA-Z0-9]/g, '')}`;
+
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, safeRoomId, uniqueAudioUserId, myName);
         const zp = ZegoUIKitPrebuilt.create(kitToken);
         zgRef.current = zp;
 
-        // Create an invisible container for Zego to do its magic without taking over the screen
+        // 💡 CRITICAL FIX 2: Do NOT use display:none, WebRTC fails to mount
         let hiddenDiv = document.getElementById(`zego-hidden-${roomId}`);
         if (!hiddenDiv) {
           hiddenDiv = document.createElement('div');
           hiddenDiv.id = `zego-hidden-${roomId}`;
-          hiddenDiv.style.display = 'none';
+          hiddenDiv.style.position = 'fixed';
+          hiddenDiv.style.top = '-10000px';
+          hiddenDiv.style.left = '-10000px';
+          hiddenDiv.style.width = '1px';
+          hiddenDiv.style.height = '1px';
+          hiddenDiv.style.overflow = 'hidden';
+          hiddenDiv.style.opacity = '0';
+          hiddenDiv.style.pointerEvents = 'none';
           document.body.appendChild(hiddenDiv);
         }
 
@@ -115,7 +123,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
         updatePresence(true);
       } catch (err: any) {
         console.error("Mic Access Failed:", err);
-        alert(isAr ? 'خطأ في الاتصال الصوتي: ' + err.message : 'Mic error: ' + err.message);
+        alert(isAr ? 'خطأ في الاتصال: ' + (err.message || '1002011') : 'Mic error: ' + err.message);
         setIsVoiceActive(false);
       }
     }
