@@ -161,7 +161,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
               const currentSlots = s || slots;
               
               if (!isHost) {
-                  // Privacy check: ignore slot changes to black/white locked screens if not allowed
                   const targetLock = currentSlots[c].lock || 'none';
                   const isAllowed = targetLock !== 'white' && (targetLock !== 'black' || (currentSlots[c].allowedUsers || []).includes(user.id));
                   if (isAllowed) {
@@ -233,7 +232,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     if (!currentAllowed.includes(knockRequest.userId)) {
         newSlots[knockRequest.slotIndex].allowedUsers = [...currentAllowed, knockRequest.userId];
         setSlots(newSlots);
-        broadcastState(knockRequest.slotIndex, newSlots, viewMode); // 💡 قبول الزائر يدخله فوراً
+        broadcastState(knockRequest.slotIndex, newSlots, viewMode);
     }
     setKnockRequest(null);
   };
@@ -310,7 +309,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        return (
          <div className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} md:top-6 md:${dir === 'rtl' ? 'right-6' : 'left-6'} z-[80] transition-all duration-500 ${isIdle && !isMenuOpen && !isWhitelistMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'} flex items-start gap-2`}>
            
-           {/* الزر الرئيسي للقفل */}
            <div className="relative">
                <button onClick={() => { setOpenLockMenu(isMenuOpen ? null : index); setOpenWhitelistMenu(null); }} className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 shadow-lg ${lockColors[lockState]} ${isMenuOpen ? 'ring-2 ring-[#00b4d8]' : ''}`}>
                  {lockState === 'none' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
@@ -327,7 +325,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
                )}
            </div>
 
-           {/* زر إدارة الزوار (يظهر فقط إذا كان القفل أسود) */}
            {lockState === 'black' && (
                <div className="relative">
                    <button onClick={() => { setOpenWhitelistMenu(isWhitelistMenuOpen ? null : index); setOpenLockMenu(null); }} className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md transition-all hover:scale-110 shrink-0 shadow-lg bg-black/90 border-slate-600 text-slate-300 ${isWhitelistMenuOpen ? 'ring-2 ring-cyan-500' : ''}`} title={isAr ? "إدارة الزوار" : "Manage Visitors"}>
@@ -501,10 +498,12 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
               <span className="text-xs font-bold uppercase hidden sm:block">{viewMode}</span>
             </button>
           )}
-          <button onClick={toggleVoiceChat} className={`flex items-center gap-2 px-5 py-2 rounded-full border-2 transition-all ${isVoiceActive ? 'border-green-500 bg-green-500/10 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : 'border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
-            {isVoiceActive ? <SoundWave/> : <MicOff className="w-4 h-4"/>}
-            <span className="text-xs font-bold uppercase">{isAr ? 'تحدث' : 'Voice'}</span>
+          
+          {/* 💡 MIC BUTTON UPDATED HERE 💡 */}
+          <button onClick={toggleVoiceChat} className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${isVoiceActive ? 'border-green-500 bg-green-500/10 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : 'border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+            {isVoiceActive ? <SoundWave/> : <MicOff className="w-5 h-5"/>}
           </button>
+          
         </div>
         <button onClick={async () => { if (navigator.share) { try { await navigator.share({ title: `انضم لغرفتي`, text: `Join my room "${displayRoomName}"\nhttps://app.com/room/${roomId}?name=${encodeURIComponent(displayRoomName)}` }); } catch(e){} } else { alert('Copied!'); } }} className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg transition-all"><Share2 className="w-5 h-5"/></button>
       </div>
