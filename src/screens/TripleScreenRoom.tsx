@@ -11,7 +11,6 @@ import RoomChat from '../components/RoomChat';
 import LiveMeeting from '../components/LiveMeeting';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
-import { ZegoExpressEngine } from 'zego-express-engine-webrtc';
 
 type ContentType = 'empty' | 'menu' | 'web' | 'youtube' | 'whiteboard' | 'notes' | 'media' | 'camera' | 'screen_share' | 'document' | 'mic' | 'live';
 type ViewMode = 'sync' | 'free';
@@ -41,9 +40,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
   const stateRef = useRef({ slots, currentSlot, viewMode });
 
   const [isVoiceActive, setIsVoiceActive] = useState(false);
-  const zgRef = useRef<ZegoExpressEngine | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteAudioRefs = useRef<{ [key: string]: HTMLAudioElement }>({});
+  // 💡 Changed to standard 'any' for UIKit
+  const zgRef = useRef<any>(null);
 
   const [isIdle, setIsIdle] = useState(false);
   const [openLockMenu, setOpenLockMenu] = useState<number | null>(null);
@@ -70,57 +68,54 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
     idleTimerRef.current = setTimeout(() => setIsIdle(true), 3000); 
   };
 
+  // 💡 Ultra-stable invisible Zego UIKit audio logic
   const toggleVoiceChat = async () => {
     if (isVoiceActive) {
       if (zgRef.current) {
-        if (localStreamRef.current) zgRef.current.destroyStream(localStreamRef.current);
-        zgRef.current.logoutRoom(`audio_${roomId}`);
+        zgRef.current.destroy();
         zgRef.current = null;
       }
+      const hiddenDiv = document.getElementById(`zego-hidden-${roomId}`);
+      if (hiddenDiv) hiddenDiv.remove();
+
       setIsVoiceActive(false);
       updatePresence(false);
-      Object.values(remoteAudioRefs.current).forEach((audio: any) => { audio.srcObject = null; audio.remove(); });
-      remoteAudioRefs.current = {};
     } else {
       try {
+        // Ask for permission cleanly
         await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        
         const appID = 21954096;
         const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
         const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, `audio_${roomId}`, safeUserId, myName);
-        const zg = new ZegoExpressEngine(appID, `wss://webliveroom${appID}-api.zego.im/ws`);
-        zgRef.current = zg;
+        
+        const zp = ZegoUIKitPrebuilt.create(kitToken);
+        zgRef.current = zp;
 
-        zg.on('roomStreamUpdate', async (roomID, updateType, streamList) => {
-          if (updateType === 'ADD') {
-            for (const sInfo of streamList) {
-              const stream = await zg.startPlayingStream(sInfo.streamID);
-              const audio = new Audio();
-              audio.srcObject = stream;
-              audio.autoplay = true;
-              document.body.appendChild(audio);
-              remoteAudioRefs.current[sInfo.streamID] = audio;
-            }
-          } else if (updateType === 'DELETE') {
-              for (const sInfo of streamList) {
-                  zg.stopPlayingStream(sInfo.streamID);
-                  if (remoteAudioRefs.current[sInfo.streamID]) {
-                      remoteAudioRefs.current[sInfo.streamID].remove();
-                      delete remoteAudioRefs.current[sInfo.streamID];
-                  }
-              }
-          }
+        // Create an invisible container for Zego to do its magic without taking over the screen
+        let hiddenDiv = document.getElementById(`zego-hidden-${roomId}`);
+        if (!hiddenDiv) {
+          hiddenDiv = document.createElement('div');
+          hiddenDiv.id = `zego-hidden-${roomId}`;
+          hiddenDiv.style.display = 'none';
+          document.body.appendChild(hiddenDiv);
+        }
+
+        zp.joinRoom({
+          container: hiddenDiv,
+          scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
+          turnOnMicrophoneWhenJoining: true,
+          turnOnCameraWhenJoining: false,
+          showPreJoinView: false,
+          showLeavingView: false,
         });
 
-        await zg.loginRoom(`audio_${roomId}`, kitToken, { userID: safeUserId, userName: myName });
-        const localStream = await zg.createStream({ camera: { audio: true, video: false } });
-        localStreamRef.current = localStream;
-        zg.startPublishingStream(`stream_${safeUserId}`, localStream);
         setIsVoiceActive(true);
         updatePresence(true);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Mic Access Failed:", err);
-        alert(isAr ? 'تعذر الوصول للميكروفون.' : 'Mic access failed.');
+        alert(isAr ? 'خطأ في الاتصال الصوتي: ' + err.message : 'Mic error: ' + err.message);
         setIsVoiceActive(false);
       }
     }
@@ -499,7 +494,6 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             </button>
           )}
           
-          {/* 💡 MIC BUTTON UPDATED HERE 💡 */}
           <button onClick={toggleVoiceChat} className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${isVoiceActive ? 'border-green-500 bg-green-500/10 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : 'border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
             {isVoiceActive ? <SoundWave/> : <MicOff className="w-5 h-5"/>}
           </button>
