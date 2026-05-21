@@ -12,7 +12,7 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: { streamId: string, is
   const { user } = useUser();
 
   useEffect(() => {
-    if (!containerRef.current || !user) return;
+    if (!containerRef.current || !user?.id) return;
     let isMounted = true;
 
     const initLive = async () => {
@@ -55,7 +55,8 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: { streamId: string, is
         zpRef.current = null;
       }
     };
-  }, [streamId, isHost, user]);
+  // 💡 CRITICAL FIX 1: Depend only on scalar values, NOT the whole user object
+  }, [streamId, isHost, user?.id, user?.fullName]);
 
   return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto" ref={containerRef} />;
 };
@@ -79,9 +80,22 @@ export default function BroadcastScreen() {
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
 
-  // 💡 REAL-TIME SUBSCRIPTION
+  // 💡 CRITICAL FIX 2: Track the ID of the stream this specific user created
+  const [myStreamId, setMyStreamId] = useState<string | null>(null);
+
+  // Cleanup myStreamId on unmount to prevent ghost streams if app is closed
   useEffect(() => {
-    fetchLiveStreams();
+    return () => {
+      if (myStreamId) {
+        supabase.from('live_streams').delete().eq('id', myStreamId).then();
+      }
+    };
+  }, [myStreamId]);
+
+  useEffect(() => {
+    if (viewState === 'list') {
+      fetchLiveStreams();
+    }
 
     const channel = supabase.channel('public:live_streams')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_streams' }, (payload) => {
@@ -99,7 +113,7 @@ export default function BroadcastScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [viewState]);
 
   const fetchLiveStreams = async () => {
     setLoading(true);
@@ -135,6 +149,7 @@ export default function BroadcastScreen() {
       const { error: insertError } = await supabase.from('live_streams').insert([newStream]);
       if (insertError) throw insertError;
       
+      setMyStreamId(streamId); // 💡 Save ID to guarantee deletion later
       setIsHost(true);
       setCurrentIndex(0);
       setViewState('room');
@@ -145,12 +160,13 @@ export default function BroadcastScreen() {
     }
   };
 
-  // 💡 HOST CLEANUP
   const handleLeaveRoom = async () => {
-    if (isHost && liveStreams[currentIndex]) {
+    // 💡 Guaranteed cleanup using the tracked myStreamId
+    if (myStreamId) {
       try {
-        await supabase.from('live_streams').delete().eq('id', liveStreams[currentIndex].id);
+        await supabase.from('live_streams').delete().eq('id', myStreamId);
       } catch(e) { console.error("Error deleting stream", e); }
+      setMyStreamId(null);
     }
     setIsHost(false);
     setViewState('list');
