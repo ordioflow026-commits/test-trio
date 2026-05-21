@@ -33,7 +33,6 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: { streamId: string, is
             config: { role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience },
           },
           showPreJoinView: false,
-          // 💡 THESE ENSURE REAL HARDWARE ACTIVATION
           turnOnMicrophoneWhenJoining: isHost,
           turnOnCameraWhenJoining: isHost,
           showMyCameraToggleButton: isHost,
@@ -81,7 +80,11 @@ export default function BroadcastScreen() {
   const [touchEndY, setTouchEndY] = useState(0);
 
   useEffect(() => {
-    fetchLiveStreams();
+    // 💡 CRITICAL FIX: Only fetch from DB when in the 'list' view. 
+    // This prevents wiping the newly created stream from local state before DB commits it.
+    if (viewState === 'list') {
+      fetchLiveStreams();
+    }
   }, [viewState]);
 
   const fetchLiveStreams = async () => {
@@ -91,7 +94,7 @@ export default function BroadcastScreen() {
       if (!error && data) {
         setLiveStreams(data);
       } else {
-        setLiveStreams([]); // 💡 COMPLETELY REMOVED MOCK DATA
+        setLiveStreams([]); 
       }
     } catch (err) {
       console.error(err);
@@ -117,6 +120,7 @@ export default function BroadcastScreen() {
 
       await supabase.from('live_streams').insert([newStream]);
       
+      // Optimistic UI update
       setLiveStreams([newStream, ...liveStreams]);
       setIsHost(true);
       setCurrentIndex(0);
@@ -272,7 +276,6 @@ export default function BroadcastScreen() {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p></div>
       ) : (
         <>
-          {/* 💡 ALWAYS USE REAL VIEWER NOW */}
           <LiveStreamViewer key={currentBroadcast.id} streamId={currentBroadcast.id} isHost={isHost} hostName={currentBroadcast.host_name} />
 
           {/* Top Info Layer */}
