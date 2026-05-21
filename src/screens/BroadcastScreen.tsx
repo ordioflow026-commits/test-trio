@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ArrowLeft, ArrowRight, Heart, ChevronLeft } from 'lucide-react';
+import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
@@ -79,13 +79,27 @@ export default function BroadcastScreen() {
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
 
+  // 💡 REAL-TIME SUBSCRIPTION
   useEffect(() => {
-    // 💡 CRITICAL FIX: Only fetch from DB when in the 'list' view. 
-    // This prevents wiping the newly created stream from local state before DB commits it.
-    if (viewState === 'list') {
-      fetchLiveStreams();
-    }
-  }, [viewState]);
+    fetchLiveStreams();
+
+    const channel = supabase.channel('public:live_streams')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'live_streams' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setLiveStreams(prev => {
+            if (prev.find(s => s.id === payload.new.id)) return prev;
+            return [payload.new, ...prev];
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setLiveStreams(prev => prev.filter(stream => stream.id !== payload.old.id));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const fetchLiveStreams = async () => {
     setLoading(true);
@@ -118,10 +132,9 @@ export default function BroadcastScreen() {
         viewers: 0
       };
 
-      await supabase.from('live_streams').insert([newStream]);
+      const { error: insertError } = await supabase.from('live_streams').insert([newStream]);
+      if (insertError) throw insertError;
       
-      // Optimistic UI update
-      setLiveStreams([newStream, ...liveStreams]);
       setIsHost(true);
       setCurrentIndex(0);
       setViewState('room');
@@ -130,6 +143,17 @@ export default function BroadcastScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 💡 HOST CLEANUP
+  const handleLeaveRoom = async () => {
+    if (isHost && liveStreams[currentIndex]) {
+      try {
+        await supabase.from('live_streams').delete().eq('id', liveStreams[currentIndex].id);
+      } catch(e) { console.error("Error deleting stream", e); }
+    }
+    setIsHost(false);
+    setViewState('list');
   };
 
   const handleSendComment = () => {
@@ -266,7 +290,7 @@ export default function BroadcastScreen() {
       onTouchEnd={handleTouchEnd}
       dir={dir}
     >
-      <button onClick={() => { setIsHost(false); setViewState('list'); }} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
+      <button onClick={handleLeaveRoom} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
           <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
 
