@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ArrowLeft, ArrowRight, Play, Heart, ChevronLeft } from 'lucide-react';
+import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ArrowLeft, ArrowRight, Heart, ChevronLeft } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
-// Detached viewer component to safely mount/unmount Zego
+// Detached viewer component to safely mount/unmount Zego (REAL HARDWARE STREAM)
 const LiveStreamViewer = ({ streamId, isHost, hostName }: { streamId: string, isHost: boolean, hostName: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
@@ -33,6 +33,7 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: { streamId: string, is
             config: { role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience },
           },
           showPreJoinView: false,
+          // 💡 THESE ENSURE REAL HARDWARE ACTIVATION
           turnOnMicrophoneWhenJoining: isHost,
           turnOnCameraWhenJoining: isHost,
           showMyCameraToggleButton: isHost,
@@ -76,7 +77,6 @@ export default function BroadcastScreen() {
   const [newComment, setNewComment] = useState('');
   const [comments, setComments] = useState<{id: number, user: string, text: string}[]>([]);
 
-  // Vertical swiping state for Room View
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
 
@@ -88,16 +88,14 @@ export default function BroadcastScreen() {
     setLoading(true);
     try {
       const { data, error } = await supabase.from('live_streams').select('*').order('created_at', { ascending: false });
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setLiveStreams(data);
       } else {
-        setLiveStreams([
-          { id: 'mock1', host_name: 'Ahmed', topic: 'The Cold War', field: 'History', viewers: 1200, isMock: true, image: 'https://picsum.photos/seed/history/400/225' },
-          { id: 'mock2', host_name: 'Sarah', topic: 'App Development', field: 'Tech', viewers: 850, isMock: true, image: 'https://picsum.photos/seed/tech/400/225' }
-        ]);
+        setLiveStreams([]); // 💡 COMPLETELY REMOVED MOCK DATA
       }
     } catch (err) {
       console.error(err);
+      setLiveStreams([]);
     } finally {
       setLoading(false);
     }
@@ -188,12 +186,12 @@ export default function BroadcastScreen() {
           {loading ? (
             <div className="col-span-full flex justify-center py-10"><Loader2 className="w-8 h-8 text-blue-500 animate-spin" /></div>
           ) : filtered.length === 0 ? (
-            <div className="col-span-full text-center py-10 text-slate-500">{dir === 'rtl' ? 'لا يوجد بث حالياً' : 'No active streams'}</div>
+            <div className="col-span-full text-center py-10 text-slate-500 font-bold">{dir === 'rtl' ? 'لا توجد بثوث حقيقية حالياً' : 'No active streams at the moment'}</div>
           ) : (
             filtered.map((broadcast, idx) => (
               <div key={broadcast.id} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-colors group cursor-pointer" onClick={() => { setIsHost(false); setCurrentIndex(idx); setViewState('room'); }}>
                 <div className="relative aspect-video bg-slate-900">
-                  {broadcast.image ? <img src={broadcast.image} alt={broadcast.topic} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center"><Video className="w-10 h-10 text-slate-700"/></div>}
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-slate-800 to-slate-900"><Video className="w-10 h-10 text-slate-600 group-hover:scale-110 transition-transform duration-500"/></div>
                   <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg"><span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE</div>
                   <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1"><Users className="w-3 h-3" /> {broadcast.viewers || 0}</div>
                 </div>
@@ -243,7 +241,7 @@ export default function BroadcastScreen() {
             </div>
             
             <button onClick={handleGoLive} disabled={!topic || loading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg flex justify-center items-center gap-2 mt-6">
-              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Radio className="w-5 h-5 animate-pulse" /> {dir === 'rtl' ? 'بدء البث' : 'Go Live'}</>}
+              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Radio className="w-5 h-5 animate-pulse" /> {dir === 'rtl' ? 'بدء البث الحقيقي' : 'Go Live Now'}</>}
             </button>
           </div>
         </div>
@@ -252,7 +250,7 @@ export default function BroadcastScreen() {
   }
 
   // -------------------------------------------------------------
-  // VIEW: ROOM (TikTok Style Feed)
+  // VIEW: ROOM (TikTok Style Feed - REAL STREAMS ONLY)
   // -------------------------------------------------------------
   const currentBroadcast = liveStreams[currentIndex];
 
@@ -264,7 +262,6 @@ export default function BroadcastScreen() {
       onTouchEnd={handleTouchEnd}
       dir={dir}
     >
-      {/* Back Button Overlay */}
       <button onClick={() => { setIsHost(false); setViewState('list'); }} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
           <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
@@ -272,14 +269,11 @@ export default function BroadcastScreen() {
       {loading && liveStreams.length === 0 ? (
         <div className="absolute inset-0 flex items-center justify-center bg-[#0f172a]"><Loader2 className="w-10 h-10 text-blue-500 animate-spin" /></div>
       ) : !currentBroadcast ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'لا يوجد بث' : 'Stream ended'}</p></div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p></div>
       ) : (
         <>
-          {currentBroadcast.isMock ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900"><Video className="w-20 h-20 text-slate-700 mb-4" /><p className="text-slate-500 font-bold">{dir === 'rtl' ? 'بث تجريبي (غير متصل)' : 'Mock Stream'}</p></div>
-          ) : (
-            <LiveStreamViewer key={currentBroadcast.id} streamId={currentBroadcast.id} isHost={isHost} hostName={currentBroadcast.host_name} />
-          )}
+          {/* 💡 ALWAYS USE REAL VIEWER NOW */}
+          <LiveStreamViewer key={currentBroadcast.id} streamId={currentBroadcast.id} isHost={isHost} hostName={currentBroadcast.host_name} />
 
           {/* Top Info Layer */}
           <div className={`absolute top-0 inset-x-0 p-4 pt-16 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
