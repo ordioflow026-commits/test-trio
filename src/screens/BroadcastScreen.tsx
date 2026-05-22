@@ -18,7 +18,9 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: { streamId: string, is
     const initLive = async () => {
       const appID = 21954096;
       const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
-      const uniqueUserId = (user.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 10) + '_live';
+      
+      // 💡 CRITICAL FIX FOR 1002011: Add a random suffix so ZegoCloud never detects a duplicate ID on fast re-renders
+      const uniqueUserId = (user.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 8) + '_' + Math.floor(Math.random() * 100000);
       const myName = user.fullName || 'User';
 
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
@@ -55,7 +57,6 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: { streamId: string, is
         zpRef.current = null;
       }
     };
-  // 💡 CRITICAL FIX 1: Depend only on scalar values, NOT the whole user object
   }, [streamId, isHost, user?.id, user?.fullName]);
 
   return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto" ref={containerRef} />;
@@ -80,10 +81,8 @@ export default function BroadcastScreen() {
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
 
-  // 💡 CRITICAL FIX 2: Track the ID of the stream this specific user created
   const [myStreamId, setMyStreamId] = useState<string | null>(null);
 
-  // Cleanup myStreamId on unmount to prevent ghost streams if app is closed
   useEffect(() => {
     return () => {
       if (myStreamId) {
@@ -149,7 +148,7 @@ export default function BroadcastScreen() {
       const { error: insertError } = await supabase.from('live_streams').insert([newStream]);
       if (insertError) throw insertError;
       
-      setMyStreamId(streamId); // 💡 Save ID to guarantee deletion later
+      setMyStreamId(streamId);
       setIsHost(true);
       setCurrentIndex(0);
       setViewState('room');
@@ -161,7 +160,6 @@ export default function BroadcastScreen() {
   };
 
   const handleLeaveRoom = async () => {
-    // 💡 Guaranteed cleanup using the tracked myStreamId
     if (myStreamId) {
       try {
         await supabase.from('live_streams').delete().eq('id', myStreamId);
@@ -197,9 +195,6 @@ export default function BroadcastScreen() {
     setTouchStartY(0); setTouchEndY(0);
   };
 
-  // -------------------------------------------------------------
-  // VIEW: LIST
-  // -------------------------------------------------------------
   if (viewState === 'list') {
     const filtered = liveStreams.filter(b => b.topic.toLowerCase().includes(searchQuery.toLowerCase()) || (b.field && b.field.toLowerCase().includes(searchQuery.toLowerCase())));
     
@@ -254,9 +249,6 @@ export default function BroadcastScreen() {
     );
   }
 
-  // -------------------------------------------------------------
-  // VIEW: SETUP
-  // -------------------------------------------------------------
   if (viewState === 'setup') {
     return (
       <div className="flex-1 flex flex-col p-6 bg-[#0f172a] items-center justify-center animate-in fade-in duration-300" dir={dir}>
@@ -293,9 +285,6 @@ export default function BroadcastScreen() {
     );
   }
 
-  // -------------------------------------------------------------
-  // VIEW: ROOM (TikTok Style Feed - REAL STREAMS ONLY)
-  // -------------------------------------------------------------
   const currentBroadcast = liveStreams[currentIndex];
 
   return (
@@ -318,7 +307,6 @@ export default function BroadcastScreen() {
         <>
           <LiveStreamViewer key={currentBroadcast.id} streamId={currentBroadcast.id} isHost={isHost} hostName={currentBroadcast.host_name} />
 
-          {/* Top Info Layer */}
           <div className={`absolute top-0 inset-x-0 p-4 pt-16 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
             <div className="flex flex-col gap-2 pointer-events-auto">
               <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full pr-4 pl-1 py-1 border border-white/10 w-max">
@@ -341,7 +329,6 @@ export default function BroadcastScreen() {
             </div>
           </div>
 
-          {/* Bottom Interaction Layer */}
           <div className="absolute bottom-0 inset-x-0 p-4 pb-safe sm:pb-8 flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
             <div className="flex-1 max-w-[70%] flex flex-col gap-3 pointer-events-auto">
               <div className="h-48 overflow-y-auto flex flex-col justify-end gap-2 pb-2 mask-image-to-top no-scrollbar">
@@ -374,7 +361,6 @@ export default function BroadcastScreen() {
             </div>
           </div>
 
-          {/* Scroll Indicators */}
           {liveStreams.length > 1 && (
              <div className={`absolute ${dir === 'rtl' ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10 pointer-events-none`}>
                 {liveStreams.map((_, idx) => (
