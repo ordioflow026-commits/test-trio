@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart } from 'lucide-react';
+import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart, Trash2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
@@ -25,7 +25,6 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
       const appID = 21954096;
       const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
       
-      // Unique User ID with timestamp seed to guarantee zero 1002011 conflicts
       const uniqueUserId = `${user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8)}_${Date.now().toString().slice(-5)}`;
       const myName = user.fullName || 'User';
 
@@ -62,7 +61,7 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
         try { zpRef.current.destroy(); } catch (e) {}
         zpRef.current = null;
       }
-      onLeave(); // Trigger DB cleanup reliably on component unmount
+      onLeave(); 
     };
   }, [streamId, isHost, user?.id, user?.fullName]);
 
@@ -88,11 +87,8 @@ export default function BroadcastScreen() {
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
 
+  // 💡 FIX 1: WebSocket connection is now independent of viewState to prevent disconnects
   useEffect(() => {
-    if (viewState === 'list') {
-      fetchLiveStreams();
-    }
-
     const channel = supabase.channel('public:live_streams')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_streams' }, (payload) => {
         if (payload.eventType === 'INSERT') {
@@ -109,6 +105,12 @@ export default function BroadcastScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, []);
+
+  useEffect(() => {
+    if (viewState === 'list') {
+      fetchLiveStreams();
+    }
   }, [viewState]);
 
   const fetchLiveStreams = async () => {
@@ -228,7 +230,22 @@ export default function BroadcastScreen() {
             filtered.map((broadcast) => {
               const isItemHost = user?.id === broadcast.host_id;
               return (
-                <div key={broadcast.id} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-colors group cursor-pointer" onClick={() => { setIsHost(isItemHost); setActiveStream(broadcast); setViewState('room'); }}>
+                <div key={broadcast.id} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-colors group cursor-pointer relative" onClick={() => { setIsHost(isItemHost); setActiveStream(broadcast); setViewState('room'); }}>
+                  
+                  {/* 💡 FIX 2: Manual delete button for ghost streams */}
+                  {isItemHost && (
+                    <button 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        handleStreamCleanup(broadcast.id, broadcast.host_id); 
+                        setLiveStreams(prev => prev.filter(s => s.id !== broadcast.id)); 
+                      }} 
+                      className="absolute top-2 right-2 z-20 p-2 bg-red-600/90 hover:bg-red-500 text-white rounded-full shadow-lg transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
                   <div className="relative aspect-video bg-slate-900">
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-slate-800 to-slate-900"><Video className="w-10 h-10 text-slate-600 group-hover:scale-110 transition-transform duration-500"/></div>
                     <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg"><span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE</div>
@@ -310,7 +327,6 @@ export default function BroadcastScreen() {
             onLeave={() => handleStreamCleanup(activeStream.id, activeStream.host_id)}
           />
 
-          {/* Top Info Layer */}
           <div className={`absolute top-0 inset-x-0 p-4 pt-16 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
             <div className="flex flex-col gap-2 pointer-events-auto">
               <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full pr-4 pl-1 py-1 border border-white/10 w-max">
@@ -333,7 +349,6 @@ export default function BroadcastScreen() {
             </div>
           </div>
 
-          {/* Bottom Interaction Layer */}
           <div className="absolute bottom-0 inset-x-0 p-4 pb-safe sm:pb-8 flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
             <div className="flex-1 max-w-[70%] flex flex-col gap-3 pointer-events-auto">
               <div className="h-48 overflow-y-auto flex flex-col justify-end gap-2 pb-2 mask-image-to-top no-scrollbar">
@@ -366,7 +381,6 @@ export default function BroadcastScreen() {
             </div>
           </div>
 
-          {/* Scroll Indicators */}
           {liveStreams.length > 1 && (
              <div className={`absolute ${dir === 'rtl' ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10 pointer-events-none`}>
                 {liveStreams.map((_, idx) => {
