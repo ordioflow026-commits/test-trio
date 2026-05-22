@@ -21,7 +21,6 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: LiveStreamViewerProps)
     let isMounted = true;
     let zpInstance: any = null;
 
-    // 💡 CRITICAL FIX: 400ms delay safely bypasses the React Strict Mode double-mount!
     const timer = setTimeout(async () => {
       if (!isMounted) return;
 
@@ -54,11 +53,11 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: LiveStreamViewerProps)
           layout: "Auto"
         });
       }
-    }, 400); // Wait out the phantom mount
+    }, 400); 
 
     return () => {
       isMounted = false;
-      clearTimeout(timer); // If StrictMode unmounts instantly, the connection is cancelled
+      clearTimeout(timer); 
       if (zpInstance) {
         try { zpInstance.destroy(); } catch (e) {}
         zpRef.current = null;
@@ -83,11 +82,15 @@ export default function BroadcastScreen() {
   const [field, setField] = useState('Education');
   const [isHost, setIsHost] = useState(false);
   const [newComment, setNewComment] = useState('');
-  const [comments, setComments] = useState<{id: number, user: string, text: string}[]>([]);
+  const [comments, setComments] = useState<{id: string, user: string, text: string}[]>([]);
 
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
 
+  // Auto-scroll ref for comments
+  const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  // 1. Maintain Live Streams List
   useEffect(() => {
     const channel = supabase.channel('public:live_streams')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_streams' }, (payload) => {
@@ -107,11 +110,40 @@ export default function BroadcastScreen() {
     };
   }, []);
 
+  // 2. Fetch Initial List
   useEffect(() => {
     if (viewState === 'list') {
       fetchLiveStreams();
     }
   }, [viewState]);
+
+  // 💡 3. REAL-TIME CHAT SYNC USING SUPABASE BROADCAST
+  useEffect(() => {
+    if (!activeStream) {
+      setComments([]); // Clear comments when leaving a room
+      return;
+    }
+
+    const chatChannel = supabase.channel(`chat_${activeStream.id}`, {
+      config: { broadcast: { ack: false } },
+    });
+
+    chatChannel.on('broadcast', { event: 'new_comment' }, (payload) => {
+      setComments(prev => {
+        const updated = [...prev, payload.payload];
+        return updated.slice(-50); // Keep only the last 50 comments to prevent lag
+      });
+    }).subscribe();
+
+    return () => {
+      supabase.removeChannel(chatChannel);
+    };
+  }, [activeStream?.id]);
+
+  // 💡 Auto-scroll to newest comment
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [comments]);
 
   const fetchLiveStreams = async () => {
     setLoading(true);
@@ -157,7 +189,6 @@ export default function BroadcastScreen() {
     }
   };
 
-  // 💡 Explicit cleanup function
   const handleStreamCleanup = async (streamIdToDelete: string, hostId: string) => {
     if (user?.id === hostId) {
       try {
@@ -166,7 +197,6 @@ export default function BroadcastScreen() {
     }
   };
 
-  // 💡 New explicit exit function tied to the back button
   const handleExitRoom = () => {
     if (isHost && activeStream) {
       handleStreamCleanup(activeStream.id, activeStream.host_id);
@@ -177,10 +207,26 @@ export default function BroadcastScreen() {
     setViewState('list');
   };
 
-  const handleSendComment = () => {
-    if (!newComment.trim()) return;
-    setComments(prev => [...prev, { id: Date.now(), user: user?.fullName || 'Me', text: newComment }]);
+  // 💡 SEND COMMENT VIA BROADCAST
+  const handleSendComment = async () => {
+    if (!newComment.trim() || !activeStream) return;
+
+    const commentData = { 
+      id: `${Date.now()}_${Math.random()}`, 
+      user: user?.fullName || 'User', 
+      text: newComment 
+    };
+
+    // Optimistically show locally
+    setComments(prev => [...prev, commentData].slice(-50));
     setNewComment('');
+
+    // Send to everyone else in the room
+    await supabase.channel(`chat_${activeStream.id}`).send({
+      type: 'broadcast',
+      event: 'new_comment',
+      payload: commentData
+    });
   };
 
   const handleTouchStart = (e: React.TouchEvent) => setTouchStartY(e.targetTouches[0].clientY);
@@ -194,15 +240,13 @@ export default function BroadcastScreen() {
     if (currentIdx === -1) return;
 
     if (distance > swipeThreshold && currentIdx < liveStreams.length - 1) {
-      if (isHost) handleStreamCleanup(activeStream.id, activeStream.host_id); // Cleanup if host swipes away
+      if (isHost) handleStreamCleanup(activeStream.id, activeStream.host_id); 
       const nextStream = liveStreams[currentIdx + 1];
-      setComments([]); 
       setIsHost(user?.id === nextStream.host_id);
       setActiveStream(nextStream);
     } else if (distance < -swipeThreshold && currentIdx > 0) {
-      if (isHost) handleStreamCleanup(activeStream.id, activeStream.host_id); // Cleanup if host swipes away
+      if (isHost) handleStreamCleanup(activeStream.id, activeStream.host_id); 
       const prevStream = liveStreams[currentIdx - 1];
-      setComments([]);
       setIsHost(user?.id === prevStream.host_id);
       setActiveStream(prevStream);
     }
@@ -324,7 +368,6 @@ export default function BroadcastScreen() {
       onTouchEnd={handleTouchEnd}
       dir={dir}
     >
-      {/* 💡 Explicitly call handleExitRoom here */}
       <button onClick={handleExitRoom} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
           <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
@@ -371,6 +414,8 @@ export default function BroadcastScreen() {
                     <span className="text-white break-words drop-shadow-md">{c.text}</span>
                   </div>
                 ))}
+                {/* 💡 Target for auto-scroll */}
+                <div ref={commentsEndRef} />
               </div>
               <div className="flex gap-2 items-center">
                 <div className="flex-1 flex items-center bg-black/40 backdrop-blur-md border border-white/20 rounded-full px-4 py-1.5 focus-within:border-blue-500/50 transition-colors">
@@ -386,7 +431,7 @@ export default function BroadcastScreen() {
                   <Heart className="w-6 h-6 text-white group-hover:text-red-500 group-hover:fill-red-500 transition-all" />
                 </div>
               </button>
-              <button onClick={() => setComments(prev => [...prev, { id: Date.now(), user: user?.fullName || 'Me', text: 'أرسل هدية 🎁' }])} className="flex flex-col items-center gap-1 group">
+              <button onClick={() => {}} className="flex flex-col items-center gap-1 group">
                 <div className="w-12 h-12 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(244,63,94,0.5)] group-hover:scale-110 transition-transform border border-white/20">
                   <Gift className="w-6 h-6 text-white" />
                 </div>
