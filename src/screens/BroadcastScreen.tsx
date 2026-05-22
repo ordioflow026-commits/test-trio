@@ -5,8 +5,14 @@ import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 
-// Detached viewer component to safely mount/unmount Zego (REAL HARDWARE STREAM)
-const LiveStreamViewer = ({ streamId, isHost, hostName }: { streamId: string, isHost: boolean, hostName: string }) => {
+interface LiveStreamViewerProps {
+  streamId: string;
+  isHost: boolean;
+  hostName: string;
+  onLeave: () => void;
+}
+
+const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
   const { user } = useUser();
@@ -19,8 +25,8 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: { streamId: string, is
       const appID = 21954096;
       const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
       
-      // 💡 CRITICAL FIX FOR 1002011: Add a random suffix so ZegoCloud never detects a duplicate ID on fast re-renders
-      const uniqueUserId = (user.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 8) + '_' + Math.floor(Math.random() * 100000);
+      // Unique User ID with timestamp seed to guarantee zero 1002011 conflicts
+      const uniqueUserId = `${user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8)}_${Date.now().toString().slice(-5)}`;
       const myName = user.fullName || 'User';
 
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
@@ -56,6 +62,7 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: { streamId: string, is
         try { zpRef.current.destroy(); } catch (e) {}
         zpRef.current = null;
       }
+      onLeave(); // Trigger DB cleanup reliably on component unmount
     };
   }, [streamId, isHost, user?.id, user?.fullName]);
 
@@ -67,7 +74,7 @@ export default function BroadcastScreen() {
   const { user } = useUser();
   const [viewState, setViewState] = useState<'list' | 'setup' | 'room'>('list');
   const [liveStreams, setLiveStreams] = useState<any[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [activeStream, setActiveStream] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -80,16 +87,6 @@ export default function BroadcastScreen() {
 
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
-
-  const [myStreamId, setMyStreamId] = useState<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (myStreamId) {
-        supabase.from('live_streams').delete().eq('id', myStreamId).then();
-      }
-    };
-  }, [myStreamId]);
 
   useEffect(() => {
     if (viewState === 'list') {
@@ -148,9 +145,8 @@ export default function BroadcastScreen() {
       const { error: insertError } = await supabase.from('live_streams').insert([newStream]);
       if (insertError) throw insertError;
       
-      setMyStreamId(streamId);
       setIsHost(true);
-      setCurrentIndex(0);
+      setActiveStream(newStream);
       setViewState('room');
     } catch (err: any) {
       setError(err.message || 'Failed to go live');
@@ -159,15 +155,14 @@ export default function BroadcastScreen() {
     }
   };
 
-  const handleLeaveRoom = async () => {
-    if (myStreamId) {
+  const handleStreamCleanup = async (streamIdToDelete: string, hostId: string) => {
+    if (user?.id === hostId) {
       try {
-        await supabase.from('live_streams').delete().eq('id', myStreamId);
-      } catch(e) { console.error("Error deleting stream", e); }
-      setMyStreamId(null);
+        await supabase.from('live_streams').delete().eq('id', streamIdToDelete);
+      } catch(e) {
+        console.error("Error performing stream auto-cleanup", e);
+      }
     }
-    setIsHost(false);
-    setViewState('list');
   };
 
   const handleSendComment = () => {
@@ -179,18 +174,21 @@ export default function BroadcastScreen() {
   const handleTouchStart = (e: React.TouchEvent) => setTouchStartY(e.targetTouches[0].clientY);
   const handleTouchMove = (e: React.TouchEvent) => setTouchEndY(e.targetTouches[0].clientY);
   const handleTouchEnd = () => {
-    if (!touchStartY || !touchEndY) return;
+    if (!touchStartY || !touchEndY || liveStreams.length <= 1 || !activeStream) return;
     const distance = touchStartY - touchEndY;
     const swipeThreshold = 50;
+    const currentIdx = liveStreams.findIndex(s => s.id === activeStream.id);
 
-    if (distance > swipeThreshold && currentIndex < liveStreams.length - 1) {
-      setCurrentIndex(prev => prev + 1);
+    if (currentIdx === -1) return;
+
+    if (distance > swipeThreshold && currentIdx < liveStreams.length - 1) {
       setComments([]); 
-      setIsHost(false); 
-    } else if (distance < -swipeThreshold && currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
+      setIsHost(false);
+      setActiveStream(liveStreams[currentIdx + 1]);
+    } else if (distance < -swipeThreshold && currentIdx > 0) {
       setComments([]);
       setIsHost(false);
+      setActiveStream(liveStreams[currentIdx - 1]);
     }
     setTouchStartY(0); setTouchEndY(0);
   };
@@ -227,22 +225,25 @@ export default function BroadcastScreen() {
           ) : filtered.length === 0 ? (
             <div className="col-span-full text-center py-10 text-slate-500 font-bold">{dir === 'rtl' ? 'لا توجد بثوث حقيقية حالياً' : 'No active streams at the moment'}</div>
           ) : (
-            filtered.map((broadcast, idx) => (
-              <div key={broadcast.id} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-colors group cursor-pointer" onClick={() => { setIsHost(false); setCurrentIndex(idx); setViewState('room'); }}>
-                <div className="relative aspect-video bg-slate-900">
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-slate-800 to-slate-900"><Video className="w-10 h-10 text-slate-600 group-hover:scale-110 transition-transform duration-500"/></div>
-                  <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg"><span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE</div>
-                  <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1"><Users className="w-3 h-3" /> {broadcast.viewers || 0}</div>
-                </div>
-                <div className="p-3">
-                  <h3 className="text-white font-bold truncate">{broadcast.topic}</h3>
-                  <div className="flex justify-between items-center mt-1">
-                    <p className="text-slate-400 text-xs">{broadcast.host_name}</p>
-                    <span className="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">{broadcast.field || 'General'}</span>
+            filtered.map((broadcast) => {
+              const isItemHost = user?.id === broadcast.host_id;
+              return (
+                <div key={broadcast.id} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-colors group cursor-pointer" onClick={() => { setIsHost(isItemHost); setActiveStream(broadcast); setViewState('room'); }}>
+                  <div className="relative aspect-video bg-slate-900">
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-slate-800 to-slate-900"><Video className="w-10 h-10 text-slate-600 group-hover:scale-110 transition-transform duration-500"/></div>
+                    <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg"><span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE</div>
+                    <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1"><Users className="w-3 h-3" /> {broadcast.viewers || 0}</div>
+                  </div>
+                  <div className="p-3">
+                    <h3 className="text-white font-bold truncate">{broadcast.topic}</h3>
+                    <div className="flex justify-between items-center mt-1">
+                      <p className="text-slate-400 text-xs">{broadcast.host_name}</p>
+                      <span className="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">{broadcast.field || 'General'}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -285,8 +286,6 @@ export default function BroadcastScreen() {
     );
   }
 
-  const currentBroadcast = liveStreams[currentIndex];
-
   return (
     <div 
       className="flex-1 relative bg-black overflow-hidden flex flex-col"
@@ -295,27 +294,32 @@ export default function BroadcastScreen() {
       onTouchEnd={handleTouchEnd}
       dir={dir}
     >
-      <button onClick={handleLeaveRoom} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
+      <button onClick={() => setViewState('list')} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
           <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
 
-      {loading && liveStreams.length === 0 ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#0f172a]"><Loader2 className="w-10 h-10 text-blue-500 animate-spin" /></div>
-      ) : !currentBroadcast ? (
+      {!activeStream ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p></div>
       ) : (
         <>
-          <LiveStreamViewer key={currentBroadcast.id} streamId={currentBroadcast.id} isHost={isHost} hostName={currentBroadcast.host_name} />
+          <LiveStreamViewer 
+            key={activeStream.id} 
+            streamId={activeStream.id} 
+            isHost={isHost} 
+            hostName={activeStream.host_name} 
+            onLeave={() => handleStreamCleanup(activeStream.id, activeStream.host_id)}
+          />
 
+          {/* Top Info Layer */}
           <div className={`absolute top-0 inset-x-0 p-4 pt-16 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
             <div className="flex flex-col gap-2 pointer-events-auto">
               <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full pr-4 pl-1 py-1 border border-white/10 w-max">
                 <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold shadow-inner">
-                  {currentBroadcast.host_name?.charAt(0) || 'U'}
+                  {activeStream.host_name?.charAt(0) || 'U'}
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-white text-xs font-bold leading-tight">{currentBroadcast.host_name}</span>
-                  <span className="text-slate-300 text-[10px]">{currentBroadcast.topic}</span>
+                  <span className="text-white text-xs font-bold leading-tight">{activeStream.host_name}</span>
+                  <span className="text-slate-300 text-[10px]">{activeStream.topic}</span>
                 </div>
               </div>
             </div>
@@ -324,11 +328,12 @@ export default function BroadcastScreen() {
                 <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> LIVE
               </div>
               <div className="bg-black/50 backdrop-blur-md text-white text-[11px] px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5">
-                <Users className="w-3 h-3" /> {currentBroadcast.viewers || 0}
+                <Users className="w-3 h-3" /> {activeStream.viewers || 0}
               </div>
             </div>
           </div>
 
+          {/* Bottom Interaction Layer */}
           <div className="absolute bottom-0 inset-x-0 p-4 pb-safe sm:pb-8 flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
             <div className="flex-1 max-w-[70%] flex flex-col gap-3 pointer-events-auto">
               <div className="h-48 overflow-y-auto flex flex-col justify-end gap-2 pb-2 mask-image-to-top no-scrollbar">
@@ -361,11 +366,13 @@ export default function BroadcastScreen() {
             </div>
           </div>
 
+          {/* Scroll Indicators */}
           {liveStreams.length > 1 && (
              <div className={`absolute ${dir === 'rtl' ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10 pointer-events-none`}>
-                {liveStreams.map((_, idx) => (
-                  <div key={idx} className={`w-1.5 rounded-full transition-all duration-300 ${idx === currentIndex ? 'h-4 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'h-1.5 bg-white/30'}`} />
-                ))}
+                {liveStreams.map((_, idx) => {
+                  const isSelected = _.id === activeStream.id;
+                  return <div key={_.id} className={`w-1.5 rounded-full transition-all duration-300 ${isSelected ? 'h-4 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'h-1.5 bg-white/30'}`} />;
+                })}
              </div>
           )}
         </>
