@@ -48,7 +48,8 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
           showScreenSharingButton: false,
           showLeavingView: false,
           showTextChat: false,
-          layout: "Gallery"
+          showUserList: false, // 💡 Cleaner UI
+          // 💡 Removed layout: "Gallery" to let Zego prioritize Host video automatically
         });
       }
     };
@@ -65,7 +66,8 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
     };
   }, [streamId, isHost, user?.id, user?.fullName]);
 
-  return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto" ref={containerRef} />;
+  // 💡 Explicit z-0 to prevent background overlap
+  return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto z-0" ref={containerRef} />;
 };
 
 export default function BroadcastScreen() {
@@ -87,7 +89,6 @@ export default function BroadcastScreen() {
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
 
-  // 💡 FIX 1: WebSocket connection is now independent of viewState to prevent disconnects
   useEffect(() => {
     const channel = supabase.channel('public:live_streams')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_streams' }, (payload) => {
@@ -184,13 +185,15 @@ export default function BroadcastScreen() {
     if (currentIdx === -1) return;
 
     if (distance > swipeThreshold && currentIdx < liveStreams.length - 1) {
+      const nextStream = liveStreams[currentIdx + 1];
       setComments([]); 
-      setIsHost(false);
-      setActiveStream(liveStreams[currentIdx + 1]);
+      setIsHost(user?.id === nextStream.host_id); // 💡 FIX 2: Dynamic Role Assessment on Swipe
+      setActiveStream(nextStream);
     } else if (distance < -swipeThreshold && currentIdx > 0) {
+      const prevStream = liveStreams[currentIdx - 1];
       setComments([]);
-      setIsHost(false);
-      setActiveStream(liveStreams[currentIdx - 1]);
+      setIsHost(user?.id === prevStream.host_id); // 💡 FIX 2: Dynamic Role Assessment on Swipe
+      setActiveStream(prevStream);
     }
     setTouchStartY(0); setTouchEndY(0);
   };
@@ -232,7 +235,6 @@ export default function BroadcastScreen() {
               return (
                 <div key={broadcast.id} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-colors group cursor-pointer relative" onClick={() => { setIsHost(isItemHost); setActiveStream(broadcast); setViewState('room'); }}>
                   
-                  {/* 💡 FIX 2: Manual delete button for ghost streams */}
                   {isItemHost && (
                     <button 
                       onClick={(e) => { 
