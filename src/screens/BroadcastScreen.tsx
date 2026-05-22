@@ -36,8 +36,8 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
         zp.joinRoom({
           container: containerRef.current,
           scenario: {
-            mode: ZegoUIKitPrebuilt.LiveStreaming,
-            config: { role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience },
+            // 💡 CRITICAL FIX: Use VideoConference to auto-publish instantly without needing a 'Start Live' button
+            mode: ZegoUIKitPrebuilt.VideoConference, 
           },
           showPreJoinView: false,
           turnOnMicrophoneWhenJoining: isHost,
@@ -48,8 +48,10 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
           showScreenSharingButton: false,
           showLeavingView: false,
           showTextChat: false,
-          showUserList: false, // 💡 Cleaner UI
-          // 💡 Removed layout: "Gallery" to let Zego prioritize Host video automatically
+          showUserList: false,
+          // 💡 CRITICAL FIX: Hide all audience members from the screen!
+          showNonVideoUser: false, 
+          layout: "Auto"
         });
       }
     };
@@ -66,7 +68,6 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
     };
   }, [streamId, isHost, user?.id, user?.fullName]);
 
-  // 💡 Explicit z-0 to prevent background overlap
   return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto z-0" ref={containerRef} />;
 };
 
@@ -187,12 +188,12 @@ export default function BroadcastScreen() {
     if (distance > swipeThreshold && currentIdx < liveStreams.length - 1) {
       const nextStream = liveStreams[currentIdx + 1];
       setComments([]); 
-      setIsHost(user?.id === nextStream.host_id); // 💡 FIX 2: Dynamic Role Assessment on Swipe
+      setIsHost(user?.id === nextStream.host_id);
       setActiveStream(nextStream);
     } else if (distance < -swipeThreshold && currentIdx > 0) {
       const prevStream = liveStreams[currentIdx - 1];
       setComments([]);
-      setIsHost(user?.id === prevStream.host_id); // 💡 FIX 2: Dynamic Role Assessment on Swipe
+      setIsHost(user?.id === prevStream.host_id);
       setActiveStream(prevStream);
     }
     setTouchStartY(0); setTouchEndY(0);
