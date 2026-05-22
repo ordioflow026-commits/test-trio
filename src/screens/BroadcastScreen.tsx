@@ -9,9 +9,10 @@ interface LiveStreamViewerProps {
   streamId: string;
   isHost: boolean;
   hostName: string;
+  onLeave: () => void;
 }
 
-const LiveStreamViewer = ({ streamId, isHost, hostName }: LiveStreamViewerProps) => {
+const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
   const { user } = useUser();
@@ -62,6 +63,7 @@ const LiveStreamViewer = ({ streamId, isHost, hostName }: LiveStreamViewerProps)
         try { zpInstance.destroy(); } catch (e) {}
         zpRef.current = null;
       }
+      onLeave(); 
     };
   }, [streamId, isHost, user?.id, user?.fullName]);
 
@@ -86,11 +88,9 @@ export default function BroadcastScreen() {
 
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
-
-  // Auto-scroll ref for comments
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
-  // 1. Maintain Live Streams List
+  // 1. Listen for ALL Database changes (INSERT, DELETE, and UPDATE for likes/viewers)
   useEffect(() => {
     const channel = supabase.channel('public:live_streams')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_streams' }, (payload) => {
@@ -101,6 +101,9 @@ export default function BroadcastScreen() {
           });
         } else if (payload.eventType === 'DELETE') {
           setLiveStreams(prev => prev.filter(stream => stream.id !== payload.old.id));
+        } else if (payload.eventType === 'UPDATE') {
+          setLiveStreams(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
+          setActiveStream(prev => prev?.id === payload.new.id ? payload.new : prev);
         }
       })
       .subscribe();
@@ -110,53 +113,61 @@ export default function BroadcastScreen() {
     };
   }, []);
 
-  // 2. Fetch Initial List
+  // 2. Room Synchronization (Chat + Presence)
   useEffect(() => {
-    if (viewState === 'list') {
-      fetchLiveStreams();
-    }
-  }, [viewState]);
-
-  // 💡 3. REAL-TIME CHAT SYNC USING SUPABASE BROADCAST
-  useEffect(() => {
-    if (!activeStream) {
-      setComments([]); // Clear comments when leaving a room
+    if (!activeStream || !user?.id) {
+      setComments([]); 
       return;
     }
 
+    // Setup Real-time Chat
     const chatChannel = supabase.channel(`chat_${activeStream.id}`, {
       config: { broadcast: { ack: false } },
     });
-
     chatChannel.on('broadcast', { event: 'new_comment' }, (payload) => {
-      setComments(prev => {
-        const updated = [...prev, payload.payload];
-        return updated.slice(-50); // Keep only the last 50 comments to prevent lag
-      });
+      setComments(prev => [...prev, payload.payload].slice(-50));
     }).subscribe();
+
+    // Setup Presence (Live Viewers)
+    const presenceChannel = supabase.channel(`presence_${activeStream.id}`, {
+      config: { presence: { key: user.id } }
+    });
+    
+    presenceChannel.on('presence', { event: 'sync' }, () => {
+      const state = presenceChannel.presenceState();
+      const viewersCount = Object.keys(state).length;
+      
+      // The host takes responsibility to update the DB so list view users can see it
+      if (isHost && activeStream.id) {
+        supabase.from('live_streams').update({ viewers: viewersCount }).eq('id', activeStream.id).then();
+      }
+    }).subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await presenceChannel.track({ user_id: user.id });
+      }
+    });
 
     return () => {
       supabase.removeChannel(chatChannel);
+      supabase.removeChannel(presenceChannel);
     };
-  }, [activeStream?.id]);
+  }, [activeStream?.id, isHost]); // Re-run if stream changes
 
-  // 💡 Auto-scroll to newest comment
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [comments]);
+
+  useEffect(() => {
+    if (viewState === 'list') fetchLiveStreams();
+  }, [viewState]);
 
   const fetchLiveStreams = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase.from('live_streams').select('*').order('created_at', { ascending: false });
-      if (!error && data) {
-        setLiveStreams(data);
-      } else {
-        setLiveStreams([]); 
-      }
+      if (!error && data) setLiveStreams(data);
     } catch (err) {
       console.error(err);
-      setLiveStreams([]);
     } finally {
       setLoading(false);
     }
@@ -173,7 +184,8 @@ export default function BroadcastScreen() {
         host_name: user?.fullName || 'Me',
         topic: topic,
         field: field,
-        viewers: 0
+        viewers: 0,
+        liked_by: [] // Init empty array
       };
 
       const { error: insertError } = await supabase.from('live_streams').insert([newStream]);
@@ -193,7 +205,7 @@ export default function BroadcastScreen() {
     if (user?.id === hostId) {
       try {
         await supabase.from('live_streams').delete().eq('id', streamIdToDelete);
-      } catch(e) { console.error("Error performing stream auto-cleanup", e); }
+      } catch(e) {}
     }
   };
 
@@ -207,26 +219,29 @@ export default function BroadcastScreen() {
     setViewState('list');
   };
 
-  // 💡 SEND COMMENT VIA BROADCAST
   const handleSendComment = async () => {
     if (!newComment.trim() || !activeStream) return;
-
-    const commentData = { 
-      id: `${Date.now()}_${Math.random()}`, 
-      user: user?.fullName || 'User', 
-      text: newComment 
-    };
-
-    // Optimistically show locally
+    const commentData = { id: `${Date.now()}_${Math.random()}`, user: user?.fullName || 'User', text: newComment };
     setComments(prev => [...prev, commentData].slice(-50));
     setNewComment('');
+    await supabase.channel(`chat_${activeStream.id}`).send({ type: 'broadcast', event: 'new_comment', payload: commentData });
+  };
 
-    // Send to everyone else in the room
-    await supabase.channel(`chat_${activeStream.id}`).send({
-      type: 'broadcast',
-      event: 'new_comment',
-      payload: commentData
-    });
+  // 💡 HANDLE SINGLE LIKE PER USER
+  const handleLike = async () => {
+    if (!activeStream || !user?.id) return;
+    const currentLikes = activeStream.liked_by || [];
+    
+    // Prevent double liking
+    if (currentLikes.includes(user.id)) return;
+    
+    const newLikes = [...currentLikes, user.id];
+    
+    // Optimistic update for UI speed
+    setActiveStream({ ...activeStream, liked_by: newLikes });
+    
+    // Update Supabase
+    await supabase.from('live_streams').update({ liked_by: newLikes }).eq('id', activeStream.id);
   };
 
   const handleTouchStart = (e: React.TouchEvent) => setTouchStartY(e.targetTouches[0].clientY);
@@ -255,30 +270,20 @@ export default function BroadcastScreen() {
 
   if (viewState === 'list') {
     const filtered = liveStreams.filter(b => b.topic.toLowerCase().includes(searchQuery.toLowerCase()) || (b.field && b.field.toLowerCase().includes(searchQuery.toLowerCase())));
-    
     return (
       <div className="flex-1 flex flex-col p-4 bg-gradient-to-b from-transparent to-slate-900/50 overflow-y-auto animate-in fade-in duration-300" dir={dir}>
         <div className="flex gap-3 items-center mb-6">
           <button onClick={() => setViewState('setup')} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl flex items-center gap-2 shadow-lg flex-shrink-0 transition-transform active:scale-95">
             <Radio className="w-5 h-5 animate-pulse" />
           </button>
-          
           <div className="flex-1 relative">
             <div className={`absolute top-1/2 -translate-y-1/2 ${dir === 'rtl' ? 'right-3' : 'left-3'}`}>
               <Search className="w-5 h-5 text-slate-400" />
             </div>
-            <input 
-              type="text" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={dir === 'rtl' ? 'البحث عن طريق الموضوع...' : 'Search by topic...'} 
-              className={`w-full bg-slate-800/80 border border-slate-700 rounded-xl py-3 ${dir === 'rtl' ? 'pr-10 pl-4' : 'pl-10 pr-4'} text-white placeholder-slate-400 focus:border-blue-500 outline-none transition-colors`}
-            />
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={dir === 'rtl' ? 'البحث عن طريق الموضوع...' : 'Search by topic...'} className={`w-full bg-slate-800/80 border border-slate-700 rounded-xl py-3 ${dir === 'rtl' ? 'pr-10 pl-4' : 'pl-10 pr-4'} text-white placeholder-slate-400 focus:border-blue-500 outline-none transition-colors`} />
           </div>
         </div>
-
         <h2 className="text-xl font-bold text-white mb-4">{dir === 'rtl' ? 'البثوث النشطة' : 'Active Broadcasts'}</h2>
-        
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-20">
           {loading ? (
             <div className="col-span-full flex justify-center py-10"><Loader2 className="w-8 h-8 text-blue-500 animate-spin" /></div>
@@ -289,20 +294,9 @@ export default function BroadcastScreen() {
               const isItemHost = user?.id === broadcast.host_id;
               return (
                 <div key={broadcast.id} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-colors group cursor-pointer relative" onClick={() => { setIsHost(isItemHost); setActiveStream(broadcast); setViewState('room'); }}>
-                  
                   {isItemHost && (
-                    <button 
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        handleStreamCleanup(broadcast.id, broadcast.host_id); 
-                        setLiveStreams(prev => prev.filter(s => s.id !== broadcast.id)); 
-                      }} 
-                      className="absolute top-2 right-2 z-20 p-2 bg-red-600/90 hover:bg-red-500 text-white rounded-full shadow-lg transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); handleStreamCleanup(broadcast.id, broadcast.host_id); setLiveStreams(prev => prev.filter(s => s.id !== broadcast.id)); }} className="absolute top-2 right-2 z-20 p-2 bg-red-600/90 hover:bg-red-500 text-white rounded-full shadow-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                   )}
-
                   <div className="relative aspect-video bg-slate-900">
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-slate-800 to-slate-900"><Video className="w-10 h-10 text-slate-600 group-hover:scale-110 transition-transform duration-500"/></div>
                     <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg"><span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE</div>
@@ -329,12 +323,10 @@ export default function BroadcastScreen() {
       <div className="flex-1 flex flex-col p-6 bg-[#0f172a] items-center justify-center animate-in fade-in duration-300" dir={dir}>
         <div className="w-full max-w-sm bg-slate-800/80 p-8 rounded-[32px] border border-slate-700 shadow-2xl relative">
           <button onClick={() => setViewState('list')} className={`absolute top-6 ${dir === 'rtl' ? 'right-6' : 'left-6'} p-2 text-slate-400 hover:text-white bg-slate-900/50 rounded-full`}><X className="w-5 h-5"/></button>
-          
           <div className="flex flex-col items-center mb-8 mt-4">
             <div className="w-20 h-20 bg-blue-500/20 rounded-full flex items-center justify-center mb-4 border border-blue-500/30 shadow-lg"><Radio className="w-10 h-10 text-blue-400" /></div>
             <h2 className="text-2xl font-bold text-white tracking-wide">{dir === 'rtl' ? 'إعداد البث' : 'Broadcast Setup'}</h2>
           </div>
-
           <div className="space-y-4">
             {error && <div className="text-red-400 text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4"/> {error}</div>}
             <div className="space-y-2">
@@ -350,7 +342,6 @@ export default function BroadcastScreen() {
                 <label className="text-slate-400 text-xs font-bold">{dir === 'rtl' ? 'الموضوع' : 'Topic'}</label>
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={dir === 'rtl' ? 'عنوان البث...' : 'Stream Topic...'} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-blue-500" dir={dir} />
             </div>
-            
             <button onClick={handleGoLive} disabled={!topic || loading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg flex justify-center items-center gap-2 mt-6">
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Radio className="w-5 h-5 animate-pulse" /> {dir === 'rtl' ? 'بدء البث الحقيقي' : 'Go Live Now'}</>}
             </button>
@@ -360,14 +351,11 @@ export default function BroadcastScreen() {
     );
   }
 
+  const hasLiked = activeStream?.liked_by?.includes(user?.id);
+  const likesCount = activeStream?.liked_by?.length || 0;
+
   return (
-    <div 
-      className="flex-1 relative bg-black overflow-hidden flex flex-col"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      dir={dir}
-    >
+    <div className="flex-1 relative bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
       <button onClick={handleExitRoom} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
           <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
@@ -376,12 +364,7 @@ export default function BroadcastScreen() {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p></div>
       ) : (
         <>
-          <LiveStreamViewer 
-            key={activeStream.id} 
-            streamId={activeStream.id} 
-            isHost={isHost} 
-            hostName={activeStream.host_name} 
-          />
+          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} onLeave={() => handleStreamCleanup(activeStream.id, activeStream.host_id)} />
 
           <div className={`absolute top-0 inset-x-0 p-4 pt-16 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
             <div className="flex flex-col gap-2 pointer-events-auto">
@@ -399,6 +382,7 @@ export default function BroadcastScreen() {
               <div className="bg-red-600/90 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
                 <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> LIVE
               </div>
+              {/* 💡 Real-time Viewers Count */}
               <div className="bg-black/50 backdrop-blur-md text-white text-[11px] px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5">
                 <Users className="w-3 h-3" /> {activeStream.viewers || 0}
               </div>
@@ -414,7 +398,6 @@ export default function BroadcastScreen() {
                     <span className="text-white break-words drop-shadow-md">{c.text}</span>
                   </div>
                 ))}
-                {/* 💡 Target for auto-scroll */}
                 <div ref={commentsEndRef} />
               </div>
               <div className="flex gap-2 items-center">
@@ -426,10 +409,12 @@ export default function BroadcastScreen() {
             </div>
 
             <div className="flex flex-col items-center gap-4 pointer-events-auto mb-2">
-              <button className="flex flex-col items-center gap-1 group">
-                <div className="w-12 h-12 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/10 group-hover:bg-red-500/20 transition-colors">
-                  <Heart className="w-6 h-6 text-white group-hover:text-red-500 group-hover:fill-red-500 transition-all" />
+              {/* 💡 The Like (Heart) Button with Logic */}
+              <button onClick={handleLike} disabled={hasLiked} className="flex flex-col items-center gap-1 group disabled:opacity-80">
+                <div className={`w-12 h-12 backdrop-blur-md rounded-full flex items-center justify-center border transition-colors ${hasLiked ? 'bg-red-500/20 border-red-500/50' : 'bg-black/40 border-white/10 group-hover:bg-red-500/20'}`}>
+                  <Heart className={`w-6 h-6 transition-all ${hasLiked ? 'text-red-500 fill-red-500 scale-110' : 'text-white group-hover:text-red-500 group-hover:fill-red-500'}`} />
                 </div>
+                <span className="text-white text-[10px] font-bold drop-shadow-md">{likesCount}</span>
               </button>
               <button onClick={() => {}} className="flex flex-col items-center gap-1 group">
                 <div className="w-12 h-12 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(244,63,94,0.5)] group-hover:scale-110 transition-transform border border-white/20">
