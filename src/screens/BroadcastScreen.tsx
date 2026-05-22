@@ -25,7 +25,10 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
       const appID = 21954096;
       const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
       
-      const uniqueUserId = `${user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8)}_${Date.now().toString().slice(-5)}`;
+      // 💡 CRITICAL FIX: Use Math.random() to guarantee a unique ID even during sub-millisecond StrictMode re-renders
+      const randomStr = Math.random().toString(36).substring(2, 10);
+      const uniqueUserId = `u_${user.id.substring(0, 5)}_${randomStr}`;
+      
       const myName = user.fullName || 'User';
 
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
@@ -36,7 +39,6 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
         zp.joinRoom({
           container: containerRef.current,
           scenario: {
-            // 💡 CRITICAL FIX: Use VideoConference to auto-publish instantly without needing a 'Start Live' button
             mode: ZegoUIKitPrebuilt.VideoConference, 
           },
           showPreJoinView: false,
@@ -49,7 +51,6 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
           showLeavingView: false,
           showTextChat: false,
           showUserList: false,
-          // 💡 CRITICAL FIX: Hide all audience members from the screen!
           showNonVideoUser: false, 
           layout: "Auto"
         });
