@@ -9,10 +9,9 @@ interface LiveStreamViewerProps {
   streamId: string;
   isHost: boolean;
   hostName: string;
-  onLeave: () => void;
 }
 
-const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamViewerProps) => {
+const LiveStreamViewer = ({ streamId, isHost, hostName }: LiveStreamViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
   const { user } = useUser();
@@ -20,27 +19,27 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
   useEffect(() => {
     if (!containerRef.current || !user?.id) return;
     let isMounted = true;
+    let zpInstance: any = null;
 
-    const initLive = async () => {
+    // 💡 CRITICAL FIX: 400ms delay safely bypasses the React Strict Mode double-mount!
+    const timer = setTimeout(async () => {
+      if (!isMounted) return;
+
       const appID = 21954096;
       const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
       
-      // 💡 CRITICAL FIX: Use Math.random() to guarantee a unique ID even during sub-millisecond StrictMode re-renders
       const randomStr = Math.random().toString(36).substring(2, 10);
       const uniqueUserId = `u_${user.id.substring(0, 5)}_${randomStr}`;
-      
       const myName = user.fullName || 'User';
 
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
-      const zp = ZegoUIKitPrebuilt.create(kitToken);
-      zpRef.current = zp;
+      zpInstance = ZegoUIKitPrebuilt.create(kitToken);
+      zpRef.current = zpInstance;
 
-      if (isMounted) {
-        zp.joinRoom({
+      if (isMounted && containerRef.current) {
+        zpInstance.joinRoom({
           container: containerRef.current,
-          scenario: {
-            mode: ZegoUIKitPrebuilt.VideoConference, 
-          },
+          scenario: { mode: ZegoUIKitPrebuilt.VideoConference },
           showPreJoinView: false,
           turnOnMicrophoneWhenJoining: isHost,
           turnOnCameraWhenJoining: isHost,
@@ -55,17 +54,15 @@ const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamVie
           layout: "Auto"
         });
       }
-    };
-
-    initLive();
+    }, 400); // Wait out the phantom mount
 
     return () => {
       isMounted = false;
-      if (zpRef.current) {
-        try { zpRef.current.destroy(); } catch (e) {}
+      clearTimeout(timer); // If StrictMode unmounts instantly, the connection is cancelled
+      if (zpInstance) {
+        try { zpInstance.destroy(); } catch (e) {}
         zpRef.current = null;
       }
-      onLeave(); 
     };
   }, [streamId, isHost, user?.id, user?.fullName]);
 
@@ -160,14 +157,24 @@ export default function BroadcastScreen() {
     }
   };
 
+  // 💡 Explicit cleanup function
   const handleStreamCleanup = async (streamIdToDelete: string, hostId: string) => {
     if (user?.id === hostId) {
       try {
         await supabase.from('live_streams').delete().eq('id', streamIdToDelete);
-      } catch(e) {
-        console.error("Error performing stream auto-cleanup", e);
-      }
+      } catch(e) { console.error("Error performing stream auto-cleanup", e); }
     }
+  };
+
+  // 💡 New explicit exit function tied to the back button
+  const handleExitRoom = () => {
+    if (isHost && activeStream) {
+      handleStreamCleanup(activeStream.id, activeStream.host_id);
+      setLiveStreams(prev => prev.filter(s => s.id !== activeStream.id));
+    }
+    setIsHost(false);
+    setActiveStream(null);
+    setViewState('list');
   };
 
   const handleSendComment = () => {
@@ -187,11 +194,13 @@ export default function BroadcastScreen() {
     if (currentIdx === -1) return;
 
     if (distance > swipeThreshold && currentIdx < liveStreams.length - 1) {
+      if (isHost) handleStreamCleanup(activeStream.id, activeStream.host_id); // Cleanup if host swipes away
       const nextStream = liveStreams[currentIdx + 1];
       setComments([]); 
       setIsHost(user?.id === nextStream.host_id);
       setActiveStream(nextStream);
     } else if (distance < -swipeThreshold && currentIdx > 0) {
+      if (isHost) handleStreamCleanup(activeStream.id, activeStream.host_id); // Cleanup if host swipes away
       const prevStream = liveStreams[currentIdx - 1];
       setComments([]);
       setIsHost(user?.id === prevStream.host_id);
@@ -315,7 +324,8 @@ export default function BroadcastScreen() {
       onTouchEnd={handleTouchEnd}
       dir={dir}
     >
-      <button onClick={() => setViewState('list')} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
+      {/* 💡 Explicitly call handleExitRoom here */}
+      <button onClick={handleExitRoom} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
           <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
 
@@ -328,7 +338,6 @@ export default function BroadcastScreen() {
             streamId={activeStream.id} 
             isHost={isHost} 
             hostName={activeStream.host_name} 
-            onLeave={() => handleStreamCleanup(activeStream.id, activeStream.host_id)}
           />
 
           <div className={`absolute top-0 inset-x-0 p-4 pt-16 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
