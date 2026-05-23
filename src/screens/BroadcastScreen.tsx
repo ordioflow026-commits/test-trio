@@ -9,10 +9,10 @@ interface LiveStreamViewerProps {
   streamId: string;
   isHost: boolean;
   hostName: string;
+  onLeave: () => void;
 }
 
-// 💡 CRITICAL FIX: React.memo prevents the video component from re-rendering when chat/likes update
-const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamViewerProps) => {
+const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: LiveStreamViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
   const { user } = useUser();
@@ -22,7 +22,7 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
     let isMounted = true;
 
     const timer = setTimeout(() => {
-      if (!isMounted || zpRef.current) return; // Prevent any duplicate connections
+      if (!isMounted || zpRef.current) return; 
 
       const appID = 21954096;
       const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
@@ -60,6 +60,7 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
         try { zpRef.current.destroy(); } catch (e) {}
         zpRef.current = null;
       }
+      onLeave(); 
     };
   }, [streamId, isHost, user?.id]);
 
@@ -349,9 +350,12 @@ export default function BroadcastScreen() {
   const hasLiked = activeStream?.liked_by?.includes(user?.id);
   const likesCount = activeStream?.liked_by?.length || 0;
 
+  // 💡 CRITICAL FIX: Changed from `relative flex-1` to `fixed inset-0 z-[999]` to cover entire screen
   return (
-    <div className="flex-1 relative bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
-      <button onClick={handleExitRoom} className={`absolute top-4 ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
+    <div className="fixed inset-0 z-[999] bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
+      
+      {/* Back button safely positioned below hardware notch */}
+      <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
           <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
 
@@ -359,10 +363,9 @@ export default function BroadcastScreen() {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p></div>
       ) : (
         <>
-          {/* 💡 Video component is now protected and won't crash when comments/hearts are sent */}
-          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} />
+          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} onLeave={() => {}} />
 
-          <div className={`absolute top-0 inset-x-0 p-4 pt-16 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
+          <div className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] inset-x-0 p-4 pt-14 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
             <div className="flex flex-col gap-2 pointer-events-auto">
               <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full pr-4 pl-1 py-1 border border-white/10 w-max">
                 <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold shadow-inner">
@@ -384,7 +387,7 @@ export default function BroadcastScreen() {
             </div>
           </div>
 
-          <div className="absolute bottom-0 inset-x-0 p-4 pb-safe sm:pb-8 flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
+          <div className="absolute bottom-0 inset-x-0 p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
             <div className="flex-1 max-w-[70%] flex flex-col gap-3 pointer-events-auto">
               <div className="h-48 overflow-y-auto flex flex-col justify-end gap-2 pb-2 mask-image-to-top no-scrollbar">
                 {comments.map(c => (
