@@ -9,55 +9,62 @@ interface LiveStreamViewerProps {
   streamId: string;
   isHost: boolean;
   hostName: string;
-  onLeave: () => void;
 }
 
-const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamViewerProps) => {
-  const { user } = useUser();
+// 💡 CRITICAL FIX: React.memo prevents the video component from re-rendering when chat/likes update
+const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamViewerProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
+  const { user } = useUser();
 
-  // 💡 CRITICAL FIX: The `ref` callback pattern eliminates React 18 Strict Mode double-mount bugs!
-  const myMeeting = async (element: HTMLDivElement | null) => {
-    if (!element) {
+  useEffect(() => {
+    if (!containerRef.current || !user?.id) return;
+    let isMounted = true;
+
+    const timer = setTimeout(() => {
+      if (!isMounted || zpRef.current) return; // Prevent any duplicate connections
+
+      const appID = 21954096;
+      const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
+      
+      const randomStr = Math.random().toString(36).substring(2, 10);
+      const uniqueUserId = `u_${user.id.substring(0, 5)}_${randomStr}`;
+      const myName = user.fullName || 'User';
+
+      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
+      const zpInstance = ZegoUIKitPrebuilt.create(kitToken);
+      zpRef.current = zpInstance;
+
+      zpInstance.joinRoom({
+        container: containerRef.current,
+        scenario: { mode: ZegoUIKitPrebuilt.VideoConference },
+        showPreJoinView: false,
+        turnOnMicrophoneWhenJoining: isHost,
+        turnOnCameraWhenJoining: isHost,
+        showMyCameraToggleButton: isHost,
+        showMyMicrophoneToggleButton: isHost,
+        showAudioVideoSettingsButton: isHost,
+        showScreenSharingButton: false,
+        showLeavingView: false,
+        showTextChat: false,
+        showUserList: false,
+        showNonVideoUser: false, 
+        layout: "Auto"
+      });
+    }, 300); 
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer); 
       if (zpRef.current) {
         try { zpRef.current.destroy(); } catch (e) {}
         zpRef.current = null;
-        onLeave();
       }
-      return;
-    }
+    };
+  }, [streamId, isHost, user?.id]);
 
-    if (zpRef.current) return; // Prevent duplicate instantiation
-
-    const appID = 21954096;
-    const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
-    const uniqueUserId = `u_${Math.floor(Math.random() * 10000000)}`;
-    const myName = user?.fullName || 'User';
-
-    const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
-    const zp = ZegoUIKitPrebuilt.create(kitToken);
-    zpRef.current = zp;
-
-    zp.joinRoom({
-      container: element,
-      scenario: { mode: ZegoUIKitPrebuilt.VideoConference },
-      showPreJoinView: false,
-      turnOnMicrophoneWhenJoining: isHost,
-      turnOnCameraWhenJoining: isHost,
-      showMyCameraToggleButton: isHost,
-      showMyMicrophoneToggleButton: isHost,
-      showAudioVideoSettingsButton: isHost,
-      showScreenSharingButton: false,
-      showLeavingView: false,
-      showTextChat: false,
-      showUserList: false,
-      showNonVideoUser: false, 
-      layout: "Auto"
-    });
-  };
-
-  return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto z-0" ref={myMeeting} />;
-};
+  return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto z-0" ref={containerRef} />;
+});
 
 export default function BroadcastScreen() {
   const { t, dir } = useLanguage();
@@ -79,7 +86,6 @@ export default function BroadcastScreen() {
   const [touchEndY, setTouchEndY] = useState(0);
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
-  // 1. Maintain Live Streams List from DB (INSERT & DELETE only)
   useEffect(() => {
     const channel = supabase.channel('public:live_streams')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_streams' }, (payload) => {
@@ -99,7 +105,6 @@ export default function BroadcastScreen() {
     };
   }, []);
 
-  // 2. UNIFIED ROOM SYNCHRONIZATION (Chat, Viewers Presence, Likes)
   useEffect(() => {
     if (!activeStream || !user?.id) {
       setComments([]); 
@@ -118,12 +123,10 @@ export default function BroadcastScreen() {
         setComments(prev => [...prev, payload.payload].slice(-50));
       })
       .on('broadcast', { event: 'like_update' }, (payload) => {
-        // Instantly update hearts for everyone via broadcast
         setActiveStream(prev => prev ? { ...prev, liked_by: payload.payload.liked_by } : null);
         setLiveStreams(prev => prev.map(s => s.id === activeStream.id ? { ...s, liked_by: payload.payload.liked_by } : s));
       })
       .on('presence', { event: 'sync' }, () => {
-        // Instantly update true viewer count for everyone
         const state = roomChannel.presenceState();
         const viewersCount = Object.keys(state).length;
         
@@ -216,21 +219,19 @@ export default function BroadcastScreen() {
   const handleLike = async () => {
     if (!activeStream || !user?.id) return;
     const currentLikes = activeStream.liked_by || [];
-    if (currentLikes.includes(user.id)) return; // Only allow one like per user
+    if (currentLikes.includes(user.id)) return;
     
     const newLikes = [...currentLikes, user.id];
     
     setActiveStream({ ...activeStream, liked_by: newLikes });
     setLiveStreams(prev => prev.map(s => s.id === activeStream.id ? { ...s, liked_by: newLikes } : s));
     
-    // Broadcast to room instantly
     supabase.channel(`room_${activeStream.id}`).send({
       type: 'broadcast',
       event: 'like_update',
       payload: { liked_by: newLikes }
     });
     
-    // Persist in DB
     await supabase.from('live_streams').update({ liked_by: newLikes }).eq('id', activeStream.id);
   };
 
@@ -245,7 +246,7 @@ export default function BroadcastScreen() {
     if (currentIdx === -1) return;
 
     if (distance > swipeThreshold && currentIdx < liveStreams.length - 1) {
-      if (isHost) handleExitRoom(); // Clean up if host swipes away
+      if (isHost) handleExitRoom(); 
       const nextStream = liveStreams[currentIdx + 1];
       setIsHost(user?.id === nextStream.host_id);
       setActiveStream(nextStream);
@@ -358,7 +359,8 @@ export default function BroadcastScreen() {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p></div>
       ) : (
         <>
-          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} onLeave={() => {}} />
+          {/* 💡 Video component is now protected and won't crash when comments/hearts are sent */}
+          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} />
 
           <div className={`absolute top-0 inset-x-0 p-4 pt-16 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
             <div className="flex flex-col gap-2 pointer-events-auto">
@@ -376,7 +378,6 @@ export default function BroadcastScreen() {
               <div className="bg-red-600/90 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
                 <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> LIVE
               </div>
-              {/* 💡 Real-time Viewers Count */}
               <div className="bg-black/50 backdrop-blur-md text-white text-[11px] px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5">
                 <Users className="w-3 h-3" /> {activeStream.viewers || 0}
               </div>
@@ -403,7 +404,6 @@ export default function BroadcastScreen() {
             </div>
 
             <div className="flex flex-col items-center gap-4 pointer-events-auto mb-2">
-              {/* 💡 The Like (Heart) Button with Logic */}
               <button onClick={handleLike} disabled={hasLiked} className="flex flex-col items-center gap-1 group disabled:opacity-80">
                 <div className={`w-12 h-12 backdrop-blur-md rounded-full flex items-center justify-center border transition-colors ${hasLiked ? 'bg-red-500/20 border-red-500/50' : 'bg-black/40 border-white/10 group-hover:bg-red-500/20'}`}>
                   <Heart className={`w-6 h-6 transition-all ${hasLiked ? 'text-red-500 fill-red-500 scale-110' : 'text-white group-hover:text-red-500 group-hover:fill-red-500'}`} />
