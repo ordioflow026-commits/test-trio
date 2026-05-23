@@ -13,61 +13,50 @@ interface LiveStreamViewerProps {
 }
 
 const LiveStreamViewer = ({ streamId, isHost, hostName, onLeave }: LiveStreamViewerProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const zpRef = useRef<any>(null);
   const { user } = useUser();
+  const zpRef = useRef<any>(null);
 
-  useEffect(() => {
-    if (!containerRef.current || !user?.id) return;
-    let isMounted = true;
-    let zpInstance: any = null;
-
-    const timer = setTimeout(async () => {
-      if (!isMounted) return;
-
-      const appID = 21954096;
-      const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
-      
-      const randomStr = Math.random().toString(36).substring(2, 10);
-      const uniqueUserId = `u_${user.id.substring(0, 5)}_${randomStr}`;
-      const myName = user.fullName || 'User';
-
-      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
-      zpInstance = ZegoUIKitPrebuilt.create(kitToken);
-      zpRef.current = zpInstance;
-
-      if (isMounted && containerRef.current) {
-        zpInstance.joinRoom({
-          container: containerRef.current,
-          scenario: { mode: ZegoUIKitPrebuilt.VideoConference },
-          showPreJoinView: false,
-          turnOnMicrophoneWhenJoining: isHost,
-          turnOnCameraWhenJoining: isHost,
-          showMyCameraToggleButton: isHost,
-          showMyMicrophoneToggleButton: isHost,
-          showAudioVideoSettingsButton: isHost,
-          showScreenSharingButton: false,
-          showLeavingView: false,
-          showTextChat: false,
-          showUserList: false,
-          showNonVideoUser: false, 
-          layout: "Auto"
-        });
-      }
-    }, 400); 
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer); 
-      if (zpInstance) {
-        try { zpInstance.destroy(); } catch (e) {}
+  // 💡 CRITICAL FIX: The `ref` callback pattern eliminates React 18 Strict Mode double-mount bugs!
+  const myMeeting = async (element: HTMLDivElement | null) => {
+    if (!element) {
+      if (zpRef.current) {
+        try { zpRef.current.destroy(); } catch (e) {}
         zpRef.current = null;
+        onLeave();
       }
-      onLeave(); 
-    };
-  }, [streamId, isHost, user?.id, user?.fullName]);
+      return;
+    }
 
-  return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto z-0" ref={containerRef} />;
+    if (zpRef.current) return; // Prevent duplicate instantiation
+
+    const appID = 21954096;
+    const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
+    const uniqueUserId = `u_${Math.floor(Math.random() * 10000000)}`;
+    const myName = user?.fullName || 'User';
+
+    const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
+    const zp = ZegoUIKitPrebuilt.create(kitToken);
+    zpRef.current = zp;
+
+    zp.joinRoom({
+      container: element,
+      scenario: { mode: ZegoUIKitPrebuilt.VideoConference },
+      showPreJoinView: false,
+      turnOnMicrophoneWhenJoining: isHost,
+      turnOnCameraWhenJoining: isHost,
+      showMyCameraToggleButton: isHost,
+      showMyMicrophoneToggleButton: isHost,
+      showAudioVideoSettingsButton: isHost,
+      showScreenSharingButton: false,
+      showLeavingView: false,
+      showTextChat: false,
+      showUserList: false,
+      showNonVideoUser: false, 
+      layout: "Auto"
+    });
+  };
+
+  return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto z-0" ref={myMeeting} />;
 };
 
 export default function BroadcastScreen() {
@@ -90,7 +79,7 @@ export default function BroadcastScreen() {
   const [touchEndY, setTouchEndY] = useState(0);
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
-  // 1. Listen for ALL Database changes (INSERT, DELETE, and UPDATE for likes/viewers)
+  // 1. Maintain Live Streams List from DB (INSERT & DELETE only)
   useEffect(() => {
     const channel = supabase.channel('public:live_streams')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_streams' }, (payload) => {
@@ -101,9 +90,6 @@ export default function BroadcastScreen() {
           });
         } else if (payload.eventType === 'DELETE') {
           setLiveStreams(prev => prev.filter(stream => stream.id !== payload.old.id));
-        } else if (payload.eventType === 'UPDATE') {
-          setLiveStreams(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
-          setActiveStream(prev => prev?.id === payload.new.id ? payload.new : prev);
         }
       })
       .subscribe();
@@ -113,45 +99,51 @@ export default function BroadcastScreen() {
     };
   }, []);
 
-  // 2. Room Synchronization (Chat + Presence)
+  // 2. UNIFIED ROOM SYNCHRONIZATION (Chat, Viewers Presence, Likes)
   useEffect(() => {
     if (!activeStream || !user?.id) {
       setComments([]); 
       return;
     }
 
-    // Setup Real-time Chat
-    const chatChannel = supabase.channel(`chat_${activeStream.id}`, {
-      config: { broadcast: { ack: false } },
+    const roomChannel = supabase.channel(`room_${activeStream.id}`, {
+      config: { 
+        broadcast: { ack: false },
+        presence: { key: user.id } 
+      },
     });
-    chatChannel.on('broadcast', { event: 'new_comment' }, (payload) => {
-      setComments(prev => [...prev, payload.payload].slice(-50));
-    }).subscribe();
 
-    // Setup Presence (Live Viewers)
-    const presenceChannel = supabase.channel(`presence_${activeStream.id}`, {
-      config: { presence: { key: user.id } }
-    });
-    
-    presenceChannel.on('presence', { event: 'sync' }, () => {
-      const state = presenceChannel.presenceState();
-      const viewersCount = Object.keys(state).length;
-      
-      // The host takes responsibility to update the DB so list view users can see it
-      if (isHost && activeStream.id) {
-        supabase.from('live_streams').update({ viewers: viewersCount }).eq('id', activeStream.id).then();
-      }
-    }).subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await presenceChannel.track({ user_id: user.id });
-      }
-    });
+    roomChannel
+      .on('broadcast', { event: 'new_comment' }, (payload) => {
+        setComments(prev => [...prev, payload.payload].slice(-50));
+      })
+      .on('broadcast', { event: 'like_update' }, (payload) => {
+        // Instantly update hearts for everyone via broadcast
+        setActiveStream(prev => prev ? { ...prev, liked_by: payload.payload.liked_by } : null);
+        setLiveStreams(prev => prev.map(s => s.id === activeStream.id ? { ...s, liked_by: payload.payload.liked_by } : s));
+      })
+      .on('presence', { event: 'sync' }, () => {
+        // Instantly update true viewer count for everyone
+        const state = roomChannel.presenceState();
+        const viewersCount = Object.keys(state).length;
+        
+        setActiveStream(prev => prev ? { ...prev, viewers: viewersCount } : null);
+        setLiveStreams(prev => prev.map(s => s.id === activeStream.id ? { ...s, viewers: viewersCount } : s));
+        
+        if (isHost && activeStream.id) {
+          supabase.from('live_streams').update({ viewers: viewersCount }).eq('id', activeStream.id).then();
+        }
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await roomChannel.track({ user_id: user.id });
+        }
+      });
 
     return () => {
-      supabase.removeChannel(chatChannel);
-      supabase.removeChannel(presenceChannel);
+      supabase.removeChannel(roomChannel);
     };
-  }, [activeStream?.id, isHost]); // Re-run if stream changes
+  }, [activeStream?.id, isHost]);
 
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -185,7 +177,7 @@ export default function BroadcastScreen() {
         topic: topic,
         field: field,
         viewers: 0,
-        liked_by: [] // Init empty array
+        liked_by: []
       };
 
       const { error: insertError } = await supabase.from('live_streams').insert([newStream]);
@@ -201,18 +193,12 @@ export default function BroadcastScreen() {
     }
   };
 
-  const handleStreamCleanup = async (streamIdToDelete: string, hostId: string) => {
-    if (user?.id === hostId) {
-      try {
-        await supabase.from('live_streams').delete().eq('id', streamIdToDelete);
-      } catch(e) {}
-    }
-  };
-
-  const handleExitRoom = () => {
+  const handleExitRoom = async () => {
     if (isHost && activeStream) {
-      handleStreamCleanup(activeStream.id, activeStream.host_id);
-      setLiveStreams(prev => prev.filter(s => s.id !== activeStream.id));
+      try {
+        await supabase.from('live_streams').delete().eq('id', activeStream.id);
+        setLiveStreams(prev => prev.filter(s => s.id !== activeStream.id));
+      } catch(e) {}
     }
     setIsHost(false);
     setActiveStream(null);
@@ -224,23 +210,27 @@ export default function BroadcastScreen() {
     const commentData = { id: `${Date.now()}_${Math.random()}`, user: user?.fullName || 'User', text: newComment };
     setComments(prev => [...prev, commentData].slice(-50));
     setNewComment('');
-    await supabase.channel(`chat_${activeStream.id}`).send({ type: 'broadcast', event: 'new_comment', payload: commentData });
+    await supabase.channel(`room_${activeStream.id}`).send({ type: 'broadcast', event: 'new_comment', payload: commentData });
   };
 
-  // 💡 HANDLE SINGLE LIKE PER USER
   const handleLike = async () => {
     if (!activeStream || !user?.id) return;
     const currentLikes = activeStream.liked_by || [];
-    
-    // Prevent double liking
-    if (currentLikes.includes(user.id)) return;
+    if (currentLikes.includes(user.id)) return; // Only allow one like per user
     
     const newLikes = [...currentLikes, user.id];
     
-    // Optimistic update for UI speed
     setActiveStream({ ...activeStream, liked_by: newLikes });
+    setLiveStreams(prev => prev.map(s => s.id === activeStream.id ? { ...s, liked_by: newLikes } : s));
     
-    // Update Supabase
+    // Broadcast to room instantly
+    supabase.channel(`room_${activeStream.id}`).send({
+      type: 'broadcast',
+      event: 'like_update',
+      payload: { liked_by: newLikes }
+    });
+    
+    // Persist in DB
     await supabase.from('live_streams').update({ liked_by: newLikes }).eq('id', activeStream.id);
   };
 
@@ -255,12 +245,12 @@ export default function BroadcastScreen() {
     if (currentIdx === -1) return;
 
     if (distance > swipeThreshold && currentIdx < liveStreams.length - 1) {
-      if (isHost) handleStreamCleanup(activeStream.id, activeStream.host_id); 
+      if (isHost) handleExitRoom(); // Clean up if host swipes away
       const nextStream = liveStreams[currentIdx + 1];
       setIsHost(user?.id === nextStream.host_id);
       setActiveStream(nextStream);
     } else if (distance < -swipeThreshold && currentIdx > 0) {
-      if (isHost) handleStreamCleanup(activeStream.id, activeStream.host_id); 
+      if (isHost) handleExitRoom(); 
       const prevStream = liveStreams[currentIdx - 1];
       setIsHost(user?.id === prevStream.host_id);
       setActiveStream(prevStream);
@@ -295,7 +285,11 @@ export default function BroadcastScreen() {
               return (
                 <div key={broadcast.id} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-colors group cursor-pointer relative" onClick={() => { setIsHost(isItemHost); setActiveStream(broadcast); setViewState('room'); }}>
                   {isItemHost && (
-                    <button onClick={(e) => { e.stopPropagation(); handleStreamCleanup(broadcast.id, broadcast.host_id); setLiveStreams(prev => prev.filter(s => s.id !== broadcast.id)); }} className="absolute top-2 right-2 z-20 p-2 bg-red-600/90 hover:bg-red-500 text-white rounded-full shadow-lg transition-all"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={async (e) => { 
+                      e.stopPropagation(); 
+                      await supabase.from('live_streams').delete().eq('id', broadcast.id);
+                      setLiveStreams(prev => prev.filter(s => s.id !== broadcast.id)); 
+                    }} className="absolute top-2 right-2 z-20 p-2 bg-red-600/90 hover:bg-red-500 text-white rounded-full shadow-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                   )}
                   <div className="relative aspect-video bg-slate-900">
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-slate-800 to-slate-900"><Video className="w-10 h-10 text-slate-600 group-hover:scale-110 transition-transform duration-500"/></div>
@@ -364,7 +358,7 @@ export default function BroadcastScreen() {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p></div>
       ) : (
         <>
-          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} onLeave={() => handleStreamCleanup(activeStream.id, activeStream.host_id)} />
+          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} onLeave={() => {}} />
 
           <div className={`absolute top-0 inset-x-0 p-4 pt-16 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
             <div className="flex flex-col gap-2 pointer-events-auto">
