@@ -52,9 +52,13 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
       showAudioVideoSettingsButton: false,
       showScreenSharingButton: false,
       showLeavingView: false,
-      // 💡 FORCE HIDE BOTTOM BAR AND LEAVE BUTTON
       showLeaveButton: false,
       showBottomMenuBar: false,
+      // 💡 CRITICAL FIX: Forcefully empty the array of bottom buttons so Zego cannot render them
+      bottomMenuBarConfig: {
+        maxCount: 0,
+        buttons: [],
+      },
       showTextChat: false,
       showUserList: false,
       showNonVideoUser: false, 
@@ -351,8 +355,8 @@ export default function BroadcastScreen() {
   const roomOverlay = (
     <div className="fixed top-0 left-0 w-screen h-screen z-[99999] bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
       
-      {/* 💡 REVERTED EXIT BUTTON: Clean Arrow with a red icon in a dark sleek background */}
-      <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2.5 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 transition-colors pointer-events-auto shadow-lg border border-red-500/20`}>
+      {/* 💡 THE RED ARROW EXIT BUTTON */}
+      <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2.5 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 transition-colors pointer-events-auto shadow-[0_0_10px_rgba(239,68,68,0.3)] border border-red-500/20`}>
           <ChevronLeft className={`w-6 h-6 text-red-500 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
 
@@ -430,6 +434,7 @@ export default function BroadcastScreen() {
         </>
       )}
 
+      {/* 💡 CSS rule to completely nuke the Zego bottom bar if their SDK ignores the config */}
       <style>{`
         .mask-image-to-top {
           mask-image: linear-gradient(to top, black 70%, transparent 100%);
@@ -437,6 +442,14 @@ export default function BroadcastScreen() {
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Ultimate override to hide Zego's default controls */
+        #zego-video-container > div > div:last-child {
+           display: none !important;
+           opacity: 0 !important;
+           visibility: hidden !important;
+           pointer-events: none !important;
+        }
       `}</style>
     </div>
   );
