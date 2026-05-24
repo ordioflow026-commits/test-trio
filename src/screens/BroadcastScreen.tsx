@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart, Trash2 } from 'lucide-react';
+import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart, Trash2, LogOut } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
@@ -12,14 +12,12 @@ interface LiveStreamViewerProps {
   hostName: string;
 }
 
-// 💡 FIX 1: Robust ref callback pattern to eliminate the 1002011 double-mount error permanently
 const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamViewerProps) => {
   const { user } = useUser();
   const zpRef = useRef<any>(null);
   const joinedRef = useRef(false);
 
   const myMeeting = async (element: HTMLDivElement | null) => {
-    // Component unmounting
     if (!element) {
       if (zpRef.current) {
         try { zpRef.current.destroy(); } catch (e) {}
@@ -29,7 +27,6 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
       return;
     }
 
-    // Prevent duplicate joins during Strict Mode
     if (joinedRef.current || !user?.id) return;
     joinedRef.current = true;
 
@@ -50,9 +47,10 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
       showPreJoinView: false,
       turnOnMicrophoneWhenJoining: isHost,
       turnOnCameraWhenJoining: isHost,
-      showMyCameraToggleButton: isHost,
-      showMyMicrophoneToggleButton: isHost,
-      showAudioVideoSettingsButton: isHost,
+      // 💡 CRITICAL FIX: Hide all default Zego buttons so they don't overlay our UI
+      showMyCameraToggleButton: false,
+      showMyMicrophoneToggleButton: false,
+      showAudioVideoSettingsButton: false,
       showScreenSharingButton: false,
       showLeavingView: false,
       showTextChat: false,
@@ -337,7 +335,7 @@ export default function BroadcastScreen() {
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={dir === 'rtl' ? 'عنوان البث...' : 'Stream Topic...'} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-blue-500" dir={dir} />
             </div>
             <button onClick={handleGoLive} disabled={!topic || loading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg flex justify-center items-center gap-2 mt-6">
-               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Radio className="w-5 h-5 animate-pulse" /> {dir === 'rtl' ? 'بدء البث الحقيقي' : 'Go Live Now'}</>}
+              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Radio className="w-5 h-5 animate-pulse" /> {dir === 'rtl' ? 'بدء البث الحقيقي' : 'Go Live Now'}</>}
             </button>
           </div>
         </div>
@@ -348,12 +346,13 @@ export default function BroadcastScreen() {
   const hasLiked = activeStream?.liked_by?.includes(user?.id);
   const likesCount = activeStream?.liked_by?.length || 0;
 
-  // 💡 FIX 2: createPortal forces the view to escape any parent layout boundaries!
   const roomOverlay = (
     <div className="fixed top-0 left-0 w-screen h-screen z-[99999] bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
       
-      <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
-          <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
+      {/* 💡 UPGRADED EXIT BUTTON */}
+      <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 flex items-center gap-1.5 px-4 py-2 bg-red-600/90 backdrop-blur-md text-white rounded-full hover:bg-red-500 transition-all active:scale-95 pointer-events-auto shadow-[0_0_15px_rgba(220,38,38,0.4)] border border-red-400/30`}>
+          <X className="w-4 h-4" />
+          <span className="font-bold text-sm tracking-wide">{isHost ? (dir === 'rtl' ? 'إنهاء البث' : 'End Live') : (dir === 'rtl' ? 'مغادرة' : 'Leave')}</span>
       </button>
 
       {!activeStream ? (
@@ -362,7 +361,8 @@ export default function BroadcastScreen() {
         <>
           <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} />
 
-          <div className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] inset-x-0 p-4 pt-14 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
+          {/* Top Info Bar is pushed lower so it doesn't overlap with the new Exit Button */}
+          <div className={`absolute top-[max(4.5rem,calc(env(safe-area-inset-top)+3rem))] inset-x-0 p-4 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
             <div className="flex flex-col gap-2 pointer-events-auto">
               <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full pr-4 pl-1 py-1 border border-white/10 w-max">
                 <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold shadow-inner">
