@@ -52,11 +52,9 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
       showAudioVideoSettingsButton: false,
       showScreenSharingButton: false,
       showLeavingView: false,
-      // 💡 CRITICAL FIX: Hide the entire Zego bottom bar (phone icon, 3 dots, etc.) and forcefully remove buttons
+      // 💡 FORCE HIDE BOTTOM BAR AND LEAVE BUTTON
       showLeaveButton: false,
       showBottomMenuBar: false,
-      bottomMenuBarConfig: { buttons: [] },
-      showLeaveRoomConfirmDialog: false,
       showTextChat: false,
       showUserList: false,
       showNonVideoUser: false, 
