@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart, Trash2, LogOut } from 'lucide-react';
+import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart, Trash2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
@@ -47,12 +47,14 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
       showPreJoinView: false,
       turnOnMicrophoneWhenJoining: isHost,
       turnOnCameraWhenJoining: isHost,
-      // 💡 CRITICAL FIX: Hide all default Zego buttons so they don't overlay our UI
       showMyCameraToggleButton: false,
       showMyMicrophoneToggleButton: false,
       showAudioVideoSettingsButton: false,
       showScreenSharingButton: false,
       showLeavingView: false,
+      // 💡 CRITICAL FIX: Hide the entire Zego bottom bar (phone icon, 3 dots, etc.)
+      showLeaveButton: false,
+      showBottomMenuBar: false,
       showTextChat: false,
       showUserList: false,
       showNonVideoUser: false, 
@@ -349,10 +351,9 @@ export default function BroadcastScreen() {
   const roomOverlay = (
     <div className="fixed top-0 left-0 w-screen h-screen z-[99999] bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
       
-      {/* 💡 UPGRADED EXIT BUTTON */}
-      <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 flex items-center gap-1.5 px-4 py-2 bg-red-600/90 backdrop-blur-md text-white rounded-full hover:bg-red-500 transition-all active:scale-95 pointer-events-auto shadow-[0_0_15px_rgba(220,38,38,0.4)] border border-red-400/30`}>
-          <X className="w-4 h-4" />
-          <span className="font-bold text-sm tracking-wide">{isHost ? (dir === 'rtl' ? 'إنهاء البث' : 'End Live') : (dir === 'rtl' ? 'مغادرة' : 'Leave')}</span>
+      {/* 💡 REVERTED EXIT BUTTON: Clean Arrow but with a red glowing background */}
+      <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2.5 bg-red-600/90 backdrop-blur-md text-white rounded-full hover:bg-red-500 transition-colors pointer-events-auto shadow-[0_0_15px_rgba(220,38,38,0.5)] border border-red-400/30`}>
+          <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
 
       {!activeStream ? (
@@ -361,8 +362,8 @@ export default function BroadcastScreen() {
         <>
           <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} />
 
-          {/* Top Info Bar is pushed lower so it doesn't overlap with the new Exit Button */}
-          <div className={`absolute top-[max(4.5rem,calc(env(safe-area-inset-top)+3rem))] inset-x-0 p-4 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
+          {/* Top Info Bar */}
+          <div className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] inset-x-0 p-4 pt-14 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
             <div className="flex flex-col gap-2 pointer-events-auto">
               <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full pr-4 pl-1 py-1 border border-white/10 w-max">
                 <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold shadow-inner">
@@ -374,11 +375,11 @@ export default function BroadcastScreen() {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2 pointer-events-auto">
+            <div className="flex flex-col items-end gap-2 pointer-events-auto mt-[-3rem]">
               <div className="bg-red-600/90 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
                 <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> LIVE
               </div>
-              <div className="bg-black/50 backdrop-blur-md text-white text-[11px] px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5">
+              <div className="bg-black/50 backdrop-blur-md text-white text-[11px] px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5 mt-2">
                 <Users className="w-3 h-3" /> {activeStream.viewers || 0}
               </div>
             </div>
