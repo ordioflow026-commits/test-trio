@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart, Trash2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
@@ -9,62 +10,59 @@ interface LiveStreamViewerProps {
   streamId: string;
   isHost: boolean;
   hostName: string;
-  onLeave: () => void;
 }
 
-const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: LiveStreamViewerProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const zpRef = useRef<any>(null);
+// 💡 FIX 1: Robust ref callback pattern to eliminate the 1002011 double-mount error permanently
+const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamViewerProps) => {
   const { user } = useUser();
+  const zpRef = useRef<any>(null);
+  const joinedRef = useRef(false);
 
-  useEffect(() => {
-    if (!containerRef.current || !user?.id) return;
-    let isMounted = true;
-
-    const timer = setTimeout(() => {
-      if (!isMounted || zpRef.current) return; 
-
-      const appID = 21954096;
-      const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
-      
-      const randomStr = Math.random().toString(36).substring(2, 10);
-      const uniqueUserId = `u_${user.id.substring(0, 5)}_${randomStr}`;
-      const myName = user.fullName || 'User';
-
-      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
-      const zpInstance = ZegoUIKitPrebuilt.create(kitToken);
-      zpRef.current = zpInstance;
-
-      zpInstance.joinRoom({
-        container: containerRef.current,
-        scenario: { mode: ZegoUIKitPrebuilt.VideoConference },
-        showPreJoinView: false,
-        turnOnMicrophoneWhenJoining: isHost,
-        turnOnCameraWhenJoining: isHost,
-        showMyCameraToggleButton: isHost,
-        showMyMicrophoneToggleButton: isHost,
-        showAudioVideoSettingsButton: isHost,
-        showScreenSharingButton: false,
-        showLeavingView: false,
-        showTextChat: false,
-        showUserList: false,
-        showNonVideoUser: false, 
-        layout: "Auto"
-      });
-    }, 300); 
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer); 
+  const myMeeting = async (element: HTMLDivElement | null) => {
+    // Component unmounting
+    if (!element) {
       if (zpRef.current) {
         try { zpRef.current.destroy(); } catch (e) {}
         zpRef.current = null;
       }
-      onLeave(); 
-    };
-  }, [streamId, isHost, user?.id]);
+      joinedRef.current = false;
+      return;
+    }
 
-  return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto z-0" ref={containerRef} />;
+    // Prevent duplicate joins during Strict Mode
+    if (joinedRef.current || !user?.id) return;
+    joinedRef.current = true;
+
+    const appID = 21954096;
+    const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
+    
+    const randomStr = Math.random().toString(36).substring(2, 10);
+    const uniqueUserId = `u_${user.id.substring(0, 5)}_${Date.now().toString().slice(-4)}_${randomStr}`;
+    const myName = user.fullName || 'User';
+
+    const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
+    const zp = ZegoUIKitPrebuilt.create(kitToken);
+    zpRef.current = zp;
+
+    zp.joinRoom({
+      container: element,
+      scenario: { mode: ZegoUIKitPrebuilt.VideoConference },
+      showPreJoinView: false,
+      turnOnMicrophoneWhenJoining: isHost,
+      turnOnCameraWhenJoining: isHost,
+      showMyCameraToggleButton: isHost,
+      showMyMicrophoneToggleButton: isHost,
+      showAudioVideoSettingsButton: isHost,
+      showScreenSharingButton: false,
+      showLeavingView: false,
+      showTextChat: false,
+      showUserList: false,
+      showNonVideoUser: false, 
+      layout: "Auto"
+    });
+  };
+
+  return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto z-0" ref={myMeeting} />;
 });
 
 export default function BroadcastScreen() {
@@ -339,7 +337,7 @@ export default function BroadcastScreen() {
                 <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={dir === 'rtl' ? 'عنوان البث...' : 'Stream Topic...'} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-blue-500" dir={dir} />
             </div>
             <button onClick={handleGoLive} disabled={!topic || loading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg flex justify-center items-center gap-2 mt-6">
-              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Radio className="w-5 h-5 animate-pulse" /> {dir === 'rtl' ? 'بدء البث الحقيقي' : 'Go Live Now'}</>}
+               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Radio className="w-5 h-5 animate-pulse" /> {dir === 'rtl' ? 'بدء البث الحقيقي' : 'Go Live Now'}</>}
             </button>
           </div>
         </div>
@@ -350,11 +348,10 @@ export default function BroadcastScreen() {
   const hasLiked = activeStream?.liked_by?.includes(user?.id);
   const likesCount = activeStream?.liked_by?.length || 0;
 
-  // 💡 CRITICAL FIX: Changed from `relative flex-1` to `fixed inset-0 z-[999]` to cover entire screen
-  return (
-    <div className="fixed inset-0 z-[999] bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
+  // 💡 FIX 2: createPortal forces the view to escape any parent layout boundaries!
+  const roomOverlay = (
+    <div className="fixed top-0 left-0 w-screen h-screen z-[99999] bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
       
-      {/* Back button safely positioned below hardware notch */}
       <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2 bg-black/40 backdrop-blur-md text-white rounded-full hover:bg-black/60 transition-colors pointer-events-auto border border-white/10`}>
           <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
@@ -363,7 +360,7 @@ export default function BroadcastScreen() {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p></div>
       ) : (
         <>
-          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} onLeave={() => {}} />
+          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} />
 
           <div className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] inset-x-0 p-4 pt-14 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
             <div className="flex flex-col gap-2 pointer-events-auto">
@@ -442,4 +439,6 @@ export default function BroadcastScreen() {
       `}</style>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(roomOverlay, document.body) : roomOverlay;
 }
