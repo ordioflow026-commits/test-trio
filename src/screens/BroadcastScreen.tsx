@@ -52,9 +52,11 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
       showAudioVideoSettingsButton: false,
       showScreenSharingButton: false,
       showLeavingView: false,
-      // 💡 CRITICAL FIX: Hide the entire Zego bottom bar (phone icon, 3 dots, etc.)
+      // 💡 CRITICAL FIX: Hide the entire Zego bottom bar (phone icon, 3 dots, etc.) and forcefully remove buttons
       showLeaveButton: false,
       showBottomMenuBar: false,
+      bottomMenuBarConfig: { buttons: [] },
+      showLeaveRoomConfirmDialog: false,
       showTextChat: false,
       showUserList: false,
       showNonVideoUser: false, 
@@ -351,9 +353,9 @@ export default function BroadcastScreen() {
   const roomOverlay = (
     <div className="fixed top-0 left-0 w-screen h-screen z-[99999] bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
       
-      {/* 💡 REVERTED EXIT BUTTON: Clean Arrow but with a red glowing background */}
-      <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2.5 bg-red-600/90 backdrop-blur-md text-white rounded-full hover:bg-red-500 transition-colors pointer-events-auto shadow-[0_0_15px_rgba(220,38,38,0.5)] border border-red-400/30`}>
-          <ChevronLeft className={`w-6 h-6 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
+      {/* 💡 REVERTED EXIT BUTTON: Clean Arrow with a red icon in a dark sleek background */}
+      <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2.5 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 transition-colors pointer-events-auto shadow-lg border border-red-500/20`}>
+          <ChevronLeft className={`w-6 h-6 text-red-500 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
       </button>
 
       {!activeStream ? (
