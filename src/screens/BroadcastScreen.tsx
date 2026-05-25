@@ -43,12 +43,8 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
 
     zp.joinRoom({
       container: element,
-      // 💡 FIX: Use LiveStreaming mode and set Role based on isHost
       scenario: { 
-        mode: ZegoUIKitPrebuilt.LiveStreaming,
-        config: {
-          role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience,
-        }
+        mode: ZegoUIKitPrebuilt.VideoConference,
       },
       showPreJoinView: false,
       turnOnMicrophoneWhenJoining: isHost,
