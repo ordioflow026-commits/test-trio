@@ -19,8 +19,8 @@ export default function CallScreen() {
     joined.current = true; // Lock immediately so it only runs ONCE
 
     try {
-        const appID = 1823159648;
-        const serverSecret = "b53364d7eb4f7975c7389248d516e8d8";
+        const appID = 1876368926;
+        const serverSecret = "c6fe23cd50c684b018f8e84ee532d5fa";
 
         const safeUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
         const safeTargetId = (targetId || 't').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);

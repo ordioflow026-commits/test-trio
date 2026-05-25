@@ -18,8 +18,8 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
     let isMounted = true;
 
     const initMeeting = async () => {
-      const appID = 1823159648;
-      const serverSecret = "b53364d7eb4f7975c7389248d516e8d8".trim();
+      const appID = 1524809815;
+      const serverSecret = "d1c6a0e47c625b2d4459f547d52df57a".trim();
       
       // Unique Sub-Room ID to avoid collision with TripleScreenRoom audio
       const liveRoomId = `vid_${roomId.replace(/[^a-zA-Z0-9]/g, '')}`;
@@ -42,7 +42,7 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
         zp.joinRoom({
           container: containerRef.current,
           scenario: {
-            mode: ZegoUIKitPrebuilt.GroupCall,
+            mode: ZegoUIKitPrebuilt.VideoConference,
           },
           // Prompts user to choose Camera/Mic before entering
           showPreJoinView: true, 

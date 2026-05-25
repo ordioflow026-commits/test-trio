@@ -86,8 +86,8 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           return await originalGetUserMedia({ audio: true, video: false });
         };
 
-        const appID = 1823159648;
-        const serverSecret = "b53364d7eb4f7975c7389248d516e8d8".trim();
+        const appID = 1524809815;
+        const serverSecret = "d1c6a0e47c625b2d4459f547d52df57a".trim();
         
         // Unique ID avoids conflicts with the global ring listener
         const uniqueAudioUserId = (user?.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 10) + '_audio'; 
@@ -110,7 +110,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
         zp.joinRoom({
           container: hiddenDiv,
-          scenario: { mode: ZegoUIKitPrebuilt.GroupCall },
+          scenario: { mode: ZegoUIKitPrebuilt.VideoConference },
           turnOnMicrophoneWhenJoining: true,
           turnOnCameraWhenJoining: false,
           showPreJoinView: false,
