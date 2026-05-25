@@ -36,25 +36,21 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
       container: containerRef.current,
       scenario: { 
         mode: ZegoUIKitPrebuilt.LiveStreaming,
-        config: {
-          role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience,
-        }
+        config: { role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience }
       },
+      showPreJoinView: isHost,
       turnOnMicrophoneWhenJoining: isHost,
       turnOnCameraWhenJoining: isHost,
       showMyCameraToggleButton: isHost,
       showMyMicrophoneToggleButton: isHost,
       showAudioVideoSettingsButton: isHost,
       showScreenSharingButton: isHost,
-      showPreJoinView: isHost, // Allows host to preview camera before clicking "Go Live"
       showLeavingView: false,
       showLeaveButton: true,
       showBottomMenuBar: true,
       showTextChat: false,
       showUserList: false,
-      onLeaveRoom: () => {
-        onLeave();
-      }
+      onLeaveRoom: () => onLeave()
     });
 
     return () => {
@@ -62,7 +58,6 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
         try { zpRef.current.destroy(); } catch (e) {}
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamId, isHost, user?.id]);
 
   return <div className="absolute inset-0 w-full h-full pointer-events-auto z-0" ref={containerRef} />;
@@ -173,16 +168,6 @@ export default function BroadcastScreen() {
   const handleGoLive = async () => {
     if (!topic) return;
     setLoading(true); setError('');
-
-    // 💡 FIX: Request permissions explicitly before creating the stream
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      stream.getTracks().forEach(track => track.stop());
-    } catch (err) {
-      setError(dir === 'rtl' ? 'يرجى السماح للتطبيق باستخدام الكاميرا والميكروفون أولاً.' : 'Please allow camera and mic access first.');
-      setLoading(false);
-      return;
-    }
 
     try {
       const streamId = `live_${Math.random().toString(36).substring(2, 10)}`;
