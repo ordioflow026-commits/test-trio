@@ -10,9 +10,10 @@ interface LiveStreamViewerProps {
   streamId: string;
   isHost: boolean;
   hostName: string;
+  onLeave: () => void;
 }
 
-const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamViewerProps) => {
+const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: LiveStreamViewerProps) => {
   const { user } = useUser();
   const zpRef = useRef<any>(null);
   const joinedRef = useRef(false);
@@ -52,22 +53,20 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
       showPreJoinView: false,
       turnOnMicrophoneWhenJoining: isHost,
       turnOnCameraWhenJoining: isHost,
-      showMyCameraToggleButton: false,
-      showMyMicrophoneToggleButton: false,
-      showAudioVideoSettingsButton: false,
-      showScreenSharingButton: false,
+      showMyCameraToggleButton: isHost, // Show only for host natively
+      showMyMicrophoneToggleButton: isHost, // Show only for host natively
+      showAudioVideoSettingsButton: isHost,
+      showScreenSharingButton: isHost,
       showLeavingView: false,
-      showLeaveButton: false,
-      showBottomMenuBar: false,
-      // 💡 CRITICAL FIX: Forcefully empty the array of bottom buttons so Zego cannot render them
-      bottomMenuBarConfig: {
-        maxCount: 0,
-        buttons: [],
-      },
+      showLeaveButton: true, // Enable native Zego leave button
+      showBottomMenuBar: isHost, // Show bar only for host
       showTextChat: false,
       showUserList: false,
-      showNonVideoUser: false, 
-      layout: "Auto"
+      showNonVideoUser: true, 
+      layout: "Auto",
+      onLeaveRoom: () => {
+        onLeave();
+      }
     });
   };
 
@@ -371,16 +370,11 @@ export default function BroadcastScreen() {
   const roomOverlay = (
     <div className="fixed top-0 left-0 w-screen h-screen z-[99999] bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
       
-      {/* 💡 THE RED ARROW EXIT BUTTON */}
-      <button onClick={handleExitRoom} className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] ${dir === 'rtl' ? 'right-4' : 'left-4'} z-50 p-2.5 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 transition-colors pointer-events-auto shadow-[0_0_10px_rgba(239,68,68,0.3)] border border-red-500/20`}>
-          <ChevronLeft className={`w-6 h-6 text-red-500 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
-      </button>
-
       {!activeStream ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p></div>
       ) : (
         <>
-          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} />
+          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} onLeave={handleExitRoom} />
 
           {/* Top Info Bar */}
           <div className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] inset-x-0 p-4 pt-14 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
@@ -405,7 +399,7 @@ export default function BroadcastScreen() {
             </div>
           </div>
 
-          <div className="absolute bottom-0 inset-x-0 p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
+          <div className="absolute bottom-0 inset-x-0 p-4 pb-[max(5.5rem,env(safe-area-inset-bottom))] flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
             <div className="flex-1 max-w-[70%] flex flex-col gap-3 pointer-events-auto">
               <div className="h-48 overflow-y-auto flex flex-col justify-end gap-2 pb-2 mask-image-to-top no-scrollbar">
                 {comments.map(c => (
@@ -459,13 +453,7 @@ export default function BroadcastScreen() {
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Ultimate override to hide Zego's default controls */
-        #zego-video-container > div > div:last-child {
-           display: none !important;
-           opacity: 0 !important;
-           visibility: hidden !important;
-           pointer-events: none !important;
-        }
+
       `}</style>
     </div>
   );
