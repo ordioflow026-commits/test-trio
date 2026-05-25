@@ -43,7 +43,13 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
 
     zp.joinRoom({
       container: element,
-      scenario: { mode: ZegoUIKitPrebuilt.VideoConference },
+      // 💡 FIX: Use LiveStreaming mode and set Role based on isHost
+      scenario: { 
+        mode: ZegoUIKitPrebuilt.LiveStreaming,
+        config: {
+          role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience,
+        }
+      },
       showPreJoinView: false,
       turnOnMicrophoneWhenJoining: isHost,
       turnOnCameraWhenJoining: isHost,
@@ -174,6 +180,17 @@ export default function BroadcastScreen() {
   const handleGoLive = async () => {
     if (!topic) return;
     setLoading(true); setError('');
+
+    // 💡 FIX: Request permissions explicitly before creating the stream
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getTracks().forEach(track => track.stop());
+    } catch (err) {
+      setError(dir === 'rtl' ? 'يرجى السماح للتطبيق باستخدام الكاميرا والميكروفون أولاً.' : 'Please allow camera and mic access first.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const streamId = `live_${Math.random().toString(36).substring(2, 10)}`;
       const newStream = {
