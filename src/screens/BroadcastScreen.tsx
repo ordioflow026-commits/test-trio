@@ -38,7 +38,7 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
         mode: ZegoUIKitPrebuilt.LiveStreaming,
         config: { role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience }
       },
-      showPreJoinView: isHost,
+      showPreJoinView: false,
       turnOnMicrophoneWhenJoining: isHost,
       turnOnCameraWhenJoining: isHost,
       showMyCameraToggleButton: isHost,
@@ -46,8 +46,8 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
       showAudioVideoSettingsButton: isHost,
       showScreenSharingButton: isHost,
       showLeavingView: false,
-      showLeaveButton: true,
-      showBottomMenuBar: true,
+      showLeaveButton: false,
+      showBottomMenuBar: false,
       showTextChat: false,
       showUserList: false,
       onLeaveRoom: () => onLeave()
@@ -358,6 +358,9 @@ export default function BroadcastScreen() {
 
           {/* Top Info Bar */}
           <div className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] inset-x-0 p-4 pt-14 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
+            <button onClick={handleExitRoom} className="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-red-500/80 transition-colors pointer-events-auto shrink-0">
+              <ChevronLeft className="w-6 h-6 rtl:rotate-180" />
+            </button>
             <div className="flex flex-col gap-2 pointer-events-auto">
               <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full pr-4 pl-1 py-1 border border-white/10 w-max">
                 <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold shadow-inner">
@@ -379,7 +382,7 @@ export default function BroadcastScreen() {
             </div>
           </div>
 
-          <div className="absolute bottom-0 inset-x-0 p-4 pb-[120px] flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
+          <div className="absolute bottom-0 inset-x-0 p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
             <div className="flex-1 max-w-[70%] flex flex-col gap-3 pointer-events-auto">
               <div className="h-48 overflow-y-auto flex flex-col justify-end gap-2 pb-2 mask-image-to-top no-scrollbar">
                 {comments.map(c => (
