@@ -39,8 +39,8 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
     let isMounted = true;
 
     const initZego = async () => {
-      const appID = 21954096;
-      const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4";
+      const appID = 1823159648;
+      const serverSecret = "b53364d7eb4f7975c7389248d516e8d8";
       const safeUserId = user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
       const userName = user.fullName || (user.email ? user.email.split('@')[0] : `User_${safeUserId}`);
 

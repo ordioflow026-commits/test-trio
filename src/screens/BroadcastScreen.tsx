@@ -30,8 +30,8 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
     if (joinedRef.current || !user?.id) return;
     joinedRef.current = true;
 
-    const appID = 21954096;
-    const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
+    const appID = 1823159648;
+    const serverSecret = "b53364d7eb4f7975c7389248d516e8d8".trim();
     
     const randomStr = Math.random().toString(36).substring(2, 10);
     const uniqueUserId = `u_${user.id.substring(0, 5)}_${Date.now().toString().slice(-4)}_${randomStr}`;
@@ -44,7 +44,10 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName }: LiveStreamV
     zp.joinRoom({
       container: element,
       scenario: { 
-        mode: ZegoUIKitPrebuilt.VideoConference,
+        mode: ZegoUIKitPrebuilt.LiveStreaming,
+        config: {
+          role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience,
+        }
       },
       showPreJoinView: false,
       turnOnMicrophoneWhenJoining: isHost,

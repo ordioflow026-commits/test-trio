@@ -18,8 +18,8 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
     let isMounted = true;
 
     const initMeeting = async () => {
-      const appID = 21954096;
-      const serverSecret = "214c0cd0d6b215fa94856c3b377f92e4".trim();
+      const appID = 1823159648;
+      const serverSecret = "b53364d7eb4f7975c7389248d516e8d8".trim();
       
       // Unique Sub-Room ID to avoid collision with TripleScreenRoom audio
       const liveRoomId = `vid_${roomId.replace(/[^a-zA-Z0-9]/g, '')}`;
