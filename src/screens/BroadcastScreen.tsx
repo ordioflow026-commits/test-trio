@@ -15,27 +15,17 @@ interface LiveStreamViewerProps {
 
 const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: LiveStreamViewerProps) => {
   const { user } = useUser();
+  const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
-  const joinedRef = useRef(false);
 
-  const myMeeting = async (element: HTMLDivElement | null) => {
-    if (!element) {
-      if (zpRef.current) {
-        try { zpRef.current.destroy(); } catch (e) {}
-        zpRef.current = null;
-      }
-      joinedRef.current = false;
-      return;
-    }
-
-    if (joinedRef.current || !user?.id) return;
-    joinedRef.current = true;
+  useEffect(() => {
+    if (!containerRef.current || !user?.id) return;
 
     const appID = 1823159648;
     const serverSecret = "b53364d7eb4f7975c7389248d516e8d8".trim();
     
     const randomStr = Math.random().toString(36).substring(2, 10);
-    const uniqueUserId = `u_${user.id.substring(0, 5)}_${Date.now().toString().slice(-4)}_${randomStr}`;
+    const uniqueUserId = `u_${user.id.substring(0, 5)}_${randomStr}`;
     const myName = user.fullName || 'User';
 
     const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
@@ -43,34 +33,39 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
     zpRef.current = zp;
 
     zp.joinRoom({
-      container: element,
+      container: containerRef.current,
       scenario: { 
         mode: ZegoUIKitPrebuilt.LiveStreaming,
         config: {
           role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience,
         }
       },
-      showPreJoinView: false,
       turnOnMicrophoneWhenJoining: isHost,
       turnOnCameraWhenJoining: isHost,
-      showMyCameraToggleButton: isHost, // Show only for host natively
-      showMyMicrophoneToggleButton: isHost, // Show only for host natively
+      showMyCameraToggleButton: isHost,
+      showMyMicrophoneToggleButton: isHost,
       showAudioVideoSettingsButton: isHost,
       showScreenSharingButton: isHost,
+      showPreJoinView: isHost, // Allows host to preview camera before clicking "Go Live"
       showLeavingView: false,
-      showLeaveButton: true, // Enable native Zego leave button
-      showBottomMenuBar: isHost, // Show bar only for host
+      showLeaveButton: true,
+      showBottomMenuBar: true,
       showTextChat: false,
       showUserList: false,
-      showNonVideoUser: true, 
-      layout: "Auto",
       onLeaveRoom: () => {
         onLeave();
       }
     });
-  };
 
-  return <div className="absolute inset-0 w-full h-full bg-black pointer-events-auto z-0" ref={myMeeting} />;
+    return () => {
+      if (zpRef.current) {
+        try { zpRef.current.destroy(); } catch (e) {}
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streamId, isHost, user?.id]);
+
+  return <div className="absolute inset-0 w-full h-full pointer-events-auto z-0" ref={containerRef} />;
 });
 
 export default function BroadcastScreen() {
@@ -399,7 +394,7 @@ export default function BroadcastScreen() {
             </div>
           </div>
 
-          <div className="absolute bottom-0 inset-x-0 p-4 pb-[max(5.5rem,env(safe-area-inset-bottom))] flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
+          <div className="absolute bottom-0 inset-x-0 p-4 pb-[120px] flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
             <div className="flex-1 max-w-[70%] flex flex-col gap-3 pointer-events-auto">
               <div className="h-48 overflow-y-auto flex flex-col justify-end gap-2 pb-2 mask-image-to-top no-scrollbar">
                 {comments.map(c => (
