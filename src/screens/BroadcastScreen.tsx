@@ -382,39 +382,7 @@ export default function BroadcastScreen() {
             </div>
           </div>
 
-          <div className="absolute bottom-0 inset-x-0 p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex justify-between items-end z-20 pointer-events-none gap-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-32">
-            <div className="flex-1 max-w-[70%] flex flex-col gap-3 pointer-events-auto">
-              <div className="h-48 overflow-y-auto flex flex-col justify-end gap-2 pb-2 mask-image-to-top no-scrollbar">
-                {comments.map(c => (
-                  <div key={c.id} className="bg-black/40 backdrop-blur-md rounded-2xl p-2 px-3 text-sm w-max max-w-full">
-                    <span className="font-bold text-blue-400 me-2">{c.user}:</span>
-                    <span className="text-white break-words drop-shadow-md">{c.text}</span>
-                  </div>
-                ))}
-                <div ref={commentsEndRef} />
-              </div>
-              <div className="flex gap-2 items-center">
-                <div className="flex-1 flex items-center bg-black/40 backdrop-blur-md border border-white/20 rounded-full px-4 py-1.5 focus-within:border-blue-500/50 transition-colors">
-                  <input type="text" value={newComment} onChange={(e) => setNewComment(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendComment()} placeholder={dir === 'rtl' ? 'أضف تعليقاً...' : 'Add comment...'} className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder-slate-400 py-1.5" dir={dir} />
-                </div>
-                <button onClick={handleSendComment} className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0 shadow-lg"><Send className={`w-4 h-4 ${dir === 'rtl' ? 'rotate-180 -ml-1' : 'ml-1'}`} /></button>
-              </div>
-            </div>
 
-            <div className="flex flex-col items-center gap-4 pointer-events-auto mb-2">
-              <button onClick={handleLike} disabled={hasLiked} className="flex flex-col items-center gap-1 group disabled:opacity-80">
-                <div className={`w-12 h-12 backdrop-blur-md rounded-full flex items-center justify-center border transition-colors ${hasLiked ? 'bg-red-500/20 border-red-500/50' : 'bg-black/40 border-white/10 group-hover:bg-red-500/20'}`}>
-                  <Heart className={`w-6 h-6 transition-all ${hasLiked ? 'text-red-500 fill-red-500 scale-110' : 'text-white group-hover:text-red-500 group-hover:fill-red-500'}`} />
-                </div>
-                <span className="text-white text-[10px] font-bold drop-shadow-md">{likesCount}</span>
-              </button>
-              <button onClick={() => {}} className="flex flex-col items-center gap-1 group">
-                <div className="w-12 h-12 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(244,63,94,0.5)] group-hover:scale-110 transition-transform border border-white/20">
-                  <Gift className="w-6 h-6 text-white" />
-                </div>
-              </button>
-            </div>
-          </div>
 
           {liveStreams.length > 1 && (
              <div className={`absolute ${dir === 'rtl' ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10 pointer-events-none`}>
