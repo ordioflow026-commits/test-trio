@@ -38,18 +38,16 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
         mode: ZegoUIKitPrebuilt.LiveStreaming,
         config: { role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience }
       },
-      showPreJoinView: false,
+      showPreJoinView: isHost,
       turnOnMicrophoneWhenJoining: isHost,
       turnOnCameraWhenJoining: isHost,
       showMyCameraToggleButton: isHost,
       showMyMicrophoneToggleButton: isHost,
       showAudioVideoSettingsButton: isHost,
       showScreenSharingButton: isHost,
-      showLeavingView: false,
-      showLeaveButton: false,
-      showBottomMenuBar: false,
-      showTextChat: false,
-      showUserList: false,
+      showLeavingView: true,
+      showLeaveButton: true,
+      showBottomMenuBar: true,
       onLeaveRoom: () => onLeave()
     });
 
@@ -348,64 +346,21 @@ export default function BroadcastScreen() {
   const likesCount = activeStream?.liked_by?.length || 0;
 
   const roomOverlay = (
-    <div className="fixed top-0 left-0 w-screen h-screen z-[99999] bg-black overflow-hidden flex flex-col" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} dir={dir}>
-      
+    <div className="fixed top-0 left-0 w-screen h-screen z-[99999] bg-black overflow-hidden flex flex-col" dir={dir}>
       {!activeStream ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]"><Video className="w-16 h-16 text-slate-600 mb-4" /><p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p></div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]">
+          <Video className="w-16 h-16 text-slate-600 mb-4" />
+          <p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p>
+        </div>
       ) : (
-        <>
-          <LiveStreamViewer key={activeStream.id} streamId={activeStream.id} isHost={isHost} hostName={activeStream.host_name} onLeave={handleExitRoom} />
-
-          {/* Top Info Bar */}
-          <div className={`absolute top-[max(1.5rem,env(safe-area-inset-top))] inset-x-0 p-4 pt-14 flex justify-between items-start z-20 pointer-events-none bg-gradient-to-b from-black/60 to-transparent pb-10 ${dir === 'rtl' ? 'pl-4' : 'pr-4'}`}>
-            <button onClick={handleExitRoom} className="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-red-500/80 transition-colors pointer-events-auto shrink-0">
-              <ChevronLeft className="w-6 h-6 rtl:rotate-180" />
-            </button>
-            <div className="flex flex-col gap-2 pointer-events-auto">
-              <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full pr-4 pl-1 py-1 border border-white/10 w-max">
-                <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold shadow-inner">
-                  {activeStream.host_name?.charAt(0) || 'U'}
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-white text-xs font-bold leading-tight">{activeStream.host_name}</span>
-                  <span className="text-slate-300 text-[10px]">{activeStream.topic}</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-2 pointer-events-auto mt-[-3rem]">
-              <div className="bg-red-600/90 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
-                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> LIVE
-              </div>
-              <div className="bg-black/50 backdrop-blur-md text-white text-[11px] px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5 mt-2">
-                <Users className="w-3 h-3" /> {activeStream.viewers || 0}
-              </div>
-            </div>
-          </div>
-
-
-
-          {liveStreams.length > 1 && (
-             <div className={`absolute ${dir === 'rtl' ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10 pointer-events-none`}>
-                {liveStreams.map((_, idx) => {
-                  const isSelected = _.id === activeStream.id;
-                  return <div key={_.id} className={`w-1.5 rounded-full transition-all duration-300 ${isSelected ? 'h-4 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'h-1.5 bg-white/30'}`} />;
-                })}
-             </div>
-          )}
-        </>
+        <LiveStreamViewer 
+          key={activeStream.id} 
+          streamId={activeStream.id} 
+          isHost={isHost} 
+          hostName={activeStream.host_name} 
+          onLeave={handleExitRoom} 
+        />
       )}
-
-      {/* 💡 CSS rule to completely nuke the Zego bottom bar if their SDK ignores the config */}
-      <style>{`
-        .mask-image-to-top {
-          mask-image: linear-gradient(to top, black 70%, transparent 100%);
-          -webkit-mask-image: linear-gradient(to top, black 70%, transparent 100%);
-        }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-
-      `}</style>
     </div>
   );
 
