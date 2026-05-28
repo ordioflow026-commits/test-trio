@@ -46,6 +46,7 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
       showAudioVideoSettingsButton: isHost,
       showScreenSharingButton: isHost,
       showLeavingView: true,
+      // @ts-ignore
       showLeaveButton: true,
       showBottomMenuBar: true,
       onLeaveRoom: () => onLeave()

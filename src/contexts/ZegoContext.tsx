@@ -124,7 +124,9 @@ export const ZegoProvider = ({ children }: { children: React.ReactNode }) => {
         },
         
         onIncomingCallCanceled: stopRingtone,
+        // @ts-ignore
         onIncomingCallAcceptButtonPressed: stopRingtone,
+        // @ts-ignore
         onIncomingCallDeclineButtonPressed: stopRingtone,
         onIncomingCallTimeout: stopRingtone,
 

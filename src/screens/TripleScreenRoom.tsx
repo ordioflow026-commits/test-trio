@@ -115,7 +115,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           turnOnCameraWhenJoining: false,
           showPreJoinView: false,
           showLeavingView: false,
-          showCameraToggleButton: false,
+          showMyCameraToggleButton: false,
         });
 
         setIsVoiceActive(true);
