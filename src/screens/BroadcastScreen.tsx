@@ -38,7 +38,7 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
         mode: ZegoUIKitPrebuilt.LiveStreaming,
         config: { role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience }
       },
-      showPreJoinView: isHost,
+      showPreJoinView: false,
       turnOnMicrophoneWhenJoining: isHost,
       turnOnCameraWhenJoining: isHost,
       showMyCameraToggleButton: isHost,

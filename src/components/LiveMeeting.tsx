@@ -45,7 +45,7 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
             mode: ZegoUIKitPrebuilt.VideoConference,
           },
           // Prompts user to choose Camera/Mic before entering
-          showPreJoinView: true, 
+          showPreJoinView: false, 
           
           turnOnMicrophoneWhenJoining: false,
           turnOnCameraWhenJoining: false,
