@@ -20,44 +20,52 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
   const joined = useRef(false);
 
   useEffect(() => {
-    if (!containerRef.current || !user?.id || joined.current) return;
+    if (!containerRef.current || !user?.id) return;
     
-    joined.current = true;
+    let isMounted = true;
+    let zp: any = null;
 
-    const appID = 1823159648;
-    const serverSecret = "b53364d7eb4f7975c7389248d516e8d8".trim();
-    
-    const randomStr = Math.random().toString(36).substring(2, 10);
-    const uniqueUserId = `u_${user.id.substring(0, 5)}_${randomStr}`;
-    const myName = user.fullName || 'User';
+    // 💡 Delay initialization by 300ms to bypass React Strict Mode double-mounting
+    const initZego = setTimeout(() => {
+      if (!isMounted) return;
 
-    const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
-    const zp = ZegoUIKitPrebuilt.create(kitToken);
-    zpRef.current = zp;
+      const appID = 1823159648;
+      const serverSecret = "b53364d7eb4f7975c7389248d516e8d8".trim();
+      
+      // 💡 Use a consistent ID instead of a random string to prevent duplicate login conflicts
+      const uniqueUserId = user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+      const myName = user.fullName || 'User';
 
-    zp.joinRoom({
-      container: containerRef.current,
-      scenario: { 
-        mode: ZegoUIKitPrebuilt.LiveStreaming,
-        config: { role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience }
-      },
-      showPreJoinView: false,
-      turnOnMicrophoneWhenJoining: isHost,
-      turnOnCameraWhenJoining: isHost,
-      showMyCameraToggleButton: isHost,
-      showMyMicrophoneToggleButton: isHost,
-      showAudioVideoSettingsButton: isHost,
-      showScreenSharingButton: isHost,
-      showLeavingView: true,
-      // @ts-ignore
-      showLeaveButton: true,
-      showBottomMenuBar: true,
-      onLeaveRoom: () => onLeave()
-    });
+      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, streamId, uniqueUserId, myName);
+      zp = ZegoUIKitPrebuilt.create(kitToken);
+      zpRef.current = zp;
+
+      zp.joinRoom({
+        container: containerRef.current,
+        scenario: { 
+          mode: ZegoUIKitPrebuilt.LiveStreaming,
+          config: { role: isHost ? ZegoUIKitPrebuilt.Host : ZegoUIKitPrebuilt.Audience }
+        },
+        showPreJoinView: false,
+        turnOnMicrophoneWhenJoining: isHost,
+        turnOnCameraWhenJoining: isHost,
+        showMyCameraToggleButton: isHost,
+        showMyMicrophoneToggleButton: isHost,
+        showAudioVideoSettingsButton: isHost,
+        showScreenSharingButton: isHost,
+        showLeavingView: true,
+        // @ts-ignore
+        showLeaveButton: true,
+        showBottomMenuBar: true,
+        onLeaveRoom: () => onLeave()
+      });
+    }, 300);
 
     return () => {
-      if (zpRef.current) {
-        try { zpRef.current.destroy(); } catch (e) {}
+      isMounted = false;
+      clearTimeout(initZego); // 💡 Cancel the connection if unmounted before 300ms
+      if (zp) {
+        try { zp.destroy(); } catch (e) {}
       }
     };
   }, [streamId, isHost, user?.id]);
