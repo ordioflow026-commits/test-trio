@@ -17,9 +17,12 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
   const { user } = useUser();
   const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
+  const joined = useRef(false);
 
   useEffect(() => {
-    if (!containerRef.current || !user?.id) return;
+    if (!containerRef.current || !user?.id || joined.current) return;
+    
+    joined.current = true;
 
     const appID = 1823159648;
     const serverSecret = "b53364d7eb4f7975c7389248d516e8d8".trim();
@@ -347,7 +350,7 @@ export default function BroadcastScreen() {
   const likesCount = activeStream?.liked_by?.length || 0;
 
   const roomOverlay = (
-    <div className="fixed top-0 left-0 w-screen h-screen z-[99999] bg-black overflow-hidden flex flex-col" dir={dir}>
+    <div className="fixed top-0 left-0 w-screen h-screen z-40 bg-black overflow-hidden flex flex-col" dir={dir}>
       {!activeStream ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]">
           <Video className="w-16 h-16 text-slate-600 mb-4" />
