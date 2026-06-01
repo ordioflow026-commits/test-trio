@@ -223,11 +223,7 @@ export default function PrivateRoomScreen() {
   );
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-900/20 gap-8 min-h-screen relative" dir={dir}>
-       <div className="flex flex-col items-center mb-4 mt-8">
-          <div className="w-24 h-24 bg-slate-800/80 rounded-full flex items-center justify-center border-2 border-slate-700/50 shadow-lg mb-6"><Lock className="w-10 h-10 text-slate-300" /></div>
-          <h1 className="text-3xl font-bold text-white">{isAr ? 'غرفة خاصة' : 'Private Room'}</h1>
-       </div>
+    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-900/20 gap-4 min-h-screen relative" dir={dir}>
        <div className="flex flex-col w-full max-w-sm gap-4">
           <button onClick={() => changeView('create')} className="bg-blue-600 text-white py-5 rounded-[24px] font-bold text-xl flex items-center justify-center gap-3"><Plus className="w-6 h-6"/> {isAr ? 'أنشئ غرفة' : 'Create Room'}</button>
           <button onClick={() => changeView('join')} className="bg-slate-800 text-slate-200 py-5 rounded-[24px] font-bold text-xl flex items-center justify-center gap-3"><LogIn className="w-6 h-6"/> {isAr ? 'انضم لرابط' : 'Join by Link'}</button>
