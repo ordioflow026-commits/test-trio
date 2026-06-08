@@ -52,7 +52,7 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
           showMyCameraToggleButton: true,
           showMyMicrophoneToggleButton: true,
           showAudioVideoSettingsButton: true,
-          showScreenSharingButton: false,
+          showScreenSharingButton: true,
           showLeavingView: false,
           layout: "Auto",
           branding: {
