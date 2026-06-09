@@ -44,7 +44,7 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
           scenario: {
             mode: ZegoUIKitPrebuilt.VideoConference,
           },
-          showPreJoinView: true, // تم التفعيل لتظهر شاشة الفحص والدخول مثل قوقل ميت
+          showPreJoinView: true, // تم التعديل إلى true لتفعيل شاشة المعاينة والدخول مثل قوقل ميت
           turnOnMicrophoneWhenJoining: false,
           turnOnCameraWhenJoining: false,
           showMyCameraToggleButton: true,
