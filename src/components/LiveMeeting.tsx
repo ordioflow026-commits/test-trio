@@ -11,9 +11,10 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
   const { user } = useUser();
+  const userId = user?.id;
 
   useEffect(() => {
-    if (!containerRef.current || !user) return;
+    if (!containerRef.current || !userId) return;
 
     let isMounted = true;
 
@@ -25,7 +26,7 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
       const liveRoomId = `vid_${roomId.replace(/[^a-zA-Z0-9]/g, '')}`;
       
       // Unique User ID to avoid token mismatch
-      const uniqueUserId = (user.id || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 10) + '_cam';
+      const uniqueUserId = (userId || 'u').replace(/[^a-zA-Z0-9]/g, '').substring(0, 10) + '_cam';
 
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
         appID, 
@@ -51,6 +52,8 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
           showMyMicrophoneToggleButton: true,
           showAudioVideoSettingsButton: true,
           showScreenSharingButton: true, // تفعيل ميزة مشاركة الشاشة
+          showLeaveButton: false, // إخفاء زر الإغلاق/المغادرة الأحمر
+          showCameraFacingToggleButton: false, // إخفاء زر تغيير الكاميرا (أمام/خلف)
           showLeavingView: false,
           showRoomDetailsButton: false, // إخفاء رقم ومعلومات الغرفة من الأعلى
           showRoomTimer: false, // إخفاء مؤقت وقت الاجتماع من الأعلى
@@ -71,7 +74,7 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
         zpRef.current = null;
       }
     };
-  }, [roomId, user, userName]);
+  }, [roomId, userId, userName]);
 
   return (
     <div className="w-full h-full bg-slate-900" ref={containerRef} />
