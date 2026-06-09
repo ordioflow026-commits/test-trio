@@ -44,15 +44,13 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
           scenario: {
             mode: ZegoUIKitPrebuilt.VideoConference,
           },
-          // Prompts user to choose Camera/Mic before entering
           showPreJoinView: false, 
-          
           turnOnMicrophoneWhenJoining: false,
           turnOnCameraWhenJoining: false,
           showMyCameraToggleButton: true,
           showMyMicrophoneToggleButton: true,
           showAudioVideoSettingsButton: true,
-          showScreenSharingButton: true,
+          showScreenSharingButton: true, // تفعيل ميزة مشاركة الشاشة
           showLeavingView: false,
           layout: "Auto",
           branding: {
@@ -74,8 +72,6 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
   }, [roomId, user, userName]);
 
   return (
-    <div className="w-full h-full bg-slate-900 relative overflow-hidden rounded-2xl">
-      <div className="w-full h-full" ref={containerRef} />
-    </div>
+    <div className="w-full h-full bg-slate-900" ref={containerRef} />
   );
 }
