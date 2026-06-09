@@ -52,6 +52,8 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
           showAudioVideoSettingsButton: true,
           showScreenSharingButton: true, // تفعيل ميزة مشاركة الشاشة
           showLeavingView: false,
+          showRoomDetailsButton: false, // إخفاء رقم ومعلومات الغرفة من الأعلى
+          showRoomTimer: false, // إخفاء مؤقت وقت الاجتماع من الأعلى
           layout: "Auto",
           branding: {
             logoURL: ""
