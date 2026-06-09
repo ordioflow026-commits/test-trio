@@ -155,6 +155,17 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
             }
           });
           setParticipants(activeUsers);
+      }).on('presence', { event: 'join' }, ({ key, newPresences }) => {
+          if (isHost && key !== user.id) {
+              const currentSlots = stateRef.current.slots;
+              broadcastState(stateRef.current.currentSlot, currentSlots, stateRef.current.viewMode);
+              
+              // Delay the tool sync broadcast to give the new visitor's UI time to mount the tool components 
+              // and subscribe to their individual realtime channels.
+              setTimeout(() => {
+                 window.dispatchEvent(new CustomEvent('host_force_sync'));
+              }, 2500);
+          }
       }).subscribe(async (status) => {
          if (status === 'SUBSCRIBED') await updatePresence(isVoiceActive);
       });

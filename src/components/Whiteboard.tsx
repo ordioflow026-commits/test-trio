@@ -24,10 +24,20 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
     channelRef.current = channel;
 
     channel.on('broadcast', { event: 'draw' }, (payload) => {
-      const { x0, y0, x1, y1, color: c, clear } = payload.payload;
+      const { x0, y0, x1, y1, color: c, clear, image_data } = payload.payload;
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
       if (!ctx || !canvas) return;
+
+      if (image_data) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        img.src = image_data;
+        return;
+      }
 
       if (clear) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -43,7 +53,20 @@ export default function Whiteboard({ roomId, canInteract = true, isLocalOnly = f
       ctx.stroke();
     }).subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    const handleForceSync = () => {
+      if (isLocalOnly || !channelRef.current || !canvasRef.current) return;
+      const dataUrl = canvasRef.current.toDataURL('image/png');
+      channelRef.current.send({
+        type: 'broadcast', event: 'draw',
+        payload: { image_data: dataUrl }
+      });
+    };
+    window.addEventListener('host_force_sync', handleForceSync);
+
+    return () => { 
+      window.removeEventListener('host_force_sync', handleForceSync);
+      supabase.removeChannel(channel); 
+    };
   }, [roomId]);
 
   useEffect(() => {

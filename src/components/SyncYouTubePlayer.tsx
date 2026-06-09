@@ -53,8 +53,23 @@ export default function SyncYouTubePlayer({ videoId, isHost, roomId, canInteract
        setTimeout(() => { isReceivingSync.current = false; }, 500);
     }).subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [roomId]);
+    const handleForceSync = () => {
+       if (!canInteract || !playerRef.current || !channelRef.current) return;
+       const state = playerRef.current.getPlayerState();
+       const time = playerRef.current.getCurrentTime();
+       channelRef.current.send({
+           type: 'broadcast',
+           event: 'video_sync',
+           payload: { action: state === 1 ? 'PLAY' : 'PAUSE', time }
+       });
+    };
+    window.addEventListener('host_force_sync', handleForceSync);
+
+    return () => { 
+      window.removeEventListener('host_force_sync', handleForceSync);
+      supabase.removeChannel(channel); 
+    };
+  }, [roomId, canInteract]);
 
   const handleReady = (event: YouTubeEvent) => {
     playerRef.current = event.target;

@@ -15,6 +15,12 @@ export default function Notebook({ roomId, canInteract = true, isLocalOnly = fal
   const channelRef = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
 
+  const contentRef = useRef(content);
+  useEffect(() => { contentRef.current = content; }, [content]);
+  
+  const isLinedRef = useRef(isLined);
+  useEffect(() => { isLinedRef.current = isLined; }, [isLined]);
+
   useEffect(() => {
     if (!roomId) return;
     const channel = supabase.channel(`notes_${roomId}`);
@@ -30,8 +36,20 @@ export default function Notebook({ roomId, canInteract = true, isLocalOnly = fal
       }
     }).subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [roomId]);
+    const handleForceSync = () => {
+      if (isLocalOnly || !channelRef.current) return;
+      channelRef.current.send({
+        type: 'broadcast', event: 'notes_update', 
+        payload: { content: contentRef.current, isLined: isLinedRef.current }
+      });
+    };
+    window.addEventListener('host_force_sync', handleForceSync);
+
+    return () => { 
+      window.removeEventListener('host_force_sync', handleForceSync);
+      supabase.removeChannel(channel); 
+    };
+  }, [roomId, isLocalOnly]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;

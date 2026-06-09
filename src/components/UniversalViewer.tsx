@@ -18,6 +18,9 @@ export default function UniversalViewer({ roomId, canInteract = true, isLocalOnl
   const isRemoteUpdate = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const urlRef = useRef(url);
+  useEffect(() => { urlRef.current = url; }, [url]);
+
   useEffect(() => {
     if (!roomId) return;
     const channel = supabase.channel(`universal_doc_${roomId}`);
@@ -31,8 +34,20 @@ export default function UniversalViewer({ roomId, canInteract = true, isLocalOnl
       }
     }).subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [roomId]);
+    const handleForceSync = () => {
+      if (isLocalOnly || !channelRef.current) return;
+      channelRef.current.send({
+        type: 'broadcast', event: 'doc_sync', 
+        payload: { url: urlRef.current }
+      });
+    };
+    window.addEventListener('host_force_sync', handleForceSync);
+
+    return () => { 
+      window.removeEventListener('host_force_sync', handleForceSync);
+      supabase.removeChannel(channel); 
+    };
+  }, [roomId, isLocalOnly]);
 
   const loadFile = () => {
     if (!canInteract || !inputUrl) return;

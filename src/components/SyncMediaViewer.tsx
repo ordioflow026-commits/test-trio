@@ -59,10 +59,21 @@ export default function SyncMediaViewer({ url, canInteract, onUploadSuccess, roo
       setTimeout(() => { isRemoteUpdate.current = false; }, 300);
     }).subscribe();
 
+    const handleForceSync = () => {
+      if (isLocalOnly || !channelRef.current || !videoRef.current || !canInteract) return;
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'video_state_change',
+        payload: { type: videoRef.current.paused ? 'pause' : 'play', time: videoRef.current.currentTime }
+      });
+    };
+    window.addEventListener('host_force_sync', handleForceSync);
+
     return () => {
+      window.removeEventListener('host_force_sync', handleForceSync);
       supabase.removeChannel(channel);
     };
-  }, [url, roomId, slotIndex]); // Removed viewMode and isHost from dependencies as they no longer block sync
+  }, [url, roomId, slotIndex, canInteract, isLocalOnly]);
 
   // 2. Broadcast Local Actions (Anyone with canInteract can control the room)
   const emitVideoEvent = (type: 'play' | 'pause' | 'seek') => {
