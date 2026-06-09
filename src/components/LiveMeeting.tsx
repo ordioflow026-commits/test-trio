@@ -45,15 +45,29 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
           scenario: {
             mode: ZegoUIKitPrebuilt.VideoConference,
           },
-          showPreJoinView: true, // تم التعديل إلى true لتفعيل شاشة المعاينة والدخول مثل قوقل ميت
+          showPreJoinView: true, 
           turnOnMicrophoneWhenJoining: false,
           turnOnCameraWhenJoining: false,
-          showMyCameraToggleButton: true,
-          showMyMicrophoneToggleButton: true,
+          
+          showLeaveButton: false,
+          showCameraFacingToggleButton: false,
           showAudioVideoSettingsButton: true,
-          showScreenSharingButton: true, // تفعيل ميزة مشاركة الشاشة
-          showLeaveButton: false, // إخفاء زر الإغلاق/المغادرة الأحمر
-          showCameraFacingToggleButton: false, // إخفاء زر تغيير الكاميرا (أمام/خلف)
+          
+          bottomMenuBarConfig: {
+            maxCount: 4,
+            buttons: [
+              'toggleMicrophoneButton',
+              'toggleCameraButton',
+              'switchAudioOutputButton',
+              'toggleScreenSharingButton'
+            ],
+          },
+          topMenuBarConfig: {
+            buttons: [],
+            hideAutomatically: true,
+            hideByClick: true
+          },
+
           showLeavingView: false,
           showRoomDetailsButton: false, // إخفاء رقم ومعلومات الغرفة من الأعلى
           showRoomTimer: false, // إخفاء مؤقت وقت الاجتماع من الأعلى
