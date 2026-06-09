@@ -34,6 +34,41 @@ export default function ChatDetailScreen() {
   const { user } = useUser();
   const { zp } = useZego();
   const [messageText, setMessageText] = useState('');
+  
+  const renderMessageContent = (content: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = content.split(urlRegex);
+
+    return parts.map((part, i) => {
+      if (part.match(urlRegex)) {
+        const handleLinkClick = (e: React.MouseEvent) => {
+          if (part.includes(window.location.origin)) {
+            e.preventDefault();
+            try {
+              const urlObj = new URL(part);
+              navigate(urlObj.pathname + urlObj.search);
+            } catch(error) {
+              window.open(part, '_blank');
+            }
+          }
+        };
+
+        return (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 underline break-all"
+            onClick={handleLinkClick}
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   
@@ -494,7 +529,7 @@ export default function ChatDetailScreen() {
                                 <a href={displayContent.replace('File: ', '')} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/20 rounded-xl hover:bg-black/30 transition-colors mt-1 relative z-20"><div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0"><FileText className="w-5 h-5 text-white" /></div><span className="text-sm font-medium text-white underline-offset-4 underline truncate max-w-[150px]">عرض الملف المرفق</span></a>
                               )}
                             </div>
-                          ) : <p className="text-[15px]">{displayContent}</p>}
+                          ) : <p className="text-[15px] font-medium whitespace-pre-wrap leading-relaxed">{renderMessageContent(displayContent)}</p>}
                           <div className="flex items-center justify-end gap-1 mt-1 relative z-0">
                             <span className="text-[10px] opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             {msg.status === 'read' ? <Check strokeWidth={3} className="w-[14px] h-[14px] text-[#00E5FF]" /> : <Check strokeWidth={3} className="w-[14px] h-[14px] text-white/70" />}

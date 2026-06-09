@@ -522,7 +522,19 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
           </button>
           
         </div>
-        <button onClick={async () => { if (navigator.share) { try { await navigator.share({ title: `انضم لغرفتي`, text: `Join my room "${displayRoomName}"\nhttps://app.com/room/${roomId}?name=${encodeURIComponent(displayRoomName)}` }); } catch(e){} } else { alert('Copied!'); } }} className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg transition-all"><Share2 className="w-5 h-5"/></button>
+        <button onClick={async () => {
+          const shareText = dir === 'rtl' 
+            ? `انضم إلى غرفتي الخاصة على TrioSync:\n\n${window.location.origin}/room/${roomId}?name=${encodeURIComponent(displayRoomName)}`
+            : `Join my Private Room on TrioSync:\n\n${window.location.origin}/room/${roomId}?name=${encodeURIComponent(displayRoomName)}`;
+          if (navigator.share) {
+            try { await navigator.share({ title: displayRoomName, text: shareText }); } catch(e){} 
+          } else { 
+            navigator.clipboard.writeText(shareText);
+            alert('Copied!'); 
+          }
+        }} className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg transition-all">
+          <Share2 className="w-5 h-5"/>
+        </button>
       </div>
 
       <div className="flex-1 relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#113a5a] to-[#008ba3]" onMouseMove={resetIdleTimer} onTouchStart={resetIdleTimer} onClick={resetIdleTimer}>

@@ -66,7 +66,7 @@ export default function PrivateRoomScreen() {
     setLoading(true); setError('');
     try {
       const roomId = Math.random().toString(36).substring(2, 10);
-      const link = `https://app.com/room/${roomId}?name=${encodeURIComponent(roomName.trim())}`;
+      const link = `${window.location.origin}/room/${roomId}?name=${encodeURIComponent(roomName.trim())}`;
       const hostId = user?.id || 'anonymous';
       await supabase.from('private_rooms').insert([{ id: roomId, host_id: hostId, name: roomName.trim(), pin: roomPin.trim() }]);
       const newRoom: RoomHistory = { id: roomId, name: roomName.trim(), type: 'created', link };
@@ -116,7 +116,9 @@ export default function PrivateRoomScreen() {
   };
 
   const handleShareClick = async () => {
-    const shareText = `${isAr ? 'انضم إلى غرفتي الخاصة' : 'Join my private room'} "${currentRoomName}"\n${generatedLink}`;
+    const shareText = isAr 
+      ? `انضم إلى غرفتي الخاصة على TrioSync:\n\n${generatedLink}`
+      : `Join my Private Room on TrioSync:\n\n${generatedLink}`;
     if(navigator.share) { try { await navigator.share({ title: currentRoomName, text: shareText }); } catch(err) {} } 
     else { navigator.clipboard.writeText(shareText); setCopied(true); setTimeout(()=>setCopied(false),2000); }
   };
