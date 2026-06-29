@@ -124,6 +124,16 @@ export default function LoginScreen() {
     }
   };
 
+  const handleGuestLogin = () => {
+    const guestId = `guest_${Math.random().toString(36).substr(2, 9)}`;
+    setUser({ 
+      id: guestId, 
+      fullName: dir === 'rtl' ? 'زائر (تجربة)' : 'Guest (Trial)', 
+      phone: '0000000000' 
+    });
+    navigate('/main', { replace: true });
+  };
+
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col relative overflow-y-auto" dir={dir}>
       {/* Red Error Snackbar */}
@@ -202,6 +212,13 @@ export default function LoginScreen() {
               ) : (
                 'Start'
               )}
+            </button>
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              className="w-full mt-4 text-sm text-slate-400 hover:text-white transition-colors underline underline-offset-4"
+            >
+              {dir === 'rtl' ? 'تخطي التسجيل للتجربة' : 'Skip registration for trial'}
             </button>
           </form>
         </div>
