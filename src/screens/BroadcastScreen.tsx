@@ -167,7 +167,20 @@ export default function BroadcastScreen() {
     setLoading(true);
     try {
       const { data, error } = await supabase.from('live_streams').select('*').order('created_at', { ascending: false });
-      if (!error && data) setLiveStreams(data);
+      let streams = (!error && data) ? data : [];
+      
+      if (user?.id?.startsWith('guest')) {
+        const mockStreams = [
+           { id: 'mock_1', host_id: 'host_1', host_name: 'أستاذ الرياضيات', topic: 'مراجعة شاملة في الرياضيات', field: 'Education', viewers: 150, liked_by: [] },
+           { id: 'mock_2', host_id: 'host_2', host_name: 'أكاديمية التفوق', topic: 'مراجعة شاملة في الرياضيات', field: 'Education', viewers: 85, liked_by: [] },
+           { id: 'mock_3', host_id: 'host_3', host_name: 'مبرمج محترف', topic: 'أساسيات تطوير الويب', field: 'Tech', viewers: 210, liked_by: [] },
+           { id: 'mock_4', host_id: 'host_4', host_name: 'نادي التقنية', topic: 'أساسيات تطوير الويب', field: 'Tech', viewers: 134, liked_by: [] },
+           { id: 'mock_5', host_id: 'host_5', host_name: 'م. أحمد', topic: 'مستقبل الذكاء الاصطناعي', field: 'Tech', viewers: 420, liked_by: [] }
+        ];
+        streams = [...mockStreams, ...streams];
+      }
+      
+      setLiveStreams(streams);
     } catch (err) {
       console.error(err);
     } finally {
