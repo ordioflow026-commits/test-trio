@@ -210,6 +210,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
 
   const canEditSlot = (index: number) => {
     if (isHost) return true;
+    if (slots[index].lock === 'green') return true;
     if (viewMode === 'sync') return false;
     return (slots[index].lock || 'none') === 'none';
   };
