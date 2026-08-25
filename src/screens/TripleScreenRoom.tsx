@@ -321,7 +321,7 @@ export default function TripleScreenRoom({ onExit, isHost = false, roomId, roomN
        const isMenuOpen = openLockMenu === index;
        const isWhitelistMenuOpen = openWhitelistMenu === index;
        const labels: Record<LockState, string> = dir === 'rtl' ? { none: 'إلغاء القفل', green: 'مرن وتفاعلي', yellow: 'تنبيه للمتابعة', red: 'إجبار المشاهدة', white: 'وضع الكواليس', black: 'غرفة خاصة' } : { none: 'Unlock', green: 'Flexible', yellow: 'Alert', red: 'Force View', white: 'Backstage', black: 'Private Room' };
-       let baseLocks: LockState[] = viewMode === 'sync' ? ['green', 'yellow', 'white', 'black'] : ['green', 'yellow', 'red', 'white', 'black'];
+       let baseLocks: LockState[] = viewMode === 'sync' ? ['green', 'yellow', 'white', 'black'] : ['yellow', 'white', 'black'];
        let availableLocks: LockState[] = lockState === 'none' ? baseLocks : ['none', ...baseLocks.filter(l => l !== lockState)];
 
        return (
