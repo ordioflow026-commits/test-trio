@@ -126,6 +126,14 @@ export default function LoginScreen() {
 
   const handleGuestLogin = () => {
     const guestId = `guest_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const defaultContacts = [
+      { id: 101, name: 'أستاذ الرياضيات', phone: '0550000001', initials: 'أس' },
+      { id: 102, name: 'زميل الدراسة', phone: '0660000002', initials: 'زم' },
+      { id: 103, name: 'فريق TrioSync', phone: '0770000003', initials: 'TR' }
+    ];
+    localStorage.setItem('triosync_device_contacts', JSON.stringify(defaultContacts));
+
     setUser({ 
       id: guestId, 
       fullName: dir === 'rtl' ? 'زائر (تجربة)' : 'Guest (Trial)', 
