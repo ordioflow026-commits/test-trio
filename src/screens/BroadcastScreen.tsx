@@ -171,11 +171,11 @@ export default function BroadcastScreen() {
       
       if (user?.id?.startsWith('guest')) {
         const mockStreams = [
-           { id: 'mock_1', host_id: 'host_1', host_name: 'أستاذ الرياضيات', topic: 'مراجعة شاملة في الرياضيات', field: 'Education', viewers: 150, liked_by: [] },
-           { id: 'mock_2', host_id: 'host_2', host_name: 'أكاديمية التفوق', topic: 'مراجعة شاملة في الرياضيات', field: 'Education', viewers: 85, liked_by: [] },
-           { id: 'mock_3', host_id: 'host_3', host_name: 'مبرمج محترف', topic: 'أساسيات تطوير الويب', field: 'Tech', viewers: 210, liked_by: [] },
-           { id: 'mock_4', host_id: 'host_4', host_name: 'نادي التقنية', topic: 'أساسيات تطوير الويب', field: 'Tech', viewers: 134, liked_by: [] },
-           { id: 'mock_5', host_id: 'host_5', host_name: 'م. أحمد', topic: 'مستقبل الذكاء الاصطناعي', field: 'Tech', viewers: 420, liked_by: [] }
+           { id: 'mock_1', host_id: 'host_1', host_name: 'أستاذ الرياضيات', topic: 'مراجعة شاملة في الرياضيات', field: 'Education', viewers: 150, liked_by: [], image_url: 'https://images.unsplash.com/photo-1632559646285-b9f0782f07d9?auto=format&fit=crop&w=500&q=80' },
+           { id: 'mock_2', host_id: 'host_2', host_name: 'أكاديمية التفوق', topic: 'مراجعة شاملة في الرياضيات', field: 'Education', viewers: 85, liked_by: [], image_url: 'https://images.unsplash.com/photo-1596496050827-8299e0220de1?auto=format&fit=crop&w=500&q=80' },
+           { id: 'mock_3', host_id: 'host_3', host_name: 'مبرمج محترف', topic: 'أساسيات تطوير الويب', field: 'Tech', viewers: 210, liked_by: [], image_url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=500&q=80' },
+           { id: 'mock_4', host_id: 'host_4', host_name: 'نادي التقنية', topic: 'أساسيات تطوير الويب', field: 'Tech', viewers: 134, liked_by: [], image_url: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=500&q=80' },
+           { id: 'mock_5', host_id: 'host_5', host_name: 'م. أحمد', topic: 'مستقبل الذكاء الاصطناعي', field: 'Tech', viewers: 420, liked_by: [], image_url: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=500&q=80' }
         ];
         streams = [...mockStreams, ...streams];
       }
@@ -313,10 +313,20 @@ export default function BroadcastScreen() {
                       setLiveStreams(prev => prev.filter(s => s.id !== broadcast.id)); 
                     }} className="absolute top-2 right-2 z-20 p-2 bg-red-600/90 hover:bg-red-500 text-white rounded-full shadow-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                   )}
-                  <div className="relative aspect-video bg-slate-900">
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-slate-800 to-slate-900"><Video className="w-10 h-10 text-slate-600 group-hover:scale-110 transition-transform duration-500"/></div>
-                    <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg"><span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE</div>
-                    <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1"><Users className="w-3 h-3" /> {broadcast.viewers || 0}</div>
+                  <div className="relative aspect-video bg-slate-900 overflow-hidden">
+                    {broadcast.image_url ? (
+                      <img src={broadcast.image_url} alt={broadcast.topic} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-slate-800 to-slate-900">
+                        <Video className="w-10 h-10 text-slate-600 group-hover:scale-110 transition-transform duration-500"/>
+                      </div>
+                    )}
+                    <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-lg">
+                      <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE
+                    </div>
+                    <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1">
+                      <Users className="w-3 h-3"/> {broadcast.viewers || 0}
+                    </div>
                   </div>
                   <div className="p-3">
                     <h3 className="text-white font-bold truncate">{broadcast.topic}</h3>
