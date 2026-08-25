@@ -149,7 +149,7 @@ export default function MainScreen() {
             {[{ id: 'contacts', label: t('contacts'), icon: Users }, { id: 'privateRoom', label: t('privateRoom'), icon: Lock }, { id: 'broadcast', label: t('broadcast'), icon: Radio }].map((tab) => {
               const Icon = tab.icon; const isActive = activeSubTab === tab.id;
               return (
-                <button key={tab.id} onClick={() => { setActiveSubTab(tab.id); if (tab.id === 'contacts') { window.dispatchEvent(new CustomEvent('fetch-contacts')); } }} className={`flex-1 flex flex-col items-center justify-center py-3 px-1 rounded-2xl transition-all duration-300 border ${isActive ? 'bg-blue-700 text-white shadow-[0_8px_16px_rgba(29,78,216,0.4)] scale-105 border-blue-500' : 'bg-slate-800/40 text-slate-400 hover:bg-slate-800 hover:text-blue-400 border-blue-500/50'}`}>
+                <button key={tab.id} onClick={() => setActiveSubTab(tab.id)} className={`flex-1 flex flex-col items-center justify-center py-3 px-1 rounded-2xl transition-all duration-300 border ${isActive ? 'bg-blue-700 text-white shadow-[0_8px_16px_rgba(29,78,216,0.4)] scale-105 border-blue-500' : 'bg-slate-800/40 text-slate-400 hover:bg-slate-800 hover:text-blue-400 border-blue-500/50'}`}>
                   <Icon className={`w-5 h-5 mb-1.5 ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-blue-400'}`} />
                   <span className={`text-[11px] font-bold tracking-wide ${isActive ? 'text-white' : ''}`}>{tab.label}</span>
                 </button>
