@@ -290,32 +290,43 @@ export default function BroadcastScreen() {
     await supabase.from('live_streams').update({ liked_by: newLikes }).eq('id', activeStream.id);
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => setTouchStartY(e.targetTouches[0].clientY);
-  const handleTouchMove = (e: React.TouchEvent) => setTouchEndY(e.targetTouches[0].clientY);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartY(e.targetTouches[0].clientY);
+    setTouchEndY(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEndY(e.targetTouches[0].clientY);
+  };
+
   const handleTouchEnd = () => {
-    if (!touchStartY || !touchEndY || liveStreams.length <= 1 || !activeStream) return;
+    if (liveStreams.length <= 1 || !activeStream) return;
+    
     const distance = touchStartY - touchEndY;
     const swipeThreshold = 50;
     const currentIdx = liveStreams.findIndex(s => s.id === activeStream.id);
 
     if (currentIdx === -1) return;
 
+    // Swipe UP (Next Stream)
     if (distance > swipeThreshold) {
-      // Swipe UP (Next Stream - Loop to start if at end)
       if (isHost) handleExitRoom(); 
       const nextIdx = currentIdx < liveStreams.length - 1 ? currentIdx + 1 : 0;
       const nextStream = liveStreams[nextIdx];
       setIsHost(user?.id === nextStream.host_id);
       setActiveStream(nextStream);
-    } else if (distance < -swipeThreshold) {
-      // Swipe DOWN (Previous Stream - Loop to end if at start)
+    } 
+    // Swipe DOWN (Previous Stream)
+    else if (distance < -swipeThreshold) {
       if (isHost) handleExitRoom(); 
       const prevIdx = currentIdx > 0 ? currentIdx - 1 : liveStreams.length - 1;
       const prevStream = liveStreams[prevIdx];
       setIsHost(user?.id === prevStream.host_id);
       setActiveStream(prevStream);
     }
-    setTouchStartY(0); setTouchEndY(0);
+    
+    setTouchStartY(0);
+    setTouchEndY(0);
   };
 
   if (viewState === 'list') {
