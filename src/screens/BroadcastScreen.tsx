@@ -393,6 +393,35 @@ export default function BroadcastScreen() {
           <Video className="w-16 h-16 text-slate-600 mb-4" />
           <p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p>
         </div>
+      ) : activeStream.id.startsWith('mock_') ? (
+        <div className="absolute inset-0 w-full h-full bg-slate-900 flex flex-col relative z-0 animate-in fade-in duration-500">
+          <img src={activeStream.image_url} alt={activeStream.topic} className="w-full h-full object-cover opacity-90" />
+          <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-start bg-gradient-to-b from-black/80 to-transparent">
+            <div className="flex items-center gap-3">
+              <div className="bg-red-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-md flex items-center gap-2 shadow-lg">
+                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> LIVE
+              </div>
+              <div className="bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-md flex items-center gap-2">
+                <Users className="w-4 h-4"/> {activeStream.viewers || 0}
+              </div>
+            </div>
+            <button onClick={handleExitRoom} className="p-2 bg-black/50 hover:bg-red-600 text-white rounded-full transition-colors backdrop-blur-md">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
+             <h2 className="text-white text-2xl font-bold mb-1 drop-shadow-md">{activeStream.topic}</h2>
+             <p className="text-slate-300 text-sm mb-6 drop-shadow-md">{activeStream.host_name} • {activeStream.field}</p>
+             <div className="flex items-center gap-3">
+               <div className="flex-1 bg-white/10 border border-white/20 rounded-full px-5 py-3 text-white/50 text-sm backdrop-blur-sm flex items-center">
+                 {dir === 'rtl' ? 'المحادثة مقفلة في البث التجريبي...' : 'Chat disabled in trial mode...'}
+               </div>
+               <button className="p-3 bg-red-500 text-white rounded-full shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                 <Heart className="w-6 h-6 fill-current" />
+               </button>
+             </div>
+          </div>
+        </div>
       ) : (
         <LiveStreamViewer 
           key={activeStream.id} 
