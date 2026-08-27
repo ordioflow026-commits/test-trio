@@ -49,8 +49,6 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
           turnOnMicrophoneWhenJoining: false,
           turnOnCameraWhenJoining: false,
           
-          showLeaveButton: false,
-          showCameraFacingToggleButton: false,
           showAudioVideoSettingsButton: true,
           
           bottomMenuBarConfig: {
@@ -67,7 +65,6 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
             hideAutomatically: true,
             hideByClick: true
           },
-
           showLeavingView: false,
           showRoomDetailsButton: false, // إخفاء رقم ومعلومات الغرفة من الأعلى
           showRoomTimer: false, // إخفاء مؤقت وقت الاجتماع من الأعلى
@@ -75,7 +72,7 @@ export default function LiveMeeting({ roomId, userName }: LiveMeetingProps) {
           branding: {
             logoURL: ""
           }
-        });
+        } as any);
       }
     };
 
