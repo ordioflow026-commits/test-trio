@@ -418,7 +418,13 @@ export default function BroadcastScreen() {
   const likesCount = activeStream?.liked_by?.length || 0;
 
   const roomOverlay = (
-    <div className="fixed top-0 left-0 w-screen h-screen z-40 bg-black overflow-hidden flex flex-col" dir={dir}>
+    <div 
+      className="fixed top-0 left-0 w-screen h-screen z-40 bg-black overflow-hidden flex flex-col" 
+      dir={dir}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {!activeStream ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]">
           <Video className="w-16 h-16 text-slate-600 mb-4" />
