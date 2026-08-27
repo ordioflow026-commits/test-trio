@@ -55,8 +55,8 @@ const LiveStreamViewer = React.memo(({ streamId, isHost, hostName, onLeave }: Li
         showScreenSharingButton: isHost,
         showLeavingView: true,
         // @ts-ignore
-        showLeaveButton: true,
-        showBottomMenuBar: true,
+        showLeaveButton: false,
+        showBottomMenuBar: isHost,
         onLeaveRoom: () => onLeave()
       });
     }, 300);
@@ -274,8 +274,7 @@ export default function BroadcastScreen() {
   const handleLike = async () => {
     if (!activeStream || !user?.id) return;
     const currentLikes = activeStream.liked_by || [];
-    if (currentLikes.includes(user.id)) return;
-    
+    // Removed the check so users can like infinitely
     const newLikes = [...currentLikes, user.id];
     
     setActiveStream({ ...activeStream, liked_by: newLikes });
@@ -437,71 +436,106 @@ export default function BroadcastScreen() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      <style>{`
+        @keyframes gentle-float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
+        }
+        .animate-gentle-float { animation: gentle-float 2.5s ease-in-out infinite; }
+      `}</style>
+      
       {!activeStream ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a]">
           <Video className="w-16 h-16 text-slate-600 mb-4" />
           <p className="text-slate-400 font-bold">{dir === 'rtl' ? 'انتهى البث' : 'Stream ended'}</p>
         </div>
-      ) : activeStream.id.startsWith('mock_') ? (
-        <div className="absolute inset-0 w-full h-full bg-slate-900 flex flex-col relative z-0 animate-in fade-in duration-500">
-          <img src={activeStream.image_url} alt={activeStream.topic} className="w-full h-full object-cover opacity-90" />
-          <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-start bg-gradient-to-b from-black/80 to-transparent">
-            <div className="flex items-center gap-3">
-              <div className="bg-red-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-md flex items-center gap-2 shadow-lg">
-                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> LIVE
-              </div>
-              <div className="bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-md flex items-center gap-2">
-                <Users className="w-4 h-4"/> {activeStream.viewers || 0}
-              </div>
-            </div>
-            <button onClick={handleExitRoom} className="p-2 bg-black/50 hover:bg-red-600 text-white rounded-full transition-colors backdrop-blur-md">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-          <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
-             <h2 className="text-white text-2xl font-bold mb-1 drop-shadow-md">{activeStream.topic}</h2>
-             <div className="flex justify-between items-center mb-6">
-               <p className="text-slate-300 text-sm drop-shadow-md">{activeStream.host_name} • {activeStream.field}</p>
-               {activeStream.host_id !== user?.id && (
-                 <button
-                   onClick={(e) => { e.stopPropagation(); toggleFollow(activeStream.host_id); }}
-                   className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-colors pointer-events-auto border ${followedHosts.includes(activeStream.host_id) ? 'bg-white/20 text-white border-white/30 backdrop-blur-md' : 'bg-blue-600 text-white border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.4)]'}`}
-                 >
-                   {followedHosts.includes(activeStream.host_id) ? <UserCheck className="w-3.5 h-3.5"/> : <UserPlus className="w-3.5 h-3.5"/>}
-                   {followedHosts.includes(activeStream.host_id) ? (dir === 'rtl' ? 'تتم المتابعة' : 'Following') : (dir === 'rtl' ? 'متابعة' : 'Follow')}
-                 </button>
-               )}
-             </div>
-             <div className="flex items-center gap-3">
-               <div className="flex-1 bg-white/10 border border-white/20 rounded-full px-5 py-3 text-white/50 text-sm backdrop-blur-sm flex items-center">
-                 {dir === 'rtl' ? 'المحادثة مقفلة في البث التجريبي...' : 'Chat disabled in trial mode...'}
-               </div>
-               <button className="p-3 bg-red-500 text-white rounded-full shadow-[0_0_15px_rgba(239,68,68,0.5)]">
-                 <Heart className="w-6 h-6 fill-current" />
-               </button>
-             </div>
-          </div>
-        </div>
       ) : (
-        <div className="relative w-full h-full">
-          <LiveStreamViewer 
-            key={activeStream.id} 
-            streamId={activeStream.id} 
-            isHost={isHost} 
-            hostName={activeStream.host_name} 
-            onLeave={handleExitRoom} 
-          />
-          {activeStream.host_id !== user?.id && (
-            <div className="absolute top-20 right-4 z-50 pointer-events-auto">
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleFollow(activeStream.host_id); }}
-                className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors border ${followedHosts.includes(activeStream.host_id) ? 'bg-black/50 text-white border-white/30 backdrop-blur-md' : 'bg-blue-600 text-white border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.5)]'}`}
-              >
-                {followedHosts.includes(activeStream.host_id) ? <UserCheck className="w-4 h-4"/> : <UserPlus className="w-4 h-4"/>}
-                {followedHosts.includes(activeStream.host_id) ? (dir === 'rtl' ? 'تتم المتابعة' : 'Following') : (dir === 'rtl' ? 'متابعة' : 'Follow')}
-              </button>
+        <div className="absolute inset-0 w-full h-full bg-slate-900 flex flex-col relative z-0 animate-in fade-in duration-500">
+          
+          {/* Base Layer: Content */}
+          <div className="absolute inset-0 z-0">
+            {activeStream.id.startsWith('mock_') ? (
+              <img src={activeStream.image_url} alt={activeStream.topic} className="w-full h-full object-cover opacity-90" />
+            ) : (
+              <LiveStreamViewer 
+                key={activeStream.id} 
+                streamId={activeStream.id} 
+                isHost={isHost} 
+                hostName={activeStream.host_name} 
+                onLeave={handleExitRoom} 
+              />
+            )}
+          </div>
+
+          {/* Overlay Layer: Unified UI */}
+          <div className="absolute inset-0 z-50 pointer-events-none flex flex-col justify-between">
+            
+            {/* Top Bar */}
+            <div className="w-full p-4 flex justify-between items-start bg-gradient-to-b from-black/60 to-transparent">
+              <div className="bg-black/50 backdrop-blur-md rounded-[24px] p-1 pr-3 pl-1 flex items-center gap-2 pointer-events-auto border border-white/10">
+                <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-inner">
+                  {activeStream.host_name.charAt(0)}
+                </div>
+                <div className="flex flex-col justify-center">
+                  <span className="text-white text-xs font-bold leading-tight">{activeStream.host_name}</span>
+                  <span className="text-slate-300 text-[10px] truncate max-w-[100px]">{activeStream.topic}</span>
+                </div>
+                {activeStream.host_id !== user?.id && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleFollow(activeStream.host_id); }}
+                    className={`ml-1 px-3 py-1 rounded-full text-[10px] font-bold transition-colors ${
+                      followedHosts.includes(activeStream.host_id) 
+                      ? 'bg-white/20 text-white' 
+                      : 'bg-[#f43f5e] text-white'
+                    }`}
+                  >
+                    {followedHosts.includes(activeStream.host_id) ? (dir === 'rtl' ? 'متابع' : 'Following') : (dir === 'rtl' ? 'متابعة' : 'Follow')}
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-col items-end gap-2 pointer-events-auto">
+                <div className="flex items-center gap-2">
+                   <div className="bg-red-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-md flex items-center gap-1.5 shadow-lg tracking-wider">
+                     <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE
+                   </div>
+                   <button onClick={handleExitRoom} className="p-1.5 bg-black/40 hover:bg-red-600 text-white rounded-full transition-colors backdrop-blur-md border border-white/10">
+                     <X className="w-4 h-4" />
+                   </button>
+                </div>
+                <div className="bg-black/40 backdrop-blur-sm text-white text-[11px] font-medium px-2.5 py-1.5 rounded-md flex items-center gap-1.5 border border-white/10 mt-1">
+                  <Users className="w-3.5 h-3.5 opacity-80"/> {activeStream.viewers || 0}
+                </div>
+              </div>
             </div>
-          )}
+
+            {/* Bottom Bar */}
+            <div className="w-full p-4 flex flex-col justify-end bg-gradient-to-t from-black/80 via-black/40 to-transparent pb-6">
+               <div className="flex justify-end mb-4 pr-1 pointer-events-auto">
+                  <div className="flex flex-col items-center gap-1.5 animate-gentle-float">
+                     <button 
+                       onClick={(e) => { e.stopPropagation(); handleLike(); }} 
+                       className="w-11 h-11 rounded-full bg-black/40 border border-white/30 flex items-center justify-center backdrop-blur-md transition-transform active:scale-90"
+                     >
+                        <Heart className="w-6 h-6 text-white" />
+                     </button>
+                     <span className="text-white text-[11px] font-bold drop-shadow-md">{likesCount}</span>
+                  </div>
+               </div>
+
+               <div className="flex items-center gap-3 pointer-events-auto w-full">
+                 <div className="flex-1 bg-black/50 border border-white/10 rounded-[24px] px-4 py-3.5 backdrop-blur-md flex items-center">
+                   <span className="text-white/60 text-[13px] font-medium">{dir === 'rtl' ? 'إضافة تعليق...' : 'Add comment...'}</span>
+                 </div>
+                 <button className="w-11 h-11 rounded-full bg-[#2563eb] flex items-center justify-center shadow-lg shrink-0 transition-transform active:scale-95">
+                   <Send className="w-4 h-4 text-white ml-0.5" />
+                 </button>
+                 <button className="w-11 h-11 rounded-full bg-[#f43f5e] flex items-center justify-center shadow-lg shrink-0 transition-transform active:scale-95">
+                   <Gift className="w-5 h-5 text-white" />
+                 </button>
+               </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
