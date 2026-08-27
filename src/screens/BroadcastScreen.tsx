@@ -165,26 +165,32 @@ export default function BroadcastScreen() {
 
   const fetchLiveStreams = async () => {
     setLoading(true);
+    const isGuest = user?.id?.startsWith('guest') || localStorage.getItem('isGuestMode') === 'true';
+    
+    let initialStreams: any[] = [];
+    
+    if (isGuest) {
+      const mockStreams = [
+         { id: 'mock_1', host_id: 'host_1', host_name: 'أستاذ الرياضيات', topic: 'مراجعة شاملة في الرياضيات', field: 'Education', viewers: 150, liked_by: [], image_url: 'https://images.unsplash.com/photo-1632559646285-b9f0782f07d9?auto=format&fit=crop&w=500&q=80' },
+         { id: 'mock_2', host_id: 'host_2', host_name: 'أكاديمية التفوق', topic: 'مراجعة شاملة في الرياضيات', field: 'Education', viewers: 85, liked_by: [], image_url: 'https://images.unsplash.com/photo-1596496050827-8299e0220de1?auto=format&fit=crop&w=500&q=80' },
+         { id: 'mock_3', host_id: 'host_3', host_name: 'مبرمج محترف', topic: 'أساسيات تطوير الويب', field: 'Tech', viewers: 210, liked_by: [], image_url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=500&q=80' },
+         { id: 'mock_4', host_id: 'host_4', host_name: 'نادي التقنية', topic: 'أساسيات تطوير الويب', field: 'Tech', viewers: 134, liked_by: [], image_url: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=500&q=80' },
+         { id: 'mock_5', host_id: 'host_5', host_name: 'م. أحمد', topic: 'مستقبل الذكاء الاصطناعي', field: 'Tech', viewers: 420, liked_by: [], image_url: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=500&q=80' }
+      ];
+      initialStreams = [...mockStreams];
+      setLiveStreams(initialStreams);
+      setLoading(false); // Instantly remove the loading spinner for guests
+    }
+  
     try {
       const { data, error } = await supabase.from('live_streams').select('*').order('created_at', { ascending: false });
-      let streams = (!error && data) ? data : [];
-      
-      if (user?.id?.startsWith('guest')) {
-        const mockStreams = [
-           { id: 'mock_1', host_id: 'host_1', host_name: 'أستاذ الرياضيات', topic: 'مراجعة شاملة في الرياضيات', field: 'Education', viewers: 150, liked_by: [], image_url: 'https://images.unsplash.com/photo-1632559646285-b9f0782f07d9?auto=format&fit=crop&w=500&q=80' },
-           { id: 'mock_2', host_id: 'host_2', host_name: 'أكاديمية التفوق', topic: 'مراجعة شاملة في الرياضيات', field: 'Education', viewers: 85, liked_by: [], image_url: 'https://images.unsplash.com/photo-1596496050827-8299e0220de1?auto=format&fit=crop&w=500&q=80' },
-           { id: 'mock_3', host_id: 'host_3', host_name: 'مبرمج محترف', topic: 'أساسيات تطوير الويب', field: 'Tech', viewers: 210, liked_by: [], image_url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=500&q=80' },
-           { id: 'mock_4', host_id: 'host_4', host_name: 'نادي التقنية', topic: 'أساسيات تطوير الويب', field: 'Tech', viewers: 134, liked_by: [], image_url: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=500&q=80' },
-           { id: 'mock_5', host_id: 'host_5', host_name: 'م. أحمد', topic: 'مستقبل الذكاء الاصطناعي', field: 'Tech', viewers: 420, liked_by: [], image_url: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=500&q=80' }
-        ];
-        streams = [...mockStreams, ...streams];
+      if (!error && data) {
+         setLiveStreams(isGuest ? [...initialStreams, ...data] : data);
       }
-      
-      setLiveStreams(streams);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!isGuest) setLoading(false);
     }
   };
 

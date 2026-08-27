@@ -46,6 +46,7 @@ export default function LoginScreen() {
   }, [error]);
 
   const handleStart = async (e: React.FormEvent) => {
+    localStorage.removeItem('isGuestMode');
     e.preventDefault();
     setError('');
 
@@ -139,6 +140,7 @@ export default function LoginScreen() {
       fullName: dir === 'rtl' ? 'زائر (تجربة)' : 'Guest (Trial)', 
       phone: '0000000000' 
     });
+    localStorage.setItem('isGuestMode', 'true');
     navigate('/main', { replace: true });
   };
 
