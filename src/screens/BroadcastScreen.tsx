@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart, Trash2 } from 'lucide-react';
+import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart, Trash2, UserPlus, UserCheck } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
@@ -92,6 +92,34 @@ export default function BroadcastScreen() {
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
   const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  const [followedHosts, setFollowedHosts] = useState<string[]>(JSON.parse(localStorage.getItem('trio_followed_hosts') || '[]'));
+
+  const toggleFollow = (targetHostId: string) => {
+    if (!targetHostId) return;
+    let updated = [...followedHosts];
+    if (updated.includes(targetHostId)) {
+      updated = updated.filter(id => id !== targetHostId);
+    } else {
+      updated.push(targetHostId);
+    }
+    setFollowedHosts(updated);
+    localStorage.setItem('trio_followed_hosts', JSON.stringify(updated));
+  };
+
+  useEffect(() => {
+    const handleOpenStream = (e: any) => {
+      const streamId = e.detail;
+      const stream = liveStreams.find(s => s.id === streamId);
+      if (stream) {
+        setIsHost(user?.id === stream.host_id);
+        setActiveStream(stream);
+        setViewState('room');
+      }
+    };
+    window.addEventListener('open-live-stream', handleOpenStream);
+    return () => window.removeEventListener('open-live-stream', handleOpenStream);
+  }, [liveStreams, user]);
 
   useEffect(() => {
     const channel = supabase.channel('public:live_streams')
@@ -417,7 +445,18 @@ export default function BroadcastScreen() {
           </div>
           <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
              <h2 className="text-white text-2xl font-bold mb-1 drop-shadow-md">{activeStream.topic}</h2>
-             <p className="text-slate-300 text-sm mb-6 drop-shadow-md">{activeStream.host_name} • {activeStream.field}</p>
+             <div className="flex justify-between items-center mb-6">
+               <p className="text-slate-300 text-sm drop-shadow-md">{activeStream.host_name} • {activeStream.field}</p>
+               {activeStream.host_id !== user?.id && (
+                 <button
+                   onClick={(e) => { e.stopPropagation(); toggleFollow(activeStream.host_id); }}
+                   className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-colors pointer-events-auto border ${followedHosts.includes(activeStream.host_id) ? 'bg-white/20 text-white border-white/30 backdrop-blur-md' : 'bg-blue-600 text-white border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.4)]'}`}
+                 >
+                   {followedHosts.includes(activeStream.host_id) ? <UserCheck className="w-3.5 h-3.5"/> : <UserPlus className="w-3.5 h-3.5"/>}
+                   {followedHosts.includes(activeStream.host_id) ? (dir === 'rtl' ? 'تتم المتابعة' : 'Following') : (dir === 'rtl' ? 'متابعة' : 'Follow')}
+                 </button>
+               )}
+             </div>
              <div className="flex items-center gap-3">
                <div className="flex-1 bg-white/10 border border-white/20 rounded-full px-5 py-3 text-white/50 text-sm backdrop-blur-sm flex items-center">
                  {dir === 'rtl' ? 'المحادثة مقفلة في البث التجريبي...' : 'Chat disabled in trial mode...'}
@@ -429,13 +468,26 @@ export default function BroadcastScreen() {
           </div>
         </div>
       ) : (
-        <LiveStreamViewer 
-          key={activeStream.id} 
-          streamId={activeStream.id} 
-          isHost={isHost} 
-          hostName={activeStream.host_name} 
-          onLeave={handleExitRoom} 
-        />
+        <div className="relative w-full h-full">
+          <LiveStreamViewer 
+            key={activeStream.id} 
+            streamId={activeStream.id} 
+            isHost={isHost} 
+            hostName={activeStream.host_name} 
+            onLeave={handleExitRoom} 
+          />
+          {activeStream.host_id !== user?.id && (
+            <div className="absolute top-20 right-4 z-50 pointer-events-auto">
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleFollow(activeStream.host_id); }}
+                className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors border ${followedHosts.includes(activeStream.host_id) ? 'bg-black/50 text-white border-white/30 backdrop-blur-md' : 'bg-blue-600 text-white border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.5)]'}`}
+              >
+                {followedHosts.includes(activeStream.host_id) ? <UserCheck className="w-4 h-4"/> : <UserPlus className="w-4 h-4"/>}
+                {followedHosts.includes(activeStream.host_id) ? (dir === 'rtl' ? 'تتم المتابعة' : 'Following') : (dir === 'rtl' ? 'متابعة' : 'Follow')}
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
