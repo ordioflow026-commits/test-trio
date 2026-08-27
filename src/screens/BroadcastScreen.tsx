@@ -161,7 +161,7 @@ export default function BroadcastScreen() {
 
   useEffect(() => {
     if (viewState === 'list') fetchLiveStreams();
-  }, [viewState]);
+  }, [viewState, user?.id]);
 
   const fetchLiveStreams = async () => {
     setLoading(true);
