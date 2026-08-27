@@ -94,6 +94,8 @@ export default function BroadcastScreen() {
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
   const [followedHosts, setFollowedHosts] = useState<string[]>(JSON.parse(localStorage.getItem('trio_followed_hosts') || '[]'));
+  const [showDonationModal, setShowDonationModal] = useState(false);
+  const [donationAmount, setDonationAmount] = useState(1);
 
   const toggleFollow = (targetHostId: string) => {
     if (!targetHostId) return;
@@ -530,12 +532,59 @@ export default function BroadcastScreen() {
                  <button className="w-11 h-11 rounded-full bg-[#2563eb] flex items-center justify-center shadow-lg shrink-0 transition-transform active:scale-95">
                    <Send className="w-4 h-4 text-white ml-0.5" />
                  </button>
-                 <button className="w-11 h-11 rounded-full bg-[#f43f5e] flex items-center justify-center shadow-lg shrink-0 transition-transform active:scale-95">
-                   <Gift className="w-5 h-5 text-white" />
+                 <button 
+                   onClick={(e) => { e.stopPropagation(); setShowDonationModal(true); }}
+                   className="w-11 h-11 rounded-full bg-[#f43f5e] flex items-center justify-center shadow-lg shrink-0 transition-transform active:scale-95 pointer-events-auto"
+                 >
+                   <Gift className="w-5 h-5 text-white"/>
                  </button>
                </div>
             </div>
           </div>
+
+          {/* Donation Modal */}
+          {showDonationModal && (
+            <div 
+              className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-auto"
+              onClick={(e) => { e.stopPropagation(); setShowDonationModal(false); }}
+            >
+              <div 
+                className="bg-[#1e293b] rounded-[24px] p-6 w-full max-w-[320px] mx-4 shadow-2xl flex flex-col items-center animate-in zoom-in-95 duration-200" 
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="text-white text-[17px] font-bold text-center mb-6 px-2 leading-snug">
+                  {dir === 'rtl' ? 'ادعم صانع المحتوى لمزيد من الإبداع!' : 'Support the creator for more creativity!'}
+                </h3>
+                
+                <div className="flex items-center justify-between w-full bg-[#0f172a] rounded-2xl p-2 mb-6 shadow-inner">
+                  <button 
+                    onClick={() => setDonationAmount(prev => Math.max(1, prev - 1))}
+                    className="w-12 h-12 rounded-xl bg-[#334155]/60 hover:bg-[#334155] text-[#94a3b8] flex items-center justify-center text-2xl font-medium transition-colors"
+                  >
+                    -
+                  </button>
+                  <span className="text-white text-3xl font-bold">${donationAmount}</span>
+                  <button 
+                    onClick={() => setDonationAmount(prev => prev + 1)}
+                    className="w-12 h-12 rounded-xl bg-[#334155]/60 hover:bg-[#334155] text-[#94a3b8] flex items-center justify-center text-2xl font-medium transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    // Reset and close
+                    setShowDonationModal(false);
+                    setDonationAmount(1);
+                  }}
+                  className="w-full bg-[#f43f5e] hover:bg-[#e11d48] text-white font-bold py-4 rounded-2xl shadow-[0_0_20px_rgba(244,63,94,0.3)] transition-all active:scale-95 text-[17px] tracking-wide"
+                >
+                  {dir === 'rtl' ? 'إرسال الدعم' : 'Send Support'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
