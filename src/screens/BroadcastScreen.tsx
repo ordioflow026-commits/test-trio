@@ -300,14 +300,18 @@ export default function BroadcastScreen() {
 
     if (currentIdx === -1) return;
 
-    if (distance > swipeThreshold && currentIdx < liveStreams.length - 1) {
+    if (distance > swipeThreshold) {
+      // Swipe UP (Next Stream - Loop to start if at end)
       if (isHost) handleExitRoom(); 
-      const nextStream = liveStreams[currentIdx + 1];
+      const nextIdx = currentIdx < liveStreams.length - 1 ? currentIdx + 1 : 0;
+      const nextStream = liveStreams[nextIdx];
       setIsHost(user?.id === nextStream.host_id);
       setActiveStream(nextStream);
-    } else if (distance < -swipeThreshold && currentIdx > 0) {
+    } else if (distance < -swipeThreshold) {
+      // Swipe DOWN (Previous Stream - Loop to end if at start)
       if (isHost) handleExitRoom(); 
-      const prevStream = liveStreams[currentIdx - 1];
+      const prevIdx = currentIdx > 0 ? currentIdx - 1 : liveStreams.length - 1;
+      const prevStream = liveStreams[prevIdx];
       setIsHost(user?.id === prevStream.host_id);
       setActiveStream(prevStream);
     }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Bell, User, Users, Lock, Radio, Globe, X, Phone, PhoneOff } from 'lucide-react';
+import { Home, Bell, User, Users, Lock, Radio, Globe, X, Phone, PhoneOff, Trash2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
@@ -196,9 +196,20 @@ export default function MainScreen() {
         {/* Dedicated Notifications Screen */}
         {activeMainTab === 'notifications' && (
           <div className="flex-1 flex flex-col p-6 bg-gradient-to-b from-transparent to-slate-900/50 overflow-y-auto animate-in fade-in duration-300">
-            <div className="flex flex-col items-center mb-8 mt-4">
+            <div className="flex flex-col items-center mb-8 mt-4 relative">
               <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mb-4 border border-slate-700/50 shadow-lg"><Bell className="w-10 h-10 text-cyan-400" /></div>
               <h2 className="text-2xl font-bold text-white tracking-wide">{t('notifications') || 'Notifications'}</h2>
+              {notifications.length > 0 && (
+                <button 
+                  onClick={() => {
+                    setNotifications([]);
+                    localStorage.removeItem('trio_notifications');
+                  }}
+                  className={`absolute top-0 ${dir === 'rtl' ? 'left-4' : 'right-4'} p-3 bg-red-500/10 text-red-400 rounded-full hover:bg-red-500/20 transition-colors border border-red-500/20`}
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
             </div>
             <div className="w-full max-w-2xl mx-auto space-y-3 pb-20">
               {notifications.length === 0 ? (
