@@ -142,30 +142,6 @@ export default function MainScreen() {
           <div className="w-24 sm:w-32 flex items-center gap-2 relative">
             <img src="/trio_sync_logo.svg" alt="TrioSync Logo" className="w-8 h-8 rounded-lg shadow-md shadow-blue-500/20" />
             <span className="text-sm font-bold text-white tracking-wide hidden sm:block">TrioSync</span>
-            
-            {/* Presentation Simulation Button */}
-            {(user?.id?.startsWith('guest') || localStorage.getItem('isGuestMode') === 'true') && (
-              <button 
-                onClick={() => {
-                  const newNotif = {
-                    id: 'notif_demo_' + Date.now(),
-                    text: dir === 'rtl' ? 'أستاذ الرياضيات بدأ بثاً مباشراً جديداً: مراجعة شاملة في الرياضيات' : 'Math Teacher is live: Comprehensive Review',
-                    read: false,
-                    date: new Date().toISOString(),
-                    action: 'open_stream',
-                    streamId: 'mock_1'
-                  };
-                  setNotifications(prev => {
-                    const updated = [newNotif, ...prev];
-                    localStorage.setItem('trio_notifications', JSON.stringify(updated));
-                    return updated;
-                  });
-                }}
-                className="absolute -bottom-4 left-0 px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[9px] rounded border border-blue-500/30 hover:bg-blue-500/40 transition-colors"
-              >
-                {dir === 'rtl' ? 'محاكاة' : 'Simulate'}
-              </button>
-            )}
           </div>
 
           <div className="flex items-center justify-center bg-slate-800/80 rounded-full p-1.5 border border-blue-900/50 shadow-inner gap-1 sm:gap-2">
