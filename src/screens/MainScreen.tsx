@@ -75,6 +75,29 @@ export default function MainScreen() {
   }, [user]);
 
   useEffect(() => {
+    const channel = supabase.channel('global_live_streams')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_streams' }, (payload) => {
+        const followedHosts = JSON.parse(localStorage.getItem('trio_followed_hosts') || '[]');
+        if (followedHosts.includes(payload.new.host_id) && payload.new.host_id !== user?.id) {
+          const newNotif = {
+            id: 'notif_' + Date.now(),
+            text: `${payload.new.host_name} بدأ بثاً مباشراً جديداً: ${payload.new.topic}`,
+            read: false,
+            date: new Date().toISOString(),
+            action: 'open_stream',
+            streamId: payload.new.id
+          };
+          setNotifications(prev => {
+            const updated = [newNotif, ...prev];
+            localStorage.setItem('trio_notifications', JSON.stringify(updated));
+            return updated;
+          });
+        }
+      }).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
+  useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       try {
@@ -182,7 +205,19 @@ export default function MainScreen() {
                 <div className="text-center p-8 bg-slate-800/30 rounded-3xl border border-slate-700/50"><p className="text-slate-400">{t('allCaughtUp') || "You're all caught up!"}</p></div>
               ) : (
                 notifications.map(n => (
-                  <div key={n.id} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex gap-4 items-start shadow-md hover:bg-slate-800 transition-colors">
+                  <div 
+                    key={n.id} 
+                    onClick={() => {
+                      if (n.action === 'open_stream') {
+                        setActiveMainTab('home');
+                        setActiveSubTab('broadcast');
+                        setTimeout(() => {
+                          window.dispatchEvent(new CustomEvent('open-live-stream', { detail: n.streamId }));
+                        }, 300);
+                      }
+                    }}
+                    className={`bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 flex gap-4 items-start shadow-md transition-colors ${n.action === 'open_stream' ? 'cursor-pointer hover:bg-slate-700' : 'hover:bg-slate-800'}`}
+                  >
                     <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center shrink-0 border border-cyan-500/30"><Bell className="w-5 h-5 text-cyan-400" /></div>
                     <div className="flex-1">
                        <p className="text-slate-200 text-[15px] leading-relaxed font-medium text-start">{n.text}</p>

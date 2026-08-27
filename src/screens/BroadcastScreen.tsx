@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart, Trash2 } from 'lucide-react';
+import { Video, Users, Gift, X, Send, Radio, Loader2, AlertCircle, Search, ChevronLeft, Heart, Trash2, UserPlus, UserCheck } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useUser } from '../contexts/UserContext';
 import { supabase } from '../lib/supabase';
@@ -163,6 +163,20 @@ export default function BroadcastScreen() {
     if (viewState === 'list') fetchLiveStreams();
   }, [viewState, user?.id]);
 
+  useEffect(() => {
+    const handleOpenStream = (e: any) => {
+      const streamId = e.detail;
+      const stream = liveStreams.find(s => s.id === streamId);
+      if (stream) {
+        setIsHost(user?.id === stream.host_id);
+        setActiveStream(stream);
+        setViewState('room');
+      }
+    };
+    window.addEventListener('open-live-stream', handleOpenStream);
+    return () => window.removeEventListener('open-live-stream', handleOpenStream);
+  }, [liveStreams, user]);
+
   const fetchLiveStreams = async () => {
     setLoading(true);
     const isGuest = user?.id?.startsWith('guest') || localStorage.getItem('isGuestMode') === 'true';
@@ -310,6 +324,8 @@ export default function BroadcastScreen() {
           ) : (
             filtered.map((broadcast) => {
               const isItemHost = user?.id === broadcast.host_id;
+              const followedHosts = JSON.parse(localStorage.getItem('trio_followed_hosts') || '[]');
+              const isFollowed = followedHosts.includes(broadcast.host_id);
               return (
                 <div key={broadcast.id} className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-colors group cursor-pointer relative" onClick={() => { setIsHost(isItemHost); setActiveStream(broadcast); setViewState('room'); }}>
                   {isItemHost && (
@@ -337,7 +353,22 @@ export default function BroadcastScreen() {
                   <div className="p-3">
                     <h3 className="text-white font-bold truncate">{broadcast.topic}</h3>
                     <div className="flex justify-between items-center mt-1">
-                      <p className="text-slate-400 text-xs">{broadcast.host_name}</p>
+                      <div className="flex items-center">
+                        <p className="text-slate-400 text-xs">{broadcast.host_name}</p>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            let updated = [...followedHosts];
+                            if (isFollowed) updated = updated.filter((id: string) => id !== broadcast.host_id);
+                            else updated.push(broadcast.host_id);
+                            localStorage.setItem('trio_followed_hosts', JSON.stringify(updated));
+                            setLiveStreams([...liveStreams]); 
+                          }}
+                          className={`ml-2 p-1 rounded-full ${isFollowed ? 'text-blue-400 bg-blue-500/10' : 'text-slate-400 bg-slate-700/50 hover:text-white'}`}
+                        >
+                          {isFollowed ? <UserCheck className="w-3 h-3"/> : <UserPlus className="w-3 h-3"/>}
+                        </button>
+                      </div>
                       <span className="text-blue-400 text-[10px] bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">{broadcast.field || 'General'}</span>
                     </div>
                   </div>
