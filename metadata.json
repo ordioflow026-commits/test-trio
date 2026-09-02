@@ -1,6 +1,9 @@
 {
-  "name": "Localize",
-  "description": "Offline P2P push-to-talk voice translation for groups.",
-  "requestFramePermissions": ["camera", "microphone"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "Remix: Remix: TRIOsync 19 //",
+  "description": "Core Architecture \u0026 Authentication for communication app",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": []
 }
